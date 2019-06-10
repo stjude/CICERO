@@ -1,0 +1,11 @@
+# Alias file for config names
+# Entries are of the form:
+#
+# ALIAS REALNAME
+#
+# If you have more than one entry for the same alias, then the first one will
+# be used.  The best thing is to just not do it!
+#
+# Aliases are case-sensitive
+
+hg19 GRCh37-lite
