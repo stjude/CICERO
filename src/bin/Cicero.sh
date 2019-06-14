@@ -2,7 +2,12 @@
 
 CICERO_ROOT=`readlink -f $(dirname ${BASH_SOURCE[0]})/../../`
 # TODO - need to totall revamp the config files
-export SJ_CONFIGS=$CICERO_ROOT/configs
+export SJ_CONFIGS=$CICERO_ROOT/configs.${HOSTNAME}.$$.tmp
+cp -rf $CICERO_ROOT/configs $SJ_CONFIGS
+echo "SJ_CONFIGS=$SJ_CONFIGS"
+
+MAX_PORT_NUM=32000
+MIN_PORT_NUM=2000
 
 BAMFILE=""
 JUNCTIONS=""
@@ -68,13 +73,15 @@ fi
 ##############################
 ### Construct config files ###
 ##############################
-for CONFIG_TYPE_DIR in $CICERO_ROOT/configs/*; do
+for CONFIG_TYPE_DIR in $SJ_CONFIGS/*; do
     CONFIG_TYPE=$(basename $CONFIG_TYPE_DIR)
     for CONFIG_TEMPLATE in $CONFIG_TYPE_DIR/*.template.txt; do
         CONFIG_FILE=$CONFIG_TYPE_DIR/$(basename $CONFIG_TEMPLATE .template.txt).config.txt
         while read KEY VALUE; do
             if [[ $(echo $VALUE | grep '/') ]]; then
                 echo -e "$KEY\t$REFDIR$VALUE"
+            elif [[ $KEY == BLAT_PORT && $VALUE == 0 ]]; then
+                echo -e "$KEY\t$$"
             else
                 echo -e "$KEY\t$VALUE"
             fi
@@ -82,33 +89,22 @@ for CONFIG_TYPE_DIR in $CICERO_ROOT/configs/*; do
     done
 done
 
-FASTA=$(awk -F$'\t' '$1=="FASTA"{print $2}' $CICERO_ROOT/configs/genome/$GENOME.config.txt)
-BLAT_HOST=$(awk -F$'\t' '$1=="BLAT_HOST"{print $2}' $CICERO_ROOT/configs/genome/$GENOME.config.txt)
-BLAT_PORT=$(awk -F$'\t' '$1=="BLAT_PORT"{print $2}' $CICERO_ROOT/configs/genome/$GENOME.config.txt)
-TWOBIT=$(awk -F$'\t' '$1=="TWOBIT"{print $2}' $CICERO_ROOT/configs/genome/$GENOME.config.txt)
+FASTA=$(awk -F$'\t' '$1=="FASTA"{print $2}' $SJ_CONFIGS/genome/${GENOME}.config.txt)
+TWOBIT=$(awk -F$'\t' '$1=="TWOBIT"{print $2}' $SJ_CONFIGS/genome/${GENOME}.config.txt)
+GFSERVER_LOG=gfServer.$(hostname).$$
 
-##################
-### Start BLAT ###
-##################
-
-# Start blat server
-gfServer status $BLAT_HOST $BLAT_PORT > /dev/null 2>&1
-RETURN_CODE=$?
-if [[ $RETURN_CODE != 0 ]]; then
-    gfServer start $BLAT_HOST $BLAT_PORT "$TWOBIT" -log=gfServer.log > /dev/null &
-    BLAT_SERVER_PID=$!
-    RETURN_CODE=1
-    echo "Starting local blat server"
-    while [[ $RETURN_CODE != 0 ]]; do
-        echo "Blat server not yet running ..."
-        gfServer status $BLAT_HOST $BLAT_PORT > /dev/null 2>&1
-        RETURN_CODE=$?
-        sleep 5
-    done
-    echo "Blat server is up!"
-else
-    echo "Blat server is already up!"
-fi
+BLAT_HOST=$(awk -F$'\t' '$1=="BLAT_HOST"{print $2}' $SJ_CONFIGS/genome/${GENOME}.config.txt)
+BLAT_PORT=$(awk -F$'\t' '$1=="BLAT_PORT"{print $2}' $SJ_CONFIGS/genome/${GENOME}.config.txt)
+# Check if the port is open, if not, choose a random number until we find a free port
+while [[ $(netstat -tulpn 2> /dev/null | grep LISTEN | grep ":$BLAT_PORT\b") ]]; do
+    # TODO: Add warning for port change
+    echo "WARN: Port $BLAT_PORT is currently in use. Trying new port..."
+    # Due to the range of RANDOM, we need to narrow it down using some math
+    RANGE=$(($MAX_PORT_NUM-$MIN_PORT_NUM+1))    # Find the total possible numbers we want
+    RAND_PORT_NUM=$RANDOM                       # Assign out the $RANDOM var 
+    let "RAND_PORT_NUM %= $RANGE"               # Mod the $RANDOM var using the range
+    BLAT_PORT=$(($RAND_PORT_NUM+$MIN_PORT_NUM)) # Add the resulting number to the min to get it within the range
+done
 
 # Set inputs
 mkdir -p $OUTDIR
@@ -116,6 +112,42 @@ cd $OUTDIR
 CICERO_RUNDIR=CICERO_RUNDIR
 CICERO_DATADIR=CICERO_DATADIR
 CICERO_CONFIG=CICERO_CONFIG
+
+##################
+### Start BLAT ###
+##################
+
+# Start blat server
+gfServer status $BLAT_HOST $BLAT_PORT 1> ${GFSERVER_LOG}.out 2> ${GFSERVER_LOG}.err
+RETURN_CODE=$?
+if [[ $RETURN_CODE != 0 ]]; then
+    gfServer start $BLAT_HOST $BLAT_PORT "$TWOBIT" -log=${GFSERVER_LOG}.log 1>> ${GFSERVER_LOG}.out 2>> ${GFSERVER_LOG}.err  &
+    BLAT_SERVER_PID=$!
+    RETURN_CODE=1
+    echo "Starting local blat server"
+    NUM_CHECKS=0
+    echo $BLAT_SERVER_PID
+    while [[ $RETURN_CODE != 0 && $NUM_CHECKS -le 20 ]]; do
+        echo "Blat server not yet running ..."
+        if  ps -p $BLAT_SERVER_PID > /dev/null; then
+            gfServer status $BLAT_HOST $BLAT_PORT 1>> ${GFSERVER_LOG}.out 2>> ${GFSERVER_LOG}.err
+            RETURN_CODE=$?
+            NUM_CHECKS=$(($NUM_CHECKS + 1))
+            sleep 5
+        else
+            >&2 echo "ERROR: The server has probably died. Please review error logs at below location:"
+            >&2 echo "$OUTDIR/${GFSERVER_LOG}.err"
+            exit 1
+        fi
+    done
+    if [[ $RETURN_CODE != 0 ]]; then
+        >&2 echo "ERROR: Unable to spin up blat server"
+        exit 1
+    fi
+    echo "Blat server is up!"
+else
+    echo "Blat server is already up!"
+fi
 
 # Make config
 echo "$SAMPLE" > $CICERO_CONFIG
@@ -148,7 +180,7 @@ parallel -j $NCORES < cmds-01.sh
 ########################
 echo "Step 02 - $(date +'%Y.%m.%d %H:%M:%S') - Cicero"
 {
-prepareCiceroInput.pl -o $CICERO_DATADIR/$SAMPLE -genome $GENOME -p $SAMPLE -l $LEN -s 250 -f $CICERO_DATADIR/$SAMPLE/$SAMPLE.gene_info.txt
+prepareCiceroInput.pl -o $CICERO_DATADIR/$SAMPLE -genome $GENOME -p $SAMPLE -l $LEN -s 250 -f $CICERO_DATADIR/$SAMPLE/${SAMPLE}.gene_info.txt
 for SCFILE in $CICERO_DATADIR/$SAMPLE/$SAMPLE.*.SC; do
     echo "Cicero.pl -i $BAMFILE -o $(echo $SCFILE | sed 's/\.SC//g') -l $LEN -genome $GENOME -f $SCFILE"
 done > cmds-02.sh
@@ -169,8 +201,8 @@ cat $CICERO_DATADIR/$SAMPLE/*/unfiltered.internal.txt > $CICERO_DATADIR/$SAMPLE/
 ##########################
 echo "Step 04 - $(date +'%Y.%m.%d %H:%M:%S') - Annotate"
 {
-annotate.pl -i $BAMFILE -o $CICERO_DATADIR/$SAMPLE -genome $GENOME -l $LEN -s $SAMPLE -f $CICERO_DATADIR/$SAMPLE/$SAMPLE.gene_info.txt -j $JUNCTIONS
-annotate.pl -i $BAMFILE -o $CICERO_DATADIR/$SAMPLE -genome $GENOME -l $LEN -s $SAMPLE -f $CICERO_DATADIR/$SAMPLE/$SAMPLE.gene_info.txt -internal # -j $JUNCTIONS
+annotate.pl -i $BAMFILE -o $CICERO_DATADIR/$SAMPLE -genome $GENOME -l $LEN -s $SAMPLE -f $CICERO_DATADIR/$SAMPLE/${SAMPLE}.gene_info.txt -j $JUNCTIONS
+annotate.pl -i $BAMFILE -o $CICERO_DATADIR/$SAMPLE -genome $GENOME -l $LEN -s $SAMPLE -f $CICERO_DATADIR/$SAMPLE/${SAMPLE}.gene_info.txt -internal # -j $JUNCTIONS
 cat $CICERO_DATADIR/$SAMPLE/annotated.fusion.txt $CICERO_DATADIR/$SAMPLE/annotated.internal.txt > $CICERO_DATADIR/$SAMPLE/annotated.all.txt
 } 1> 04_Annotate.out 2> 04_Annotate.err
 
@@ -187,6 +219,12 @@ cp $CICERO_DATADIR/$SAMPLE/final_fusions.txt $CICERO_DATADIR/$SAMPLE/final_fusio
 ### Kill the blat server ###
 ############################
 if [[ $BLAT_SERVER_PID ]]; then
+    echo "Killing blat server with pid $BLAT_SERVER_PID" 2>&1
     kill $BLAT_SERVER_PID
 fi
+
+#############################
+### Blow away tmp configs ###
+#############################
+rm -rf $SJ_CONFIGS
 
