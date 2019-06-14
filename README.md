@@ -1,4 +1,4 @@
-### Cicero 0.1.1
+### Cicero 0.1.2
 
 (Explain what this is and what paper to cite)
 
