@@ -1,0 +1,1 @@
+sample	geneA	chrA	posA	ortA	featureA	geneB	chrB	posB	ortB	featureB	sv_ort	readsA	readsB	matchA	matchB	repeatA	repeatB	coverageA	coverageB	ratioA	ratioB	qposA	qposB	total_readsA	total_readsB	contig	type
