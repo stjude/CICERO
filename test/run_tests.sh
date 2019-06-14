@@ -21,7 +21,7 @@ JUNCTIONS=`readlink -f $(pwd)/data/input/$SAMPLE/${SAMPLE}.bam.junctions.tab`
 ### Run the code ###
 ####################
 rm -rf ${SAMPLE}.tmp
-time Cicero.sh -b $BAMFILE -r $REFDIR -g $GENOME -n 4 -j $JUNCTIONS -o ${SAMPLE}.tmp
+time Cicero.sh -b $BAMFILE -r $REFDIR -g $GENOME -n 4 -j $JUNCTIONS -o ${SAMPLE}.$$.tmp
 
 ########################
 ### Test the results ###
@@ -33,7 +33,7 @@ RETURN_CODE=0
 for GS_FILENAME in data/output/$SAMPLE/*; do
     if [[ ! -f $GS_FILENAME ]]; then continue; fi
     FILENAME=$(basename $GS_FILENAME)
-    AT_FILENAME=${SAMPLE}.tmp/CICERO_DATADIR/$SAMPLE/$FILENAME
+    AT_FILENAME=${SAMPLE}.$$.tmp/CICERO_DATADIR/$SAMPLE/$FILENAME
 
     if [[ ! -f $AT_FILENAME ]]; then
         echo "DNE .... $FILENAME"
