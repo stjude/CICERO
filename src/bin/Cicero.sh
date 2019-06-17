@@ -1,10 +1,5 @@
 #!/usr/bin/env bash
 
-CICERO_ROOT=`readlink -f $(dirname ${BASH_SOURCE[0]})/../../`
-# TODO - need to totall revamp the config files
-export SJ_CONFIGS=$CICERO_ROOT/configs.${HOSTNAME}.$$.tmp
-cp -rf $CICERO_ROOT/configs $SJ_CONFIGS
-echo "SJ_CONFIGS=$SJ_CONFIGS"
 
 MAX_PORT_NUM=32000
 MIN_PORT_NUM=2000
@@ -70,9 +65,27 @@ if [[ $GENOME != "GRCh37-lite" ]]; then
     exit 1
 fi
 
+# Set inputs
+mkdir -p $OUTDIR
+cd $OUTDIR
+CICERO_RUNDIR=CICERO_RUNDIR
+CICERO_DATADIR=CICERO_DATADIR
+CICERO_CONFIG=CICERO_CONFIG
+
 ##############################
 ### Construct config files ###
 ##############################
+
+# Create the config location and set variables to it
+CICERO_ROOT=`readlink -f $(dirname ${BASH_SOURCE[0]})/../../`
+# TODO - need to totall revamp the config files
+export SJ_CONFIGS=configs.${HOSTNAME}.$$.tmp
+echo "$CICERO_ROOT/configs"
+echo "$SJ_CONFIGS"
+cp -rf $CICERO_ROOT/configs $SJ_CONFIGS
+echo "SJ_CONFIGS=$SJ_CONFIGS"
+
+# Construct the actual config file
 for CONFIG_TYPE_DIR in $SJ_CONFIGS/*; do
     CONFIG_TYPE=$(basename $CONFIG_TYPE_DIR)
     for CONFIG_TEMPLATE in $CONFIG_TYPE_DIR/*.template.txt; do
@@ -81,7 +94,17 @@ for CONFIG_TYPE_DIR in $SJ_CONFIGS/*; do
             if [[ $(echo $VALUE | grep '/') ]]; then
                 echo -e "$KEY\t$REFDIR$VALUE"
             elif [[ $KEY == BLAT_PORT && $VALUE == 0 ]]; then
-                echo -e "$KEY\t$$"
+                PORT_NUM=$$
+                # Check if the port is open or not in our declared port range, if not, choose a random number until we find a free port
+                while [[ $(netstat -tulpn 2> /dev/null | grep LISTEN | grep ":$PORT_NUM\b") || ( $PORT_NUM -le $MIN_PORT_NUM || $PORT_NUM -ge $MAX_PORT_NUM )]]; do
+                    echo "WARN: Port $PORT_NUM is not available for use. Trying new port..."
+                    # Due to the range of RANDOM, we need to narrow it down using some math
+                    RANGE=$(($MAX_PORT_NUM-$MIN_PORT_NUM+1))    # Find the total possible numbers we want
+                    RAND_PORT_NUM=$RANDOM                       # Assign out the $RANDOM var 
+                    let "RAND_PORT_NUM %= $RANGE"               # Mod the $RANDOM var using the range
+                    PORT_NUM=$(($RAND_PORT_NUM+$MIN_PORT_NUM)) # Add the resulting number to the min to get it within the range
+                done
+                echo -e "$KEY\t$PORT_NUM"
             else
                 echo -e "$KEY\t$VALUE"
             fi
@@ -95,23 +118,6 @@ GFSERVER_LOG=gfServer.$(hostname).$$
 
 BLAT_HOST=$(awk -F$'\t' '$1=="BLAT_HOST"{print $2}' $SJ_CONFIGS/genome/${GENOME}.config.txt)
 BLAT_PORT=$(awk -F$'\t' '$1=="BLAT_PORT"{print $2}' $SJ_CONFIGS/genome/${GENOME}.config.txt)
-# Check if the port is open, if not, choose a random number until we find a free port
-while [[ $(netstat -tulpn 2> /dev/null | grep LISTEN | grep ":$BLAT_PORT\b") ]]; do
-    # TODO: Add warning for port change
-    echo "WARN: Port $BLAT_PORT is currently in use. Trying new port..."
-    # Due to the range of RANDOM, we need to narrow it down using some math
-    RANGE=$(($MAX_PORT_NUM-$MIN_PORT_NUM+1))    # Find the total possible numbers we want
-    RAND_PORT_NUM=$RANDOM                       # Assign out the $RANDOM var 
-    let "RAND_PORT_NUM %= $RANGE"               # Mod the $RANDOM var using the range
-    BLAT_PORT=$(($RAND_PORT_NUM+$MIN_PORT_NUM)) # Add the resulting number to the min to get it within the range
-done
-
-# Set inputs
-mkdir -p $OUTDIR
-cd $OUTDIR
-CICERO_RUNDIR=CICERO_RUNDIR
-CICERO_DATADIR=CICERO_DATADIR
-CICERO_CONFIG=CICERO_CONFIG
 
 ##################
 ### Start BLAT ###
@@ -126,7 +132,6 @@ if [[ $RETURN_CODE != 0 ]]; then
     RETURN_CODE=1
     echo "Starting local blat server"
     NUM_CHECKS=0
-    echo $BLAT_SERVER_PID
     while [[ $RETURN_CODE != 0 && $NUM_CHECKS -le 20 ]]; do
         echo "Blat server not yet running ..."
         if  ps -p $BLAT_SERVER_PID > /dev/null; then
