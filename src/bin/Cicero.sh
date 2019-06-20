@@ -1,5 +1,16 @@
 #!/usr/bin/env bash
 
+exit_trap() {
+    for PID in $(pgrep -P $$); do
+        PS_LINE=$(ps --no-header -p $PID)
+        if [[ $PS_LINE ]]; then
+            echo "Killing $PS_LINE"
+            kill -9 $PID
+        fi
+    done
+}
+trap exit_trap EXIT
+
 CICERO_ROOT=`readlink -f $(dirname ${BASH_SOURCE[0]})/../../`
 # TODO - need to totall revamp the config files
 export SJ_CONFIGS=$CICERO_ROOT/configs.${HOSTNAME}.$$.tmp
