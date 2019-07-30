@@ -137,7 +137,7 @@ BLAT_PORT=$(awk -F$'\t' '$1=="BLAT_PORT"{print $2}' $SJ_CONFIGS/genome/${GENOME}
 gfServer status $BLAT_HOST $BLAT_PORT 1> ${GFSERVER_LOG}.out 2> ${GFSERVER_LOG}.err
 RETURN_CODE=$?
 if [[ $RETURN_CODE != 0 ]]; then
-    gfServer start $BLAT_HOST $BLAT_PORT "$TWOBIT" -log=${GFSERVER_LOG}.log 1>> ${GFSERVER_LOG}.out 2>> ${GFSERVER_LOG}.err  &
+    gfServer start $BLAT_HOST $BLAT_PORT "$TWOBIT" -log=${GFSERVER_LOG}.log -stepSize=5 1>> ${GFSERVER_LOG}.out 2>> ${GFSERVER_LOG}.err  &
     BLAT_SERVER_PID=$!
     RETURN_CODE=1
     echo "Starting local blat server"
