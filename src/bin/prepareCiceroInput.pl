@@ -15,6 +15,7 @@ my $expression_ratio_cutoff = 0.01;
 my $split_every_n = 5000;
 my $out_suffix = "sclip.txt";
 my ( $help, $man, $version, $usage );
+my $min_sclip_reads = 2;#Liqing
 my $optionOK = GetOptions(
 	'o|out_dir=s'	=> \$out_dir,
 	'genome=s'	=> \$genome,
@@ -78,10 +79,13 @@ while(<$SCI>){
 	chomp;
 	my ($chr, $site, $strand, $sc_cnt, $cover, $psc, $nsc, $pn, $nn) = split(/\t/);
 	my $SC_MAF = $psc/($pn+0.01) > $nsc/($nn+0.01) ? $psc/($pn+0.01) : $nsc/($nn+0.01);
+	next if($sc_cnt < $min_sclip_reads);#Liqing
+	next unless (exists($gene_info{$chr}));#Liqing
 	my @gInfo = @{$gene_info{$chr}};
 	my $intra = 0;
 	foreach my $g (@gInfo){
 		my ($gene_name, $gStart, $gEnd, $mRNA_length, $r_cnt, $sc_cutoff) =  @{$g};
+		next if($r_cnt == 0);
 		next if ($gStart > $site || $gEnd < $site);
 		$intra = 1;
 		last if ($sc_cutoff < 0.01);
@@ -102,12 +106,13 @@ while(<$SCI>){
 		}
 	}
 	next if($sc_cnt < 5 || $intra);
-	push @intergenic_SCs, [$chr, $site, $strand, $sc_cnt, -1, 0, $cover] if($intra==0 && $sc_cnt > 5);
+	#push @intergenic_SCs, [$chr, $site, $strand, $sc_cnt, -1, 0, $cover] if($intra==0 && $sc_cnt > 5);#Liqing
+	push @intra_SCs, [$chr, $site, $strand, $sc_cnt, -1, 0, $cover];#Liqing
 }
 close $SCI;
-print "number of SCs: ", scalar @intra_SCs, "\t", scalar @intergenic_SCs, "\n";
+#print "number of SCs: ", scalar @intra_SCs, "\t", scalar @intergenic_SCs, "\n";#Liqing
 
-push @intra_SCs, @intergenic_SCs;
+#push @intra_SCs, @intergenic_SCs;#Liqing
 
 print "start to write out seperate files...\n";
 my $idx_bin=0;
