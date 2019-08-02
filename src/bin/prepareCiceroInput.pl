@@ -15,7 +15,7 @@ my $expression_ratio_cutoff = 0.01;
 my $split_every_n = 5000;
 my $out_suffix = "sclip.txt";
 my ( $help, $man, $version, $usage );
-my $min_sclip_reads = 2;#Liqing
+my $min_sclip_reads = 2;
 my $optionOK = GetOptions(
 	'o|out_dir=s'	=> \$out_dir,
 	'genome=s'	=> \$genome,
@@ -55,7 +55,6 @@ while(<$BLK>){
 close($BLK);
 
 my %gene_info;
-#$gene_info_file = "$out_dir/gInfo.txt";
 print STDERR "Parsing gene info file\n"; 
 print "\ngene_info_file: $gene_info_file\n";
 open my $GI, "$gene_info_file";
@@ -79,8 +78,8 @@ while(<$SCI>){
 	chomp;
 	my ($chr, $site, $strand, $sc_cnt, $cover, $psc, $nsc, $pn, $nn) = split(/\t/);
 	my $SC_MAF = $psc/($pn+0.01) > $nsc/($nn+0.01) ? $psc/($pn+0.01) : $nsc/($nn+0.01);
-	next if($sc_cnt < $min_sclip_reads);#Liqing
-	next unless (exists($gene_info{$chr}));#Liqing
+	next if($sc_cnt < $min_sclip_reads);
+	next unless (exists($gene_info{$chr}));
 	my @gInfo = @{$gene_info{$chr}};
 	my $intra = 0;
 	foreach my $g (@gInfo){
@@ -100,19 +99,14 @@ while(<$SCI>){
 
 		my $expression_ratio = ($cover/($read_len-20))/($r_cnt*$read_len/(2*$mRNA_length));
 		if($expression_ratio > $expression_ratio_cutoff || $SC_MAF > 0.05){
-		#if($cnt > $sc_cutoff){
 			push @intra_SCs, [$chr, $site, $strand, $sc_cnt, $sc_cutoff, $expression_ratio, $cover] if($chr);
 			last;
 		}
 	}
 	next if($sc_cnt < 5 || $intra);
-	#push @intergenic_SCs, [$chr, $site, $strand, $sc_cnt, -1, 0, $cover] if($intra==0 && $sc_cnt > 5);#Liqing
-	push @intra_SCs, [$chr, $site, $strand, $sc_cnt, -1, 0, $cover];#Liqing
+	push @intra_SCs, [$chr, $site, $strand, $sc_cnt, -1, 0, $cover];
 }
 close $SCI;
-#print "number of SCs: ", scalar @intra_SCs, "\t", scalar @intergenic_SCs, "\n";#Liqing
-
-#push @intra_SCs, @intergenic_SCs;#Liqing
 
 print "start to write out seperate files...\n";
 my $idx_bin=0;
