@@ -64,6 +64,6 @@ while (my $chr = <$chrFile>){
 		$skip = 1 if ($chr =~ /.*$bad.*/i); 
 	}
 	next if ($skip);  
-	my $cmd = "extract_range.pl --ref_genome $genome_file -i $bam_file -o $output_dir -r $chr -l $read_length -m 2 -min_sc_len 20";
+	my $cmd = "extract_range.pl --ref_genome $genome_file -i $bam_file -o $output_dir -r $chr -l $read_length -m 2 -min_sc_len 3";
 	print $cmd."\n";
 }
