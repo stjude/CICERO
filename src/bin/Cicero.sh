@@ -78,9 +78,6 @@ fi
 # Set inputs
 mkdir -p $OUTDIR
 cd $OUTDIR
-CICERO_RUNDIR=CICERO_RUNDIR
-CICERO_DATADIR=CICERO_DATADIR
-CICERO_CONFIG=CICERO_CONFIG
 
 ##############################
 ### Construct config files ###
@@ -164,71 +161,6 @@ else
     echo "Blat server is already up!"
 fi
 
-# Make config
-echo "$SAMPLE" > $CICERO_CONFIG
-
-# Prep datadir
-rm -rf $CICERO_DATADIR
-mkdir -p $CICERO_DATADIR
-mkdir -p $CICERO_DATADIR/$SAMPLE
-ln -s $BAMFILE $CICERO_DATADIR/$SAMPLE
-ln -s ${BAMFILE}.bai $CICERO_DATADIR/$SAMPLE
-ln -s $JUNCTIONS $CICERO_DATADIR/$SAMPLE
-
-# Make rundir
-rm -rf $CICERO_RUNDIR
-mkdir -p $CICERO_RUNDIR
-
-###############################
-### Step 01 - extractSClips ###
-###############################
-echo "Step 01 - $(date +'%Y.%m.%d %H:%M:%S') - ExtractSClips"
-{
-LEN=$(getReadLength.sh $BAMFILE)
-get_sc_cmds.pl -i $BAMFILE -genome $GENOME -o $CICERO_DATADIR/$SAMPLE -l $LEN > cmds-01.sh
-echo "get_geneInfo.pl -i $BAMFILE -o $CICERO_DATADIR/$SAMPLE -l $LEN -genome $GENOME -s $SAMPLE" >> cmds-01.sh
-parallel -j $NCORES < cmds-01.sh
-} 1> 01_ExtractSClips.out 2> 01_ExtractSClips.err
-
-########################
-### STEP 02 - Cicero ###
-########################
-echo "Step 02 - $(date +'%Y.%m.%d %H:%M:%S') - Cicero"
-{
-prepareCiceroInput.pl -o $CICERO_DATADIR/$SAMPLE -genome $GENOME -p $SAMPLE -l $LEN -s 250 -f $CICERO_DATADIR/$SAMPLE/${SAMPLE}.gene_info.txt
-for SCFILE in $CICERO_DATADIR/$SAMPLE/$SAMPLE.*.SC; do
-    echo "Cicero.pl -i $BAMFILE -o $(echo $SCFILE | sed 's/\.SC//g') -l $LEN -genome $GENOME -f $SCFILE"
-done > cmds-02.sh
-parallel -j $NCORES < cmds-02.sh
-} 1> 02_Cicero.out 2> 02_Cicero.err
-
-#########################
-### STEP 03 - Combine ###
-#########################
-echo "Step 03 - $(date +'%Y.%m.%d %H:%M:%S') - Combine"
-{
-cat $CICERO_DATADIR/$SAMPLE/*/unfiltered.fusion.txt > $CICERO_DATADIR/$SAMPLE/unfiltered.fusion.txt
-cat $CICERO_DATADIR/$SAMPLE/*/unfiltered.internal.txt > $CICERO_DATADIR/$SAMPLE/unfiltered.internal.txt
-} 1> 03_Combine.out 2> 03_Combine.err
-
-##########################
-### STEP 04 - Annotate ###
-##########################
-echo "Step 04 - $(date +'%Y.%m.%d %H:%M:%S') - Annotate"
-{
-annotate.pl -i $BAMFILE -o $CICERO_DATADIR/$SAMPLE -genome $GENOME -l $LEN -s $SAMPLE -f $CICERO_DATADIR/$SAMPLE/${SAMPLE}.gene_info.txt -j $JUNCTIONS
-annotate.pl -i $BAMFILE -o $CICERO_DATADIR/$SAMPLE -genome $GENOME -l $LEN -s $SAMPLE -f $CICERO_DATADIR/$SAMPLE/${SAMPLE}.gene_info.txt -internal # -j $JUNCTIONS
-cat $CICERO_DATADIR/$SAMPLE/annotated.fusion.txt $CICERO_DATADIR/$SAMPLE/annotated.internal.txt > $CICERO_DATADIR/$SAMPLE/annotated.all.txt
-} 1> 04_Annotate.out 2> 04_Annotate.err
-
-########################
-### STEP 05 - Filter ###
-########################
-echo "Step 05 - $(date +'%Y.%m.%d %H:%M:%S') - Filter"
-{
-cicero_filter.sh $CICERO_DATADIR $SAMPLE $GENOME
-cp $CICERO_DATADIR/$SAMPLE/final_fusions.txt $CICERO_DATADIR/$SAMPLE/final_fusions.report.html
-} 1> 05_Filter.out 2> 05_Filter.err
 
 ############################
 ### Kill the blat server ###
