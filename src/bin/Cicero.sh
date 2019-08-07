@@ -139,13 +139,13 @@ if [[ $RETURN_CODE != 0 ]]; then
     RETURN_CODE=1
     echo "Starting local blat server"
     NUM_CHECKS=0
-    while [[ $RETURN_CODE != 0 && $NUM_CHECKS -le 20 ]]; do
+    while [[ $RETURN_CODE != 0 && $NUM_CHECKS -le 200 ]]; do
         echo "Blat server not yet running ..."
         if  ps -p $BLAT_SERVER_PID > /dev/null; then
             gfServer status $BLAT_HOST $BLAT_PORT 1>> ${GFSERVER_LOG}.out 2>> ${GFSERVER_LOG}.err
             RETURN_CODE=$?
             NUM_CHECKS=$(($NUM_CHECKS + 1))
-            sleep 5
+            sleep 10
         else
             >&2 echo "ERROR: The server has probably died. Please review error logs at below location:"
             >&2 echo "$OUTDIR/${GFSERVER_LOG}.err"
