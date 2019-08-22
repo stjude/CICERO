@@ -762,6 +762,7 @@ sub print_out{
 	#my $out_file_Q = $out_file.".qual";
 	#open(my $qual_fh, ">$out_file_Q");
 	my (%end1_reads, %end2_reads);
+    srand(100001);
 	foreach my $r (@reads){
 		#next unless(exists($end1_reads{$r->{name}}) && exists($end2_reads{$r->{name}}));
 		#print STDERR "testing ... \n";
@@ -770,7 +771,6 @@ sub print_out{
 		next if($r->{sam_flag} & 0x0200); #QC failure
 
 		if($rand_cutoff < 1){
-			my $rrr = rand();
 			next if(rand() > $rand_cutoff);
 		}
 
