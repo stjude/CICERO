@@ -40,6 +40,17 @@ Cicero, and `junctions` is the (optional) junctions file output from RNApeg.
     - Tree
     - warnings
 
+### Downloading RNApeg
+
+RNApeg is required to generate a junctions file for use by Cicero. You can get RNApeg from both docker and singularity.
+
+Running RNApeg via Docker:
+* docker run mnedmonson/public:rnapeg RNApeg.sh
+
+Running RNApeg via Singularity:
+* singularity run docker://mnedmonson/public:rnapeg
+* singularity run docker://mnedmonson/public:rnapeg RNApeg.sh
+
 ### Downloading reference files
 
 (Explain how to download the reference files here)
