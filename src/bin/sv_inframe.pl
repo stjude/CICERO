@@ -1,4 +1,4 @@
-#!/bin/env perl
+#!/usr/bin/env perl
 # determine whether fusion events are in-frame
 # MNE 8/2014
 #
