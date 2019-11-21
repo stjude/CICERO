@@ -17,7 +17,7 @@ RUN apt-get update && \
     apt-get install libncurses5-dev -y && \ 
     apt-get install libncursesw5-dev -y && \
     apt-get install libexpat1-dev -y && \
-    apt-get install libdb-dev -y
+    apt-get install libdb-dev -y && \
     rm -r /var/lib/apt/lists/*
 
 RUN umask 002

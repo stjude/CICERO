@@ -286,7 +286,7 @@ cp $CICERO_DATADIR/$SAMPLE/final_fusions.txt $CICERO_DATADIR/$SAMPLE/final_fusio
 } 1> 05_Filter.out 2> 05_Filter.err
 
 ## QC
-if  [ $(wc -l $CICERO_DATADIR/$SAMPLE/final_fusions.txt) -eq 1 ]
+if  [ $(wc -l $CICERO_DATADIR/$SAMPLE/final_fusions.txt | cut -f 1 -d ' ') -eq 1 ]
 then
   echo "No events found"
 fi
