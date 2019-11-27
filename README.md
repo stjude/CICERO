@@ -1,6 +1,8 @@
 ### Cicero 0.1.6
 
 (Explain what this is and what paper to cite)
+CICERO (Clipped-reads Extended for RNA Optimization) is an assembly-based algorithm to detect diverse classes
+of driver gene fusions from RNA-seq.
 
 Invoke the Cicero wrapper as
 ```
@@ -53,4 +55,5 @@ Running RNApeg via Singularity:
 
 ### Downloading reference files
 
-(Explain how to download the reference files here)
+Reference files are required to run Cicero. They can be found at the following location:
+* https://www.stjuderesearch.org/site/lab/zhang/cicero
