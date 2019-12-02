@@ -225,7 +225,7 @@ for file in $(ls $CICERO_DATADIR/$SAMPLE/*.cover)
 do 
    if [ ! -s $file ]
    then
-     echo "$file is has no soft clipped reads"
+     echo "$file has no soft clipped reads"
    fi
 done
 

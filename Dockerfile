@@ -59,8 +59,6 @@ RUN conda update -n base -c defaults conda -y && \
     -y && \
     conda clean --all -y
 
-RUN pip install cwlref-runner html5lib
-
 RUN which perl
 RUN perl -v
 
