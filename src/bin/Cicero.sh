@@ -212,16 +212,19 @@ parallel $PARALLEL_ARG < cmds-01.sh
 } 1> 01_ExtractSClips.out 2> 01_ExtractSClips.err
 
 ## QC
-cover_file_count=$(ls $CICERO_DATADIR/$SAMPLE/*.cover | wc -l)
-geneinfo_count=$(ls $CICERO_DATADIR/$SAMPLE/*.gene_info.txt | wc -l)
+shopt -s nullglob
+cover_files=($CICERO_DATADIR/$SAMPLE/*.cover)
+cover_file_count=${#cover_files[@]}
+geneinfo=($CICERO_DATADIR/$SAMPLE/*.gene_info.txt)
+geneinfo_count=${#geneinfo[@]}
 
 # Check to ensure the number of output files is equal to the expected number
-if [ $(wc -l cmds-01.sh | cut -f 1 -d ' ') -ne $(( $cover_file_count + $geneinfo_count )) ]
+if [ $(wc -l cmds-01.sh | awk '{ print $1} ') -ne $(( $cover_file_count + $geneinfo_count )) ]
 then
   exit "Error in ExtractSClips"
 fi
 
-for file in $(ls $CICERO_DATADIR/$SAMPLE/*.cover)
+for file in ${cover_files[@]}
 do 
    if [ ! -s $file ]
    then
@@ -271,7 +274,7 @@ cat $CICERO_DATADIR/$SAMPLE/annotated.fusion.txt $CICERO_DATADIR/$SAMPLE/annotat
 } 1> 04_Annotate.out 2> 04_Annotate.err
 
 ## QC 
-if [ $(wc -l $CICERO_DATADIR/$SAMPLE/annotated.all.txt | cut -f 1 -d ' ') -eq 1 ]
+if [ $(wc -l $CICERO_DATADIR/$SAMPLE/annotated.all.txt | awk '{ print $1 }') -eq 1 ]
 then
   echo "No annotated events found"
 fi
@@ -286,7 +289,7 @@ cp $CICERO_DATADIR/$SAMPLE/final_fusions.txt $CICERO_DATADIR/$SAMPLE/final_fusio
 } 1> 05_Filter.out 2> 05_Filter.err
 
 ## QC
-if  [ $(wc -l $CICERO_DATADIR/$SAMPLE/final_fusions.txt | cut -f 1 -d ' ') -eq 1 ]
+if  [ $(wc -l $CICERO_DATADIR/$SAMPLE/final_fusions.txt | awk '{ print $1 }') -eq 1 ]
 then
   echo "No events found"
 fi
