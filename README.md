@@ -1,16 +1,16 @@
-### Cicero 0.1.7
+### CICERO 0.1.7
 
 CICERO (Clipped-reads Extended for RNA Optimization) is an assembly-based algorithm to detect diverse classes
 of driver gene fusions from RNA-seq.
 
-Invoke the Cicero wrapper as
+Invoke the CICERO wrapper as
 ```
 Cicero.sh [-n ncores] -b bamfile -g genome -r refdir [-j junctions]
 ```
 
 Where `ncores` is the number of cores to be run on (with [GNU parallel](https://www.gnu.org/software/parallel/),
 `bamfile` is the input bamfile, `genome` is GRCh37-lite, `refdir` is the reference file directory specific to
-Cicero, and `junctions` is the (optional) junctions file output from RNApeg.
+CICERO, and `junctions` is the (optional) junctions file output from RNApeg.
 
 ### Dependencies
 
@@ -43,7 +43,7 @@ Cicero, and `junctions` is the (optional) junctions file output from RNApeg.
 
 ### Downloading RNApeg
 
-RNApeg is required to generate a junctions file for use by Cicero. You can get RNApeg from both docker and singularity.
+RNApeg is required to generate a junctions file for use by CICERO. You can get RNApeg from both docker and singularity.
 
 Running RNApeg via Docker:
 * docker run mnedmonson/public:rnapeg RNApeg.sh
@@ -54,7 +54,7 @@ Running RNApeg via Singularity:
 
 ### Downloading reference files
 
-Reference files are required to run Cicero. They can be found at the following location:
+Reference files are required to run CICERO. They can be found at the following location:
 * https://www.stjuderesearch.org/site/lab/zhang/cicero
 
 ### License
