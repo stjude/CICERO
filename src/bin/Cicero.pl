@@ -399,33 +399,33 @@ sub second_sc_chk {
 }
 
 =head1 VERSION
-This documentation refers to Cicero.pl version 0.3.0.
+This documentation refers to Cicero.pl version 0.1.7.
 
 =head1 USAGE
 	
 	This program depends on several things that need to be installed and/or
 	specified.  The program uses BioPerl and Bio::DB::Sam module to parse 
-	the files and bam files.  Also it uses Blat software suits to do genome
+	the files and bam files.  Also it uses Blat software suites to do genome
 	mapping and alignment.  To make the program efficient, it also requires
 	a blat server setup.  And the program uses CAP3 assembler.
 
 =head1 AUTHOR
-Yongjin Li (yongjin.li@stjude.org)
-
+Yongjin Li 
+Liqing Tian (Liqing.Tian@STJUDE.ORG)
 
 =head1 LICENCE AND COPYRIGHT
 
-Copyright (c) 2015 by St. Jude Children's Research Hospital.
+Copyright 2019 St. Jude Children's Research Hospital
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 2 of the License, or
-(at your option) any later version. 
+Licensed under a modified version of the Apache License, Version 2.0
+(the "License") for academic research use only; you may not use this
+file except in compliance with the License. To inquire about commercial
+use, please contact the St. Jude Office of Technology Licensing at
+scott.elmer@stjude.org.
+    
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
-This program is distributed in the hope that it will be useful, 
-but WITHOUT ANY WARRANTY; without even the implied warranty of 
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the 
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program. If not, see <http://www.gnu.org/licenses/>.

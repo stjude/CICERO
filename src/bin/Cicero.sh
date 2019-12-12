@@ -20,7 +20,7 @@ REFFA=""
 GENOME=""
 SAMPLE=""
 TARGET="TRANSCRIPTOME"
-NCORES=1
+NCORES=
 OUTDIR=$(pwd)
 
 usage() {
@@ -43,6 +43,12 @@ while [ ! -z "$1" ]; do
     esac
     shift
 done
+
+PARALLEL_ARG=
+if [ $NCORES ]
+then
+  PARALLEL_ARG="-j $NCORES"
+fi
 
 #######################
 ### Validate inputs ###
@@ -71,10 +77,25 @@ fi
 
 SAMPLE=$(basename $BAMFILE .bam)
 if [[ $GENOME != "GRCh37-lite" ]]; then
-    >&2 echo "ERROR: Only genome 'GRCh37-lite' is currently supported'"
+    >&2 echo "ERROR: Only genome 'GRCh37-lite' is currently supported"
     exit 1
 fi
 
+# Check for GNU parallel and BLAT 
+which parallel 2> /dev/null > /dev/null
+RET=$?
+if [ $RET -eq 1 ] 
+then
+    >&2 echo "ERROR: GNU parallel required"
+    exit 1
+fi
+which gfServer 2> /dev/null > /dev/null
+RET=$?
+if [ $RET -eq 1 ] 
+then
+    >&2 echo "ERROR: BLAT required (gfServer)"
+    exit 1
+fi
 # Set inputs
 mkdir -p $OUTDIR
 cd $OUTDIR
@@ -187,8 +208,29 @@ echo "Step 01 - $(date +'%Y.%m.%d %H:%M:%S') - ExtractSClips"
 LEN=$(getReadLength.sh $BAMFILE)
 get_sc_cmds.pl -i $BAMFILE -genome $GENOME -o $CICERO_DATADIR/$SAMPLE -l $LEN > cmds-01.sh
 echo "get_geneInfo.pl -i $BAMFILE -o $CICERO_DATADIR/$SAMPLE -l $LEN -genome $GENOME -s $SAMPLE" >> cmds-01.sh
-parallel -j $NCORES < cmds-01.sh
+parallel $PARALLEL_ARG < cmds-01.sh
 } 1> 01_ExtractSClips.out 2> 01_ExtractSClips.err
+
+## QC
+shopt -s nullglob
+cover_files=($CICERO_DATADIR/$SAMPLE/*.cover)
+cover_file_count=${#cover_files[@]}
+geneinfo=($CICERO_DATADIR/$SAMPLE/*.gene_info.txt)
+geneinfo_count=${#geneinfo[@]}
+
+# Check to ensure the number of output files is equal to the expected number
+if [ $(wc -l cmds-01.sh | awk '{ print $1} ') -ne $(( $cover_file_count + $geneinfo_count )) ]
+then
+  exit "Error in ExtractSClips"
+fi
+
+for file in ${cover_files[@]}
+do 
+   if [ ! -s $file ]
+   then
+     echo "$file has no soft clipped reads"
+   fi
+done
 
 ########################
 ### STEP 02 - Cicero ###
@@ -199,7 +241,7 @@ prepareCiceroInput.pl -o $CICERO_DATADIR/$SAMPLE -genome $GENOME -p $SAMPLE -l $
 for SCFILE in $CICERO_DATADIR/$SAMPLE/$SAMPLE.*.SC; do
     echo "Cicero.pl -i $BAMFILE -o $(echo $SCFILE | sed 's/\.SC//g') -l $LEN -genome $GENOME -f $SCFILE"
 done > cmds-02.sh
-parallel -j $NCORES < cmds-02.sh
+parallel $PARALLEL_ARG < cmds-02.sh
 } 1> 02_Cicero.out 2> 02_Cicero.err
 
 #########################
@@ -211,6 +253,16 @@ cat $CICERO_DATADIR/$SAMPLE/*/unfiltered.fusion.txt > $CICERO_DATADIR/$SAMPLE/un
 cat $CICERO_DATADIR/$SAMPLE/*/unfiltered.internal.txt > $CICERO_DATADIR/$SAMPLE/unfiltered.internal.txt
 } 1> 03_Combine.out 2> 03_Combine.err
 
+## QC
+if [ ! -s $CICERO_DATADIR/$SAMPLE/unfiltered.fusion.txt ]
+then
+  echo "No fusions in unfiltered data."
+fi
+if [ ! -s $CICERO_DATADIR/$SAMPLE/unfiltered.internal.txt ]
+then
+  echo "No internal events in unfiltered data."
+fi 
+
 ##########################
 ### STEP 04 - Annotate ###
 ##########################
@@ -221,6 +273,12 @@ annotate.pl -i $BAMFILE -o $CICERO_DATADIR/$SAMPLE -genome $GENOME -l $LEN -s $S
 cat $CICERO_DATADIR/$SAMPLE/annotated.fusion.txt $CICERO_DATADIR/$SAMPLE/annotated.internal.txt > $CICERO_DATADIR/$SAMPLE/annotated.all.txt
 } 1> 04_Annotate.out 2> 04_Annotate.err
 
+## QC 
+if [ $(wc -l $CICERO_DATADIR/$SAMPLE/annotated.all.txt | awk '{ print $1 }') -eq 1 ]
+then
+  echo "No annotated events found"
+fi
+
 ########################
 ### STEP 05 - Filter ###
 ########################
@@ -229,6 +287,12 @@ echo "Step 05 - $(date +'%Y.%m.%d %H:%M:%S') - Filter"
 cicero_filter.sh $CICERO_DATADIR $SAMPLE $GENOME
 cp $CICERO_DATADIR/$SAMPLE/final_fusions.txt $CICERO_DATADIR/$SAMPLE/final_fusions.report.html
 } 1> 05_Filter.out 2> 05_Filter.err
+
+## QC
+if  [ $(wc -l $CICERO_DATADIR/$SAMPLE/final_fusions.txt | awk '{ print $1 }') -eq 1 ]
+then
+  echo "No events found"
+fi
 
 ############################
 ### Kill the blat server ###

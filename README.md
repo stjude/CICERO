@@ -1,6 +1,7 @@
-### Cicero 0.1.6
+### Cicero 0.1.7
 
-(Explain what this is and what paper to cite)
+CICERO (Clipped-reads Extended for RNA Optimization) is an assembly-based algorithm to detect diverse classes
+of driver gene fusions from RNA-seq.
 
 Invoke the Cicero wrapper as
 ```
@@ -53,4 +54,20 @@ Running RNApeg via Singularity:
 
 ### Downloading reference files
 
-(Explain how to download the reference files here)
+Reference files are required to run Cicero. They can be found at the following location:
+* https://www.stjuderesearch.org/site/lab/zhang/cicero
+
+### License
+Copyright 2019 St. Jude Children's Research Hospital
+
+Licensed under a modified version of the Apache License, Version 2.0
+(the "License") for academic research use only; you may not use this
+file except in compliance with the License. To inquire about commercial
+use, please contact the St. Jude Office of Technology Licensing at
+scott.elmer@stjude.org.
+    
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
