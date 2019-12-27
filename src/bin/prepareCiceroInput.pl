@@ -3,6 +3,8 @@
 use strict;
 use warnings; 
 
+use locale; 
+
 use Carp;
 use Getopt::Long;
 use English;
@@ -67,7 +69,7 @@ while(<$GI>){
 close $GI;
 
 my $SC_file = "$out_dir/$out_prefix.SC.txt";
-`cat $out_dir/$out_prefix*.cover > $SC_file`;
+`ls $out_dir/$out_prefix*.cover | xargs cat > $SC_file`;
 print STDERR $SC_file, "\n";
 open my $SCI, "$SC_file";
 
