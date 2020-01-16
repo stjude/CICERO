@@ -57,6 +57,11 @@ Running RNApeg via Singularity:
 Reference files are required to run CICERO. They can be found at the following location:
 * https://www.stjuderesearch.org/site/lab/zhang/cicero
 
+### Demo
+
+A demo of CICERO can be found at the following location:
+* https://www.stjuderesearch.org/site/lab/zhang/cicero
+
 ### License
 Copyright 2019 St. Jude Children's Research Hospital
 
