@@ -371,6 +371,7 @@ sub remove_artificial_contigs {
 	my $psl_file = $contig_file.".psl";
 	my $read_len = $param{-READ_LEN};
 	my $sc_chr = $param{-scChr};
+	$sc_chr =~ s/^chr//;
 	my $sc_site = $param{-scSite};
 	my $tentative_anchor = $param{-anchorBP} || "0:0";
 	my $clip = $param{-CLIP};
@@ -393,6 +394,7 @@ sub remove_artificial_contigs {
 		while(my $hit = $result->next_hit) { #foreach chrom
 			my (@left_mappings, @right_mappings);
 			my $tchr = $hit->name;
+			$tchr =~ s/^chr//;
 			while( my $hsp = $hit->next_hsp) {
 				my ($n_matches) = $hsp->matches;
 				$best_matches{$qname} = $n_matches if($n_matches > $best_matches{$qname});
@@ -631,6 +633,7 @@ sub overhang_intrachr_mapping {
 	my $options = $param{-OPTIONS} || $self->{OPTIONS};
 	my $read_len = $param{-READ_LEN};
 	my $sc_chr = $param{-scChr};
+	$sc_chr =~ s/^chr//;
 	my $scSite = $param{-scSite};
 	my $tentative_anchor = $param{-anchorBP} || "0:0";
 	my $clip = $param{-CLIP};
@@ -649,6 +652,7 @@ sub overhang_intrachr_mapping {
 		my $qseq = $pm->{qseq};
 		while( my $hit = $result->next_hit) { #foreach chrom
 			my $tchr = $hit->name;
+			$tchr =~ s/^chr//;
 			next if($tchr ne $sc_chr);
 			my @overhang_mappings;
 			my $min_dist=$self->{MIN_FS_DIST};
@@ -1137,7 +1141,11 @@ sub select_overhang_mapping {
 		print STDERR "qname: $qname\tctg: $ctg\n" if($debug);
 		while( my $hit = $result->next_hit ) {
 			my $tchr = $hit->name;
-			next if($tchr eq $sc_chr);
+			my $l_tchr = $tchr;
+			my $l_sc_chr = $sc_chr; 
+			$l_tchr =~ s/^chr//; 
+			$l_sc_chr =~ s/^chr//;
+			next if($l_tchr eq $l_sc_chr);
 			while( my $hsp = $hit->next_hsp) {
 				my ($n_matches_2) = $hsp->matches;
 				#print STDERR join("\t", $hsp->start('query'), $self->{MIN_HIT_LEN}, $contig_len, $hsp->end('query')), "\n";# || $percent < 0.9);
@@ -1247,7 +1255,11 @@ sub select_sc_contig {
 				#print STDERR "scSite, clip, tchr, tstart, tend, qstart, qend, qstrand, n_matches\n", join("\t", $scSite, $clip, $tchr, $tstart, $tend, $qstart, $qend, $qstrand, $n_matches), "\n" if($debug);
 				next if($qstart < $self->{MIN_HIT_LEN} && $contig_len - $qend < $self->{MIN_HIT_LEN} && $identity > 0.9); # to remove fully mapped contigs
 				$total_length += $n_matches;
-				last if($sc_chr ne $tchr);
+				my $l_sc_chr = $sc_chr;
+				$l_sc_chr =~ s/^chr//;
+				my $l_tchr = $tchr; 
+				$l_tchr =~ s/^chr//;
+				last if($l_sc_chr ne $l_tchr);
 				
 				# need to trim the wrongly mapped region.
 				my @tblocks = @{$hsp->gap_blocks('hit')};

@@ -76,10 +76,10 @@ elif [[ $JUNCTIONS && ! -f $JUNCTIONS ]]; then
 fi
 
 SAMPLE=$(basename $BAMFILE .bam)
-if [[ $GENOME != "GRCh37-lite" ]]; then
-    >&2 echo "ERROR: Only genome 'GRCh37-lite' is currently supported"
-    exit 1
-fi
+#if [[ $GENOME != "GRCh37-lite" ]]; then
+#    >&2 echo "ERROR: Only genome 'GRCh37-lite' is currently supported"
+#    exit 1
+#fi
 
 # Check for GNU parallel and BLAT 
 which parallel 2> /dev/null > /dev/null

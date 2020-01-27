@@ -1171,7 +1171,14 @@ sub quantification {
 		   ($first_bp->{ort}, $first_bp->{tname}, $first_bp->{tstart}, $first_bp->{tend}, $first_bp->{qstart}, $first_bp->{qend}, $first_bp->{qstrand}, $first_bp->{matches}, $first_bp->{percent}, $first_bp->{repeat});
 		my ($ortB ,$chrB, $tstartB, $tendB, $qstartB, $qendB, $qstrandB, $matchesB, $percentB, $repeatB) = 
 		   ($second_bp->{ort}, $second_bp->{tname}, $second_bp->{tstart}, $second_bp->{tend}, $second_bp->{qstart}, $second_bp->{qend}, $second_bp->{qstrand}, $second_bp->{matches}, $second_bp->{percent}, $second_bp->{repeat});
-		if($bp1->{tname} =~ m/chr/) {$chrA = "chr".$chrA; $chrB = "chr".$chrB}
+		if($bp1->{tname} =~ m/chr/) {
+			if ($chrA !~ m/^chr/){
+			  $chrA = "chr".$chrA; 
+			}
+			if ($chrB !~ m/^chr/){
+			  $chrB = "chr".$chrB;
+			}
+		}	
 		print STDERR "first_bp: ",  join("\t", $ortA, $chrA, $tstartA, $tendA, $qstartA, $qendA, $qstrandA, $matchesA, $repeatA), "\n" if($debug);
 		print STDERR "second_bp: ", join("\t", $ortB, $chrB, $tstartB, $tendB, $qstartB, $qendB, $qstrandB, $matchesB, $repeatB), "\n" if($debug);
 		my ($qposA, $qposB) = ($ortA > 0) ? ($qendA, $qstartB) : ($qstartA, $qendB);
