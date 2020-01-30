@@ -73,7 +73,7 @@ while (my $chr = <$chrFile>){
 		$skip = 1 if ($chr =~ /.*$bad.*/i); 
 	}
 	next if ($skip);  
-	if($excludes_files){
+	if($excludes_file){
 		my $s = 0; # Intialize to start of the chromosome to search for regions.
 		foreach my $start (sort {$a <=> $b} keys %{$regions{$chr}}){
 			my $end = $regions{$chr}{$start};
