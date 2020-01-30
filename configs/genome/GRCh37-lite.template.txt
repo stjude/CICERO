@@ -7,6 +7,7 @@ REFSEQ_REFFLAT	/Homo_sapiens/GRCh37-lite/mRNA/RefSeq/refFlat-sharp.txt
 BLACKLIST_GENES	/Homo_sapiens/GRCh37-lite/CICERO/blacklist.genes.txt
 BLACKLIST_FUSIONS	/Homo_sapiens/GRCh37-lite/CICERO/blacklist.fusions.txt
 EXCLD_CHR	M,Y,GL,HAP
+EXCLUDED_REGIONS	/Homo_sapiens/GRCh37-lite/CICERO/hg19.exclude
 REFGENE2PROTEIN	/Homo_sapiens/GRCh37-lite/CICERO/refgene2protein.tab
 CHR_LENGTHS	/Homo_sapiens/GRCh37-lite/SUPPORT/chromosome_lengths.txt
 COMPLEX_REGIONS	/Homo_sapiens/GRCh37-lite/CICERO/complex_regions.txt

@@ -25,6 +25,7 @@ my $bam_file;
 my $genome; 
 my $read_length = 100;
 my $output_dir;
+my $excludes_file;
 my $optionOK = GetOptions(
 	's|sample=s'	=> \$sample,
 	'q|queue=s'		=> \$queue,
@@ -36,36 +37,91 @@ my $optionOK = GetOptions(
 	'usage'			=> \$usage,
 	'v|version'		=> \$version,
 	'o|outdir=s'	=> \$output_dir,
+	'e|exclude=s'   => \$excludes_file
 );
 if( !$bam_file) {
 	croak "you must provide sample names or input bam files to run the program\n";
 }
 
-my ($genome_file, $gene_model_file, $excluded_chr);
+my ($genome_file, $gene_model_file, $excluded_chr, $chr_lengths);
 
 my $conf = &TdtConfig::findConfig("genome", $genome); 
 if ($conf){
 	$conf = &TdtConfig::readConfig("genome", $genome); 	
 	$gene_model_file = $conf->{'REFSEQ_REFFLAT'};
 	$genome_file = $conf->{'FASTA'}; 
-	$excluded_chr = $conf->{'EXCLD_CHR'}; 	
+	$excluded_chr = $conf->{'EXCLD_CHR'};
+	$excludes_file = $conf->{'EXCLUDED_REGIONS'}; 	
 }
 else{
 	croak "Unknown genome name: $genome\n";
 }
 
 my @chrs = split(/,/, $excluded_chr); 
+my %regions; 
 
 open my $chrFile, "<", $conf->{'CHR_LENGTHS'};
 while (my $chr = <$chrFile>){
-	($chr, my $o) = split(/\s/, $chr);
+	($chr, my $len) = split(/\s/, $chr);
+	$chr = handleChrPrefix($chr); 
 	my $skip = 0; 
 	foreach my $bad (@chrs){
 		$skip = 1 if ($chr =~ /.*$bad.*/i); 
 	}
 	next if ($skip);  
-	my $cmd = "extract_range.pl --ref_genome $genome_file -i $bam_file -o $output_dir -r $chr -l $read_length -m 2 -min_sc_len 3";
-	print $cmd."\n";
+	if($excludes_files){
+		my $s = 0; # Intialize to start of the chromosome to search for regions.
+		foreach my $start (sort {$a <=> $b} (keys $regions{$chr})){
+			my $end = $regions{$chr}{$start};
+			# If the region is 0 length, skip it
+			if ($start == $end){
+				$s = $end;
+				next;
+			} 
+			# If the region start is equal to current start position, 
+			# we need to skip to the end of this region. 
+			if ($s == $start){
+				$s = $end + 1;
+			}
+			else{ 
+				# If the start of the region is not the current start,  
+				# we need to create a region from the current start to the
+				# beginning of this region.
+				my $region_end = $start - 1;
+				my $cmd = "extract_range.pl --ref_genome $genome_file -i $bam_file -o $output_dir -r $chr:$s-$region_end -l $read_length -m 2 -min_sc_len 3";
+				print $cmd."\n";
+				# The new current start is the start of this region.
+				$s = $end + 1; 
+			}
+		}
+		# If our last excluded region didn't extend to the end
+		# of the chromosome, add a region. 
+		if ($s < $len){
+ 			my $cmd = "extract_range.pl --ref_genome $genome_file -i $bam_file -o $output_dir -r $chr:$s-$len -l $read_length -m 2 -min_sc_len 3";
+			print $cmd."\n";
+		} 
+	}
+	else{
+		my $cmd = "extract_range.pl --ref_genome $genome_file -i $bam_file -o $output_dir -r $chr -l $read_length -m 2 -min_sc_len 3";
+		print $cmd."\n";
+	}
+}
+
+sub readRegions{
+	my ($file) = @_;
+	open(my $fh, "<", $file); 
+	while(my $line = <$fh>){
+		chomp $line; 
+		my ($bin, $chrom, $start, $end, $index, $n, $size, $type, $bridge) = split("\t", $line);
+		$chrom = handleChrPrefix($chrom); 
+		$regions{$chrom}{$start} = $end; 
+	}
+}
+
+sub handleChrPrefix{
+	my ($in) = @_; 
+	$in =~ s/^chr//;
+	return $in; 
 }
 
 =head1 LICENCE AND COPYRIGHT
