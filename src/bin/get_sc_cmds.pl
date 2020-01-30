@@ -92,8 +92,10 @@ while (my $chr = <$chrFile>){
 				# we need to create a region from the current start to the
 				# beginning of this region.
 				my $region_end = $start - 1;
-				my $cmd = "extract_range.pl --ref_genome $genome_file -i $bam_file -o $output_dir -r $chr:$s-$region_end -l $read_length -m 2 -min_sc_len 3";
-				print $cmd."\n";
+				if ($s < $region_end){
+					my $cmd = "extract_range.pl --ref_genome $genome_file -i $bam_file -o $output_dir -r $chr:$s-$region_end -l $read_length -m 2 -min_sc_len 3";
+					print $cmd."\n";
+				}
 				# The new current start is the start of this region.
 				$s = $end + 1; 
 			}
