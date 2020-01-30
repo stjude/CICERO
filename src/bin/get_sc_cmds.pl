@@ -116,7 +116,7 @@ sub readRegions{
 	open(my $fh, "<", $file); 
 	while(my $line = <$fh>){
 		chomp $line; 
-		my ($bin, $chrom, $start, $end, $index, $n, $size, $type, $bridge) = split("\t", $line);
+		my ($chrom, $start, $end, $type) = split("\t", $line);
 		$chrom = handleChrPrefix($chrom); 
 		$regions{$chrom}{$start} = $end; 
 	}
