@@ -92,6 +92,7 @@ if ($header){
 }
 
 my $conf; 
+# Load configuration values for the genome build
 if (&TdtConfig::findConfig("genome", $genome)){
 	$conf = &TdtConfig::readConfig("genome", $genome); 
 }
@@ -117,12 +118,20 @@ $gold_gene_file = $conf->{CLINCLS_GOLD_GENE_LIST_FILE};
 print STDERR "CLINCLS_GOLD_GENE_LIST_FILE:", $gold_gene_file, "\n";
 $excluded_chroms = $conf->{EXCLD_CHR} unless($excluded_chroms);
 $complex_region_file = $conf->{COMPLEX_REGIONS} unless($complex_region_file);
+
+# Load Cicero-specific configuration settings
 $conf = &TdtConfig::readConfig('app', 'cicero'); 
 $min_hit_len = $conf->{MIN_HIT_LEN} unless($min_hit_len);
 $max_num_hits = $conf->{MAX_NUM_HITS} unless($max_num_hits);
 $min_fusion_distance = $conf->{MIN_FUSION_DIST} unless($min_fusion_distance);
+
+# Assume sample name is the bam prefix
 $sample = basename($input_bam, ".bam") unless($sample);
+
 my @excluded_chroms = split(/,/,$excluded_chroms);
+
+# Load list of complex regions to be used later to determine if
+# breakpoints are located within a "complex" region
 my @complex_regions;
 #if ($complex_region_file && -s $complex_region_file){
 	open (my $CRF, $complex_region_file);
@@ -141,6 +150,7 @@ my @complex_regions;
 	close($CRF);
 #}
 
+# Combine all of the individual results from Cicero.pl
 my $unfiltered_file = "$out_dir/unfiltered.fusion.txt";
 if($internal) { 
 	$unfiltered_file = "$out_dir/unfiltered.internal.txt";
@@ -171,7 +181,8 @@ while(<$GI>){
 }
 close $GI;
 
-# Those variable will be global
+# Intialize CAP3 and BLAT utilities
+# These variables will be global
 my $assembler = Assembler->new( 
 	-PRG => "cap3",
 	-OPTIONS => $cap3_options
@@ -187,11 +198,14 @@ my $mapper = Mapper->new(
 	-MIN_FS_DIST => $min_fusion_distance
 );
 
+# Read the gene model from a refflat file
 my $gm_format = "REFFLAT";
 my $gm = GeneModel->new if($gene_model_file);
 $gm->from_file($gene_model_file, $gm_format);
 
 croak "Specify a genome: $ref_genome" unless (-f $ref_genome); 
+
+# Load the BAM file
 my $sam_d = Bio::DB::Sam->new( -bam => $input_bam, -fasta => $ref_genome);
 my @seq_ids = $sam_d->seq_ids;
 my $validator = CiceroSCValidator->new();
@@ -262,6 +276,8 @@ while(<$ITD_F>){
 	$known_ITDs{$gene} = [$start, $end];
 }
 
+# Load gene pairs that are enhancer activated
+# involving T-cell receptors and immunoglobulin loci
 my %enhancer_activated_genes = ();
 if($known_fusion_file && -e $known_fusion_file){
    open(my $KFF, $known_fusion_file);
@@ -362,7 +378,10 @@ while(my $line = <$UNF>){
 	$bad_evidence += 1 if($second_bp->{repeat} > 0.9);
 	$bad_evidence += 1 if($second_bp->{percent} < 0.95);
 
+        # If either breakpoint is in an excluded chromosome, skip it
 	next if(is_bad_chrom($first_bp->{tname}) || is_bad_chrom($second_bp->{tname}));
+
+	# Check if both breakpoints are in complex regions, if so skip
 	my($crA, $crB) = (in_complex_region($first_bp->{tname}, $first_bp->{tpos}), in_complex_region($second_bp->{tname}, $second_bp->{tpos}));
 	next if($crA && $crB);
 	$first_bp->{gene} = $crA if($crA);
@@ -375,9 +394,14 @@ while(my $line = <$UNF>){
 	#next if($first_bp->{repeat} > 0.8 && $second_bp->{repeat} > 0.8 || (abs($gap) > 5 && $first_bp->{repeat} + $second_bp->{repeat} > 1.5));
 #	y ($g1_chr, $pos1, $strand1, $g2_chr, $pos2, $strand2) = @fields[8,5,13,19,6,24];
 
+	# Check if the reference uses 'chr' prefixes
+	# Ensure that the breakpoint chromosome names match
 	unless($seq_ids[0] =~ m/chr/) {$first_bp->{tname} =~ s/chr//; $second_bp->{tname} =~ s/chr//;}
 	next if(!$internal && is_bad_fusion($first_bp->{tname}, $first_bp->{tpos}, $second_bp->{tname}, $second_bp->{tpos}));
+
+	# Deteremine the variant type: CTX, Internal_inv, Interal_splicing, Internal_dup, ITX, read_through, DEL, INS
 	my $type = get_type($first_bp, $second_bp, $same_gene);
+	# If we're not processing combined results (-all) and this is an Internal event
 	if(!$all_output && $type =~ m/Internal/){
 		#next unless($annotated_SV->{type} eq 'Internal_dup');
 		if(%gold_genes){
@@ -418,11 +442,14 @@ while(my $line = <$UNF>){
 		first_bp => $first_bp,
 		second_bp => $second_bp,
 		};
+	# If our SV is not a duplicate (same chromosome and within 10bp of the breakpoints)
 	if($tmp_SV && ! is_dup_raw_SV(\@raw_SVs, $tmp_SV)){
 		push @raw_SVs, $tmp_SV;
+		# If we've seen this sequence string, increment
+		# recurrance count
 		if(exists($contig_recurrance{$qseq})){
 			$contig_recurrance{$qseq}++;
-		}else{
+		}else{ # Check the reverse complement as well.
 			$qseq = rev_comp($qseq);
 			if(exists($contig_recurrance{$qseq})){
 				$contig_recurrance{$qseq}++;
@@ -551,6 +578,7 @@ my $annotation_dir = tempdir(DIR => "$out_dir/tmp_anno");
 `mkdir -p $annotation_dir`;
 print STDERR "Annotation Dir: $annotation_dir\n" if($debug); 
 
+# Loop over the soft clip files again
 #my @configs = <~myname/project/etc/*.cfg>;
 my @cover_files = <$out_dir/*.cover>;
 foreach my $fn (@cover_files) {
@@ -564,15 +592,17 @@ foreach my $fn (@cover_files) {
 		my ($chr, $pos, $clip, $sc_cover, $cover, $psc, $nsc, $pn, $nn) = split(/\t/,$line);
 		$clip = RIGHT_CLIP if($clip eq "+");
 		$clip = LEFT_CLIP if($clip eq "-");
+		# If this is a new site, add it to the list of breakpoints
 		my $site= $chr."_".$pos."_".$clip;
 		if(not exists($breakpoint_sites{$site})){
 			$breakpoint_sites{$site} = $line;
 		}
-		else{
+		else{ # Look for breakpoints already added that are within +/- 5bp
 			my $sc_cover0 = 0;
 			for(my $s=-5; $s<=5; $s++){
 				my $tmp_pos = $pos + $s;
 				my $tmp_site= $chr."_".$tmp_pos."_".$clip;
+				# If the new site is within +/- 5bp and its coverage is greater than the prior site
 				if(exists($breakpoint_sites{$tmp_site}) && $sc_cover > $sc_cover0){
 					$sc_cover0 = $sc_cover;
 					$breakpoint_sites{$site} = $line;
