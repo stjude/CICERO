@@ -55,14 +55,6 @@ nm2rows
 clean_sharp
 		  );
 
-
-use DBTools qw(
-		get_dbi_hg18
-		get_dbi_hg19
-		get_dbi_mm9
-		selectall_hashref
-);
-
 use constant CHUNK_SIZE => 100000;
 
 sub new {
@@ -92,21 +84,7 @@ sub setup {
 
   my $is_interbase;
 
-  if ($style eq "refgene") {
-    $is_interbase = 1;
-    my $genome = $self->genome() || die "specify -genome";
-    my $dbi;
-    if ($genome eq "hg19" or $genome eq "GRCh37-lite") {
-      $dbi = get_dbi_hg19();
-    } elsif ($genome eq "hg18") {
-      $dbi = get_dbi_hg18();
-    } elsif ($genome eq "mm9" or $genome eq "MGSCv37") {
-      $dbi = get_dbi_mm9();
-    } else {
-      die "unknown database for genome $genome";
-    }
-    $rows = selectall_hashref($dbi, "select chrom,txStart,txEnd,name2,name from refGene");
-  } elsif ($style eq "gene_exon_region") {
+  if ($style eq "gene_exon_region") {
     $is_interbase = 0;
     my $dir = $self->gene_exon_region_dir() || confess "-gene_exon_region_dir";
     my @files = glob($dir . "/*region.txt");
