@@ -99,17 +99,15 @@ else{
 	croak("no config");
 }
 
-#$all_output = 1 if(!$internal);
 $ref_genome = $conf->{FASTA} unless($ref_genome && -f $ref_genome);
 $blat_server = $conf->{BLAT_HOST} unless($blat_server);
 $blat_port = $conf->{BLAT_PORT} unless($blat_port);
-$dir_2bit = '/';#$conf->{DIR_2BIT} unless($dir_2bit);
+$dir_2bit = '/';
 $gene_model_file = $conf->{'REFSEQ_REFFLAT'} unless($gene_model_file);
 print STDERR "gene_model_file: $gene_model_file\n";
 $blacklist_gene_file = $conf->{BLACKLIST_GENES} unless($blacklist_gene_file);
 $blacklist_fusion_file = $conf->{BLACKLIST_FUSIONS} unless($blacklist_fusion_file);
 print STDERR "blacklist_fusion_file: $blacklist_fusion_file\n";
-#$conf->{BLACKLIST_GENES} unless($blacklist_gene_file);
 $known_itd_file = $conf->{KNOWN_ITD_FILE} unless($known_itd_file);
 print STDERR "KNOWN_ITD_FILE: ", $known_itd_file, "\n";
 $known_fusion_file = $conf->{KNOWN_FUSIONS} unless($known_fusion_file);
@@ -149,13 +147,13 @@ if($internal) {
 else{
 	`cat $out_dir/*/unfiltered.fusion.txt > $unfiltered_file` unless(-s $unfiltered_file);
 }
+print "Unfiltered fusions file: $unfiltered_file\n"; 
 
 if (! $gene_info_file || ! -e $gene_info_file){
 	my $out_prefix = basename($input_bam, ".bam");
 	$gene_info_file = "$out_prefix.gene_info.txt";
 	$gene_info_file = File::Spec->catfile($out_dir, $gene_info_file);
 }
-#$gene_info_file = "$out_dir/gene_info.txt" if (! $gene_info_file && ! -e $gene_info_file); 
 my $out_file = $unfiltered_file;
 $out_file =~ s/unfiltered/annotated/;
 print STDERR "unfiltered results: $unfiltered_file\n" if($debug);
@@ -167,7 +165,6 @@ while(<$GI>){
 	chomp;
 	my ($name, $gRange, $strand, $mRNA_length, $cnt, $sc_cutoff) = split(/\t/);
 	$gene_info{$name} = $sc_cutoff;
-	#$gene_info{$name} = $cnt/$mRNA_length;
 }
 close $GI;
 
@@ -177,7 +174,6 @@ my $assembler = Assembler->new(
 	-OPTIONS => $cap3_options
 );
 
-#print "blat_client_exe:$blat_client_exe\n\n";
 my $mapper = Mapper->new(
 	-PRG => join(' ', ("gfClient", $blat_server, $blat_port)),
 	-OPTIONS => $blat_client_options,
@@ -218,7 +214,6 @@ if($gold_gene_file && -e $gold_gene_file){
 }
 
 my %bad_fusions;
-#if(!$internal && $blacklist_fusion_file && -s $blacklist_fusion_file){
 if(!$internal){
 	my $df = new DelimitedFile(
 	       "-file" => $blacklist_fusion_file,
@@ -358,28 +353,19 @@ while(my $line = <$UNF>){
 	};
 	$second_bp->{clip} = $second_bp->{qstrand}*$second_bp->{ort};
 
-	$bad_evidence += 1 if($second_bp->{matches} < 50);
-	$bad_evidence += 1 if($second_bp->{repeat} > 0.9);
-	$bad_evidence += 1 if($second_bp->{percent} < 0.95);
-
+        # If either breakpoint is in an excluded chromosome, skip it
 	next if(is_bad_chrom($first_bp->{tname}) || is_bad_chrom($second_bp->{tname}));
 	my($crA, $crB) = (in_complex_region($first_bp->{tname}, $first_bp->{tpos}), in_complex_region($second_bp->{tname}, $second_bp->{tpos}));
 	next if($crA && $crB);
 	$first_bp->{gene} = $crA if($crA);
 	$second_bp->{gene} = $crB if($crB);
 
-	#$bad_evidence += 1 if($crB);
-	#$bad_evidence += 1 if($crA);
-	#next if(!$all_output && $first_bp->{reads_num} < 5 &&  $bad_evidence > 3);
-
-	#next if($first_bp->{repeat} > 0.8 && $second_bp->{repeat} > 0.8 || (abs($gap) > 5 && $first_bp->{repeat} + $second_bp->{repeat} > 1.5));
-#	y ($g1_chr, $pos1, $strand1, $g2_chr, $pos2, $strand2) = @fields[8,5,13,19,6,24];
-
+	# Check if the reference uses 'chr' prefixes
+	# Ensure that the breakpoint chromosome names match
 	unless($seq_ids[0] =~ m/chr/) {$first_bp->{tname} =~ s/chr//; $second_bp->{tname} =~ s/chr//;}
 	next if(!$internal && is_bad_fusion($first_bp->{tname}, $first_bp->{tpos}, $second_bp->{tname}, $second_bp->{tpos}));
 	my $type = get_type($first_bp, $second_bp, $same_gene);
 	if(!$all_output && $type =~ m/Internal/){
-		#next unless($annotated_SV->{type} eq 'Internal_dup');
 		if(%gold_genes){
 			 next unless ($type eq 'Internal_dup' && exists($gold_genes{$first_bp->{gene}}));
 		}
@@ -389,31 +375,8 @@ while(my $line = <$UNF>){
 		unless(is_good_ITD($first_bp, $second_bp)){
 			next if(!$DNA && ($first_bp->{reads_num} < 5*$cutoff || $first_bp->{reads_num} < 10));
 		}
-=pos
-		if($type eq 'Internal_dup'){
-			next unless(is_good_ITD($first_bp, $second_bp));}
-		elsif(!$DNA){
-			next if($type eq 'Internal_splicing');
-			next if($cutoff < 0 || $first_bp->{reads_num} < abs(10*$cutoff) || $first_bp->{reads_num} < 50);
-		        next unless( $first_bp->{feature} =~ m/coding/ || 
-			    $second_bp->{feature} =~ m/coding/);
-		}
-=cut
 	}
 
-	#next if (($first_bp->{matches} <= 40 && ($first_bp->{repeat} > 0.7 || $first_bp->{percent} < 0.9)) ||
-	#	($second_bp->{matches} <= 40 && ($second_bp->{repeat} > 0.7 || $second_bp->{percent} < 0.9)));
-
-#	my $same_gene = 0;
-#	if($gene1 ne 'NA' && $gene2 ne 'NA'){
-#		$same_gene = same_gene($gene1, $gene2);}
-#	else{
-#		$same_gene = 1 if($g1_chr eq $g2_chr && abs($pos1-$pos2) < 1000);
-#	}
-
-	#print STDERR "=== 0 ===\n";
-
-#	next if(abs($second_bp->{qend} - $second_bp->{qstart}) < 25);
 	my $tmp_SV = {
 		first_bp => $first_bp,
 		second_bp => $second_bp,
@@ -431,12 +394,10 @@ while(my $line = <$UNF>){
 		$tmp_SV->{junc_seq} = $qseq;
 		$tmp_SV->{type} = $type;
 	}
-	#print STDERR "raw_SVs: ", scalar @raw_SVs, "\n";
 }
 close($UNF);
 
 if($junction_file){
-#if($junction_file && -s $junction_file){
   open(my $JUNC, "$junction_file");
   while(my $line = <$JUNC>){
 	chomp($line);
@@ -454,9 +415,6 @@ if($junction_file){
 
 	my($crA, $crB) = (in_complex_region($chr1, $pos1), in_complex_region($chr2, $pos2));
 	next if($crA && $crB);
-
-	#my $inter_genes = count_genes($chr1, $pos1, $pos2);
-	#next if($inter_genes == 0);
 
 	my $cutoff = -1;
 	my ($gene1,$gene2)= ("NA", "NA");
@@ -551,7 +509,6 @@ my $annotation_dir = tempdir(DIR => "$out_dir/tmp_anno");
 `mkdir -p $annotation_dir`;
 print STDERR "Annotation Dir: $annotation_dir\n" if($debug); 
 
-#my @configs = <~myname/project/etc/*.cfg>;
 my @cover_files = <$out_dir/*.cover>;
 foreach my $fn (@cover_files) {
     my @path = split(/\//, $fn);
@@ -602,14 +559,11 @@ foreach my $sv (@raw_SVs){
 	}
 	next if($bad_gene);
 	print STDERR "next if($contigSeq && ", $contig_recurrance{$contigSeq}," > $max_num_hits)\n" if(abs($sv->{second_bp}->{tpos} - 170818803)<10 || abs($sv->{first_bp}->{tpos} - 170818803)<10); 
-	#next if($contigSeq && $contig_recurrance{$contigSeq} > $max_num_hits);
 
 		my $bp1_site = join("_", $first_bp->{tname}, $first_bp->{tpos}, $first_bp->{clip});
 		my $bp2_site = join("_", $second_bp->{tname}, $second_bp->{tpos}, $second_bp->{clip});
 		$bp1_site =~ s/chr//;
 		$bp2_site =~ s/chr//;
-#		$breakpoint_sites{$bp1_site} = 1;
-#		$breakpoint_sites{$bp2_site} = 1;
 
 	my $start_run = time();
 	print STDERR "\nstart to quantify the fusion... ", join(" ", $sv->{first_bp}->{tname}, $sv->{first_bp}->{tpos}, $sv->{second_bp}->{tname}, $sv->{second_bp}->{tpos}), "\n" if(abs($sv->{second_bp}->{tpos} - 170818803)<10 || abs($sv->{first_bp}->{tpos} - 170818803)<10);
@@ -623,21 +577,15 @@ foreach my $sv (@raw_SVs){
 		   );
  	my $end_run = time();
 	my $run_time = $end_run - $start_run;
-	#print STDERR "quantified_SVs: ", scalar @quantified_SVs,"\n";
-	#print STDERR join("\t", "run_time", $run_time,  $sv->{first_bp}->{tname}, $sv->{first_bp}->{tpos}, $sv->{second_bp}->{tname}, $sv->{second_bp}->{tpos}), "\n";
 
 	foreach my $quantified_SV (@quantified_SVs){
-	#if($quantified_SV) {
 		my $annotated_SV = annotate($gm, $quantified_SV) if($quantified_SV);
 		next unless($annotated_SV);
 		my ($first_bp, $second_bp, $type) = ($annotated_SV->{first_bp}, $annotated_SV->{second_bp}, $annotated_SV->{type});
-		#next if(!$all_output && $type eq "Internal_dup");
 		if(!$all_output && $type =~ m/Internal/){
-			#next unless($annotated_SV->{type} eq 'Internal_dup');
 			if($type eq 'Internal_dup'){
 				next unless (is_good_ITD($first_bp, $second_bp) || exists($gold_genes{$first_bp->{gene}}));
 			}
-			#	next unless(is_good_ITD($first_bp, $second_bp));}
 			elsif(!$DNA){
 				next if($type eq 'Internal_splicing');
 			        next unless( $first_bp->{feature} =~ m/coding/ || 
@@ -651,13 +599,11 @@ print "annotated_SVs: ", scalar @annotated_SVs, "\n";
 
 my @uniq_SVs;
 foreach my $sv (@annotated_SVs){
-	#print "finished quantification: ", $updated_SV->{ort}, "\n";
 	print STDERR "xxx\n" if(abs($sv->{second_bp}->{tpos} - 170818803)<10 || abs($sv->{first_bp}->{tpos} - 170818803)<10);
 	my ($bp1, $bp2, $qseq) = ($sv->{first_bp}, $sv->{second_bp}, $sv->{junc_seq});
 	next if(exists($blacklist{$bp1->{gene}}) || exists($blacklist{$bp2->{gene}}));
 	push @uniq_SVs, $sv if($sv && ! is_dup_SV(\@uniq_SVs, $sv));
 }
-#print STDERR "number of uniq mappings: ", scalar @uniq_SVs, "\n";
 
 open(hFo, ">$out_file");
 print hFo $out_header, "\n";
@@ -673,8 +619,6 @@ foreach my $sv (@uniq_SVs){
 	$bp1->{qstrand} =  ($bp1->{qstrand}>0) ? '+' : '-';
 	$bp2->{qstrand} =  ($bp2->{qstrand}>0) ? '+' : '-';
 
-	#my $bp1_site = join("_",$bp1->{tname}, $bp1->{tpos});
-	#my $bp2_site = join("_",$bp2->{tname}, $bp2->{tpos});
 	my $bp1_site = $bp1->{tname}."_".$bp1->{tpos}."_". $bp1->{clip};
 	my $bp2_site = $bp2->{tname}."_".$bp2->{tpos}."_". $bp2->{clip};
 
@@ -684,9 +628,6 @@ foreach my $sv (@uniq_SVs){
 
 	if(exists($breakpoint_sites{$bp1_site}) && $breakpoint_sites{$bp1_site} ne "1"){
 		my @bp1_fields = split(/\t/,$breakpoint_sites{$bp1_site});
-		#print STDERR join(" x ", @bp1_fields), "\n";
-		#print STDERR join(" x ", @bp1_fields[5,6,7,8]), "\n";
-	#my ($chr, $pos, $clip, $sc_cover, $cover, $pscA, $nscA, $pnA, $nnA) = split(/\t/,$line);
 		($pscA, $nscA, $pnA, $nnA) = @bp1_fields[5,6,7,8];
 	}
 	else{
@@ -696,9 +637,6 @@ foreach my $sv (@uniq_SVs){
 
 	       if(exists($breakpoint_sites{$bp1_site}) && $breakpoint_sites{$bp1_site} ne "1"){
 		 my @bp1_fields = split(/\t/,$breakpoint_sites{$bp1_site});
-		 #print STDERR join(" x ", @bp1_fields), "\n";
-		 #print STDERR join(" x ", @bp1_fields[5,6,7,8]), "\n";
-	#my ($chr, $pos, $clip, $sc_cover, $cover, $pscA, $nscA, $pnA, $nnA) = split(/\t/,$line);
 		 ($pscA, $nscA, $pnA, $nnA) = @bp1_fields[5,6,7,8];
 		 last;
 	       }
@@ -710,7 +648,6 @@ foreach my $sv (@uniq_SVs){
 
 	if(exists($breakpoint_sites{$bp2_site}) && $breakpoint_sites{$bp2_site} ne "1"){
 		my @bp2_fields = split(/\t/,$breakpoint_sites{$bp2_site});
-	#my ($chr, $pos, $clip, $sc_cover, $cover, $psc, $nsc, $pn, $nn) = split(/\t/,$line);
 		($pscB, $nscB, $pnB, $nnB) = @bp2_fields[5,6,7,8];
 	}
 	else{
@@ -719,7 +656,6 @@ foreach my $sv (@uniq_SVs){
 		$bp2_site = $bp1->{tname}."_".$tmp_pos."_". $bp2->{clip};
 	        if(exists($breakpoint_sites{$bp2_site}) && $breakpoint_sites{$bp2_site} ne "1"){
 		   my @bp2_fields = split(/\t/,$breakpoint_sites{$bp2_site});
-	#my ($chr, $pos, $clip, $sc_cover, $cover, $psc, $nsc, $pn, $nn) = split(/\t/,$line);
 		   ($pscB, $nscB, $pnB, $nnB) = @bp2_fields[5,6,7,8];
 		   last;
 	   	}
@@ -746,15 +682,12 @@ foreach my $sv (@uniq_SVs){
 	}
 	$total_readsB = $bp2->{reads_num} if($bp2->{reads_num} > $total_readsB);
 
-	#my $avg_area=0;
-	#$avg_area = 2*($bp1->{area}*$bp2->{area})/($bp1->{area} + $bp2->{area}) if($bp1->{area}+$bp2->{area} > 0);
 	unless($seq_ids[0] =~ m/chr/) {$bp1->{tname} = "chr".$bp1->{tname}; $bp2->{tname} = "chr".$bp2->{tname};}
 	my $out_string = join("\t", $sample, $bp1->{gene}, $bp1->{tname}, $bp1->{tpos}, $bp1->{qstrand}, $bp1->{feature}, 
 				$bp2->{gene}, $bp2->{tname}, $bp2->{tpos}, $bp2->{qstrand}, $bp2->{feature}, $sv->{ort}, 
 				$bp1->{reads_num}, $bp2->{reads_num}, $bp1->{matches}, $bp2->{matches}, sprintf("%.2f", $bp1->{repeat}), 
 				sprintf("%.2f", $bp2->{repeat}), $bp1->{area}, $bp2->{area}, sprintf("%.2f", $mafA), sprintf("%.2f", $mafB),
 				 $bp1->{qpos}, $bp2->{qpos}, $total_readsA, $total_readsB, $qseq, $type);
-				#$bp2->{qpos}, $ratioA, $ratioB, $total_readsA, $total_readsB, $qseq, $type);
 	print hFo $out_string, "\n";
 }	
 close(hFo);
@@ -774,8 +707,6 @@ sub is_good_ITD {
 sub is_dup_raw_SV {
 	my($r_SVs, $sv) = @_;
 	foreach my $s (@{$r_SVs}) {
-	#for (my $i = 0; $i<=scalar @{$r_SVs}; $i++){
-	#	my $s = $r_SVs->[$i];
 		return 1
 		if( abs($s->{first_bp}->{tpos} - $sv->{first_bp}->{tpos}) < 10 &&
 		    abs($s->{second_bp}->{tpos} - $sv->{second_bp}->{tpos}) < 10 &&
@@ -789,8 +720,6 @@ sub is_dup_raw_SV {
 			$s->{second_bp}->{tname} eq $sv->{first_bp}->{tname}
 		){
 			$s->{second_bp} = $sv->{first_bp};
-			#print STDERR $sv->{first_bp}->{tpos}, "\t", $sv->{second_bp}->{tpos}, "\n";
-			#print STDERR $s->{first_bp}->{tpos}, "\t", $s->{second_bp}->{tpos}, "\n";
 			return 1;
 		}
 	}
@@ -898,7 +827,6 @@ sub low_complexity{
 }
 
 sub annotate {
-#	my $self = shift;
 	my %args = @_;
 	my ($gm, $SV) = @_;
 	my $debug = 0;
@@ -953,7 +881,6 @@ sub annotate {
 			first_bp => $annotated_second_bp,
 			second_bp => $annotated_first_bp,
 			ort => '>',
-			#-GAP => $gap
 			};
 	}
 	else {
@@ -962,7 +889,6 @@ sub annotate {
 			first_bp => $annotated_first_bp,
 			second_bp => $annotated_second_bp,
 			ort => '>',
-			#-GAP => $gap
 			};
 	}
 	my $same_gene = same_gene($annotated_first_bp->{gene}, $annotated_second_bp->{gene});
@@ -976,7 +902,6 @@ sub annotate {
 	}
 	$annotated_SV->{type} = $type;
 	return $annotated_SV;
-	#push @SVs, $annotated_SV;
 } #end of annotate
 
 sub sign{
@@ -1001,8 +926,6 @@ sub annotate_enhancer_gene_bp{
 
 	my $bp = shift;
 	my $debug = 0;
-	#$bp->{tname} = "chr".$bp->{tname} unless($bp->{tname} =~ m/chr/);
-	#my $chr = $bp->{tname};
 	my $chr = ($bp->{tname} =~ m/chr/) ? $bp->{tname} : "chr".$bp->{tname};
 	my $tpos = $bp->{tpos};
 	my $strand = ($bp->{qstrand} > 0) ? '+' : '-';
@@ -1010,7 +933,6 @@ sub annotate_enhancer_gene_bp{
 	my $qseq_ort = ($bp->{ort} > 0) ? '+' : '-';
 	my $rev_strand = ($bp->{qstrand} > 0) ? '-' : '+';
 
-	#my $dist = 40000;
 	my $extend_size = 1000000;
 	
 		my ($start, $end) = ($tpos - $extend_size, $tpos + $extend_size);
@@ -1022,7 +944,6 @@ sub annotate_enhancer_gene_bp{
 			next unless(exists($enhancer_activated_genes{$g->name}));
 			my ($tmp_feature, $tmp_score);
 			print STDERR "gene at $strand is: ", join("\t", $g->name, $g->start, $g->end),"\n" if($debug);
-			#print STDERR "gene at $strand is: ", join("\t", @{$g}, $g->name, $g->start, $g->end),"\n" if($debug);
 			my $check_point = ($qseq_ort eq $strand) ? ($tpos - 10) : ($tpos + 10);
 			$tmp_feature = $g->get_feature($chr, $check_point, $strand);
 			print STDERR "$tmp_feature = g->get_feature($chr, $check_point, $strand)\n" if($debug);
@@ -1030,7 +951,6 @@ sub annotate_enhancer_gene_bp{
 			$tmp_score = 0.8 if($tmp_feature =~ m/utr/);
 			$tmp_score = 0.5 if($tmp_feature eq 'intron');
 			$tmp_score = 0.1 if($tmp_feature eq 'intergenic');
-			#my $tmp_dist = (abs($g->start - $tpos) < abs($g->end - $tpos)) ? abs($g->start - $tpos) : abs($g->end - $tpos);
 	
 			$bp->{annotate_score} = $tmp_score;
 			$bp->{feature} = $tmp_feature;
@@ -1048,7 +968,6 @@ sub annotate_enhancer_gene_bp{
 			next unless(exists($enhancer_activated_genes{$g->name}));
 			my ($tmp_feature, $tmp_score);
 			print STDERR "gene at $rev_strand is: ", join("\t", $g->name, $g->start, $g->end),"\n" if($debug);
-			#print STDERR "gene at $rev_strand is: ", join("\t", @{$g}, $g->name, $g->start, $g->end),"\n" if($debug);
 			my $check_point = ($qseq_ort eq $strand) ? ($tpos - 10) : ($tpos + 10);
 			$tmp_feature = $g->get_feature($chr, $check_point, $rev_strand);
 			print STDERR "$tmp_feature = g->get_feature($chr, $check_point, $rev_strand)\n" if($debug);
@@ -1056,7 +975,6 @@ sub annotate_enhancer_gene_bp{
 			$tmp_score = -0.8 if($tmp_feature =~ m/utr/);
 			$tmp_score = -0.5 if($tmp_feature eq 'intron');
 			$tmp_score = -0.1 if($tmp_feature eq 'intergenic');
-			#my $tmp_dist = (abs($g->start - $tpos) < abs($g->end - $tpos)) ? abs($g->start - $tpos) : abs($g->end - $tpos);
 			$bp->{annotate_score} = $tmp_score;
 			$bp->{feature} = $tmp_feature;
 			$bp->{ts_strand} = -1*$bp->{qstrand};
@@ -1070,8 +988,6 @@ sub annotate_bp{
 
 	my $bp = shift;
 	my $debug = 0;
-	#$bp->{tname} = "chr".$bp->{tname} unless($bp->{tname} =~ m/chr/);
-	#my $chr = $bp->{tname};
 	my $chr = ($bp->{tname} =~ m/chr/) ? $bp->{tname} : "chr".$bp->{tname};
 	my $tpos = $bp->{tpos};
 	print STDERR "\n=== annotating bp at ", $chr, ":", $tpos, " ===\n" if($debug);
@@ -1082,17 +998,6 @@ sub annotate_bp{
 	$bp->{feature} = 'intergenic';
 	$bp->{ts_strand} = 0;
 	$bp->{gene} = 'NA';
-=pod
-	my $cr = in_complex_region($chr, $tpos);
-	if($cr){
-		$bp->{gene} = $cr;
-		$bp->{feature} = '5utr';
-		$bp->{annotate_score} = 0.5;
-		$bp->{ts_strand} = $bp->{qstrand};
-		return $bp;
-
-	}
-=cut
 	my $dist = 40000;
 	foreach my $extend_size (10, 5000, 10000, 40000){
 	
@@ -1104,7 +1009,6 @@ sub annotate_bp{
 			$g=$g->val;
 			my ($tmp_feature, $tmp_score);
 			print STDERR "gene at $strand is: ", join("\t", $g->name, $g->start, $g->end),"\n" if($debug);
-			#print STDERR "gene at $strand is: ", join("\t", @{$g}, $g->name, $g->start, $g->end),"\n" if($debug);
 			my $check_point = ($qseq_ort eq $strand) ? ($tpos - 10) : ($tpos + 10);
 			$tmp_feature = $g->get_feature($chr, $check_point, $strand);
 			print STDERR "$tmp_feature = g->get_feature($chr, $check_point, $strand)\n" if($debug);
@@ -1132,7 +1036,6 @@ sub annotate_bp{
 			$g=$g->val;
 			my ($tmp_feature, $tmp_score);
 			print STDERR "gene at $rev_strand is: ", join("\t", $g->name, $g->start, $g->end),"\n" if($debug);
-			#print STDERR "gene at $rev_strand is: ", join("\t", @{$g}, $g->name, $g->start, $g->end),"\n" if($debug);
 			my $check_point = ($qseq_ort eq $strand) ? ($tpos - 10) : ($tpos + 10);
 			$tmp_feature = $g->get_feature($chr, $check_point, $rev_strand);
 			print STDERR "$tmp_feature = g->get_feature($chr, $check_point, $rev_strand)\n" if($debug);
@@ -1162,7 +1065,7 @@ sub quantification {
 	my ($bp1, $bp2) = ($SV->{first_bp}, $SV->{second_bp});
 	my ($chr1, $pos1, $start1, $end1) = ($bp1->{tname}, $bp1->{tpos}, $bp1->{ort}, $bp1->{tstart}, $bp1->{tend});
 	my ($chr2, $pos2, $start2, $end2) = ($bp2->{tname}, $bp2->{tpos}, $bp2->{ort}, $bp2->{tstart}, $bp2->{tend});
-	$debug = 1 if(abs($pos1 - 170818803)<10 || abs($pos2 - 170818803)<10);
+	$debug = 0 if(abs($pos1 - 170818803)<10 || abs($pos2 - 170818803)<10);
 	print STDERR "xxx\n" if(abs($pos1 - 170818803)<10 || abs($pos2 - 170818803)<10);
 	my $fixSC1 = $bp1->{reads_num} < 10 ? 1 : 0;
 	my $fixSC2 = $bp2->{reads_num} < 10 ? 1 : 0;
@@ -1258,7 +1161,6 @@ sub quantification {
 	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr2, -scSite=>$pos2, -CLIP=>$clip2, -READ_LEN => $read_len) if(-s $contig_file);
 	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr2, -scSite=>$pos2, -CLIP=>$clip2, -READ_LEN => $read_len)
 		 if(($SV->{type} eq 'Internal_dup' || !@mappings) && -s $contig_file);
-	#system("rm $fa_file.cap.*");
 
 	my @qSVs;
 	foreach my $sv (@mappings){
@@ -1293,15 +1195,12 @@ sub quantification {
 		close($CTG);
 
 		my ($psl_file1, $psl_file2) = ("$anno_dir/bp1.psl", "$anno_dir/bp2.psl",);
-		#($psl_file1, $psl_file2) = ("$anno_dir/bp1.internal.psl", "$anno_dir/bp2.internal.psl") if($internal);
 		
 		unlink $psl_file1 if(-f $psl_file1); unlink $psl_file2 if(-f $psl_file2);
 		`blat -noHead -maxIntron=5 $tmp_ctg_file $fa_file1 $psl_file1` if(-s $fa_file1);
 		`blat -noHead -maxIntron=5 $tmp_ctg_file $fa_file2 $psl_file2` if(-s $fa_file2);
 		my ($readsA, $areaA, $readsB, $areaB) = (0,1,0,1);
 		my $shift_bases = 5;
-		#my $shift_bases = $ortA*($qposB - $qposA) > 0 ?  $ortA*($qposB - $qposA) + 5 : 5;
-		#$shift_bases = 15 if($shift_bases > 15);
 		if($chrA eq $bp1->{tname} && abs($bp1->{tpos} - $tposA)<50 &&
 		   $bp2->{tname} eq $chrB && abs($bp2->{tpos} - $tposB)<50){ 
 				$tposA = $bp1->{tpos};
@@ -1362,7 +1261,6 @@ sub quantification {
 		push @qSVs, $tmp_SV if($selected_bp1->{tpos} && $selected_bp2->{tpos});
 	}
 	return @qSVs;
-	#return undef;
 }
 
 sub get_junc_reads{
@@ -1381,13 +1279,9 @@ sub get_junc_reads{
 		next unless($matches > $min_hit_len);
 		my $percent = $matches/($qend - $qstart);
 		next if($percent <= 0.95);
-		#print STDERR "next if(($tend - $bp - $cutoff)*($tstart - $bp - $cutoff) > 0)\n";
-		#next if(($tend - $bp - $cutoff)*($tstart - $bp - $cutoff) > 0);
 		next unless($tend > $bp + $cutoff && $tstart < $bp - $cutoff);
 		$junc_reads{$qname} = 1;
 		$qstrand = ($qstrand eq '+') ? 1 : -1;
-		#print STDERR "qstrand: $qstrand ort: $ort\n";
-		#my $support_len = ($ort*$qstrand > 0) ? ($tend - $bp) : ($bp - $tstart);
 		my $support_len = ($ort > 0) ? ($tend - $bp) : ($bp - $tstart);
 		print STDERR "$qname: support_len = ($ort > 0) ? ($tend - $bp) : ($bp - $tstart)\n" if($debug);
 		print STDERR "coverage = $coverage + $support_len\n" if($debug);
@@ -1479,11 +1373,6 @@ sub get_type {
 	else {
 		return 'ITX' if($second_bp->{qstrand}*$first_bp->{qstrand} < 0);
 		if($clip1 * ($first_bp->{tpos} - $second_bp->{tpos} - 10) < 0){
-			#my $inter_genes = count_genes($first_bp->{tname}, $first_bp->{tpos}, $second_bp->{tpos}, $transcript_strand);
-			#print STDERR "my $inter_genes = count_genes(", $first_bp->{tname},", ",$first_bp->{tpos},", ",$second_bp->{tpos},")\n";
-			#print STDERR "inter_genes: $inter_genes\n" if($debug);
-			#print STDERR "return \"read_through\" if($inter_genes == 0 || abs(", $first_bp->{tpos}," - ", $second_bp->{tpos},") < 100000)\n";
-			#return "read_through" if($inter_genes == 0 || abs($first_bp->{tpos} - $second_bp->{tpos}) < 40000);
 			return "read_through" if(abs($first_bp->{tpos} - $second_bp->{tpos}) < 100000);
 			return 'DEL';
 		}

@@ -18,7 +18,6 @@ use List::MoreUtils qw/ uniq /;
 use lib dirname($0);
 my $script_dir = dirname($0);
 #custom packages
-#use SCValidator qw($lowqual_cutoff $min_percent_id $min_percent_hq LEFT_CLIP RIGHT_CLIP);
 use CiceroUtil qw(parse_range is_PCR_dup);
 use TdtConfig; 
 
@@ -118,17 +117,15 @@ foreach my $chr (@chroms){
 		my $tree = $gm->sub_model($full_chr, $strand);
 		next unless($tree);
 		my @tmp = $tree->intersect([$start, $end]);
-		#print "number of genes: ", scalar @tmp, " at ", $full_chr, " ", $strand, "\n";
 		foreach my $tnode (@tmp) {
 			my $g=$tnode->val;
-			#$gRange =~ s/chr//;
 			my $mRNA_length = $g->get_mRNA_length;
 			my $gRange = $chr.":".$g->start."-".$g->end;
 			my $cnt = 0;
 			$sam->fetch($gRange, 
 				sub {
 					my $a = shift;
-					return if( ($a->flag & 0x0400) || ($a->flag & 0x0004) ); #PCR dumplicate or unmapped
+					return if( ($a->flag & 0x0400) || ($a->flag & 0x0004) ); #PCR duplicate or unmapped
 					$cnt++;
 				}) unless(exists($blacklist{$g->name}));
 
@@ -141,7 +138,6 @@ foreach my $chr (@chroms){
 				reads_cnt   => $cnt,
 				sc_cutoff   => $sc_cutoff
 			  };
-			#print STDERR join("\t", $tmp_gene->{name}, $tmp_gene->{range}, $tmp_gene->{strand}, $tmp_gene->{mRNA_length}, $tmp_gene->{reads_cnt}, $tmp_gene->{sc_cutoff}), "\n";
 			print $GI join("\t", $tmp_gene->{name}, $tmp_gene->{range}, $tmp_gene->{strand}, $tmp_gene->{mRNA_length}, $tmp_gene->{reads_cnt}, $tmp_gene->{sc_cutoff}), "\n";
 		}
 	}
@@ -155,12 +151,11 @@ sub calc_sc_cutoff{
 	$sam->fetch($range, 
 		sub {
 			my $a = shift;
-			return if( ($a->flag & 0x0400) || ($a->flag & 0x0004) ); #PCR dumplicate or unmapped
+			return if( ($a->flag & 0x0400) || ($a->flag & 0x0004) ); #PCR duplicate or unmapped
 			$cnt++;
 		});
 		my $RPK_value = 1000*$cnt/$mRNA_length;
 		my $sc_cutoff = ($read_len-20)*$cnt/(100*$mRNA_length);
-		#print join("\t", $range, $mRNA_length, $cnt, $RPK_value, $sc_cutoff), "\n";
 		return $sc_cutoff;
 }
 

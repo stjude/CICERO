@@ -27,6 +27,7 @@ my $rmdup = 0;
 my ($out_dir, $ref_genome);
 my $min_sc_reads = 2;
 my($read_len, $min_sc_len) = (100, 10);
+# Group soft clips within +/- 3 bp into a cluster to account for mapping ambiguity
 my $sc_shift = 3;
 
 # input/output
@@ -91,40 +92,26 @@ $output_file = join('.', $out_prefix, $tmp, "cover");
 $output_file = File::Spec->catfile($out_dir, $output_file);
 print "output_file: $output_file\n" if($debug);
 open my $SC_file, ">$output_file";
-#my ($cov) = $sam->features(-type => 'coverage', -flags=>{DUPLICATE=>0}, -seq_id=> $chr,
-       #       		        -start => $start, -end => $end);
-        #my @c_d = $cov->coverage;
 my($pcover, $ncover) = extract_range_sclip(
 	-SAM => $sam, 
 	-RANGE => $range, 
 	-VALIDATOR => $validator);
 
 foreach my $p (keys(%{$pcover})) {
-	#my $c = ($rmdup ? scalar(@{$pcover->{$p}}) : $pcover->{$p});
 	my @c = @{$pcover->{$p}};
 	my $tc = count_coverage($sam, $chr, $p);
 	print $SC_file join("\t", $chr, $p, "+", @c), "\t", $tc->{"+"},"\t", $tc->{"-"}, "\n" if($c[0]>=$min_sc_reads);
 }
 foreach my $p (keys(%{$ncover})) {
-	#my $c = ($rmdup ? scalar(@{$ncover->{$p}}) : $ncover->{$p});
 	my @c = @{$ncover->{$p}};
 	my $tc = count_coverage($sam, $chr, $p);
 	print $SC_file join("\t", $chr, $p, "-", @c), "\t", $tc->{"+"},"\t", $tc->{"-"}, "\n" if($c[0]>=$min_sc_reads);
 }
 exit(0);
 
-#sub count_coverage {
-#	my ($sam, $chr, $pos, $clip) = @_;
-#	my ($c) = $sam->features(-type => 'coverage', -seq_id=> $chr, 
-#		-start => $pos, -end => $pos);
-#	my @c_d = $c->coverage;
-#	return $c_d[0];
-#}
-
 sub count_coverage {
 	my ($sam, $chr, $pos) = @_;
 	my $seg = $sam->segment(-seq_id => $chr, -start => $pos, -end => $pos);
-	#print STDERR "seg: ", $seg, "\n";
 	my ($pos_N, $neg_N) = (0, 0);
 	if($seg){
 		my $itr = $seg->features(-iterator => 1);
@@ -149,7 +136,6 @@ sub extract_range_sclip {
 	my $debug = 0;
 	my $sam = $arg{-SAM} || croak "missing -SAM";
 	my $range = $arg{-RANGE} || croak "missing -RANGE";
-#	my $output_file = $arg{-OUTPUT} || croak "missing -OUTPUT";
 	my $validator = $arg{-VALIDATOR} || croak "missing -VALIDATOR";
 	my ($chr, $start, $end) = split /[:|-]/, $range;
 
@@ -168,14 +154,9 @@ sub extract_range_sclip {
 			return if($paired && !$a->mpos); 
 			return if($a->flag & 0x0400); #PCR duplicate
 			return unless($a->start);
-			#return unless(abs($a->end - 29446394) < 10);
-			#return unless(abs($a->start - 73800850) < 10);
-			#return unless($a->qname =~ m/C0FVUACXX120313:3:2302:5930:71041/);
-			#return unless($a->qname =~ m/16389/);
 			if($paired && !$a->proper_pair){ #paired but mate is not mapped 
 				$validator->remove_validator("strand_validator");
 			}
-			#print STDERR "\n1\t", join("\t", $a->qname, $a->start, $a->flag, $cigar_str), "\n" if($debug);
 			print STDERR join("\t", $a->qname, $cigar_array[0]->[0], $cigar_array[0]->[1]), "\n" if($debug);
 			my ($left_validated, $right_validated);
 			$left_validated = $validator->validate($a, LEFT_CLIP) if($cigar_array[0]->[0] eq 'S');
@@ -183,7 +164,6 @@ sub extract_range_sclip {
 			if($cigar_array[0]->[0] eq 'S' && $left_validated){
 				my $ort = '-';
 				my (@sclip_lens, @sclip_sites);
-				#push @sclip_sites, [$cigar_array[0]->[1], $a->start];
 				push @sclip_lens, $cigar_array[0]->[1];
 				push @sclip_sites, $a->start;
 				# to solve very short base match problem
@@ -193,14 +173,11 @@ sub extract_range_sclip {
 					push @sclip_lens, $cigar_array[0]->[1] + $cigar_array[1]->[1];
 					push @sclip_sites, $a->start + $cigar_array[1]->[1] + $cigar_array[2]->[1];
 				}
-			#print STDERR "2\t", join("\t", $a->qname, $a->start, $a->flag, $cigar_str, $cigar_array[0]->[1]), "\n" if($debug);
 
 			    for(my $i=0;$i<=$#sclip_sites;$i++){ # one or two soft-clip sites
 
 				my ($pos, $sclip_len) = ($sclip_sites[$i], $sclip_lens[$i]);
 			print STDERR join("\t", $a->qname, $a->start, $a->flag, $cigar_str, $cigar_array[0]->[1], $pos, $sclip_len, "-"), "\n" if($debug);
-			#print STDERR "xxxx\t", join("\t", $a->qname, $a->start, $a->flag, $cigar_str, $cigar_array[0]->[1], $pos, $sclip_len, "+"), "\n" if($debug);
-#				print "($pos < $start || $pos > $end)\n";
 				next if($sclip_len<$min_sc_len);
 				if(exists $left_sclip_lens{$pos}) {
 					$left_sclip_lens{$pos} .= "+$sclip_len";
@@ -249,9 +226,7 @@ sub extract_range_sclip {
 				my $ort = '+';
 				push @sclip_lens, $cigar_array[-1]->[1];
 				push @sclip_sites, $a->end;
-				#my $read_len = length($a->query->dna);
 			print STDERR "3\t", join("\t", $a->qname, $a->start, $a->flag, $cigar_str), "\n" if($debug);
-				# to solve very short base match problem
 				if($cigar_length >=4 && $cigar_array[-1]->[1] >= $min_sc_len-3 && 
 					$cigar_array[-2]->[0] eq 'M' && $cigar_array[-2]->[1] <= 5
 					&& $cigar_array[-3]->[0] eq 'N'){
@@ -268,7 +243,6 @@ sub extract_range_sclip {
 
 				my ($pos, $sclip_len) = ($sclip_sites[$i], $sclip_lens[$i]);
 			print STDERR "yyyy\t", join("\t", $a->qname, $a->start, $a->flag, $cigar_str, $cigar_array[0]->[1], $pos, $sclip_len, "-"), "\n" if($debug);
-				#next if($pos < $start || $pos > $end);
 				next if($sclip_len<$min_sc_len);
 				if(exists $right_sclip_lens{$pos}) {
 					$right_sclip_lens{$pos} .= "+$sclip_len";
@@ -387,7 +361,6 @@ sub extract_range_sclip {
 			$count1 += $right_count{$k} if(exists($right_count{$k}));
 			$plus_count1 += $plus_right_count{$k} if(exists($plus_right_count{$k}));
 			$neg_count1 += $neg_right_count{$k} if(exists($neg_right_count{$k}));
-			#push @tmp_sclip_lens, split("+", $right_sclip_lens{$k}) if(exists($right_sclip_lens{$k}));
 			print STDERR "cover1 += right_cover{$k} if(exists(right_cover{$k}))\n" if($debug);
 			print STDERR "$cover1 += ", $right_cover{$k}, "\n" if($debug && exists($right_cover{$k}));
 			$long_sc_reads += $long_right_cover{$k} if(exists($long_right_cover{$k}));

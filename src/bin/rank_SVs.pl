@@ -32,7 +32,6 @@ my $min_coverage = $read_len*0.5;
 my $out_dir = dirname($annotated_file);
 $out_file = "$out_dir/final_fusions.txt" unless($out_file);
 
-#my $known_fusion_file = '/nfs_exports/genomes/1/Homo_sapiens/GRCh37-lite/CICERO/known_fusions.txt';
 my ($known_fusion_file, $known_itd_file);
 my $conf; 
 if (&TdtConfig::findConfig("genome", $genome)){
@@ -53,20 +52,6 @@ my $df = new DelimitedFile(
 	       "-file" => $annotated_file,
 	       "-headers" => 1,
 	      );
-
-=pod
- push @sv_extra_fields, (
-                         "score",
-                         "rating",
-                         "medal",
-			 "functional_effect",
- );
-
-my $rpt = $df->get_reporter(
-			      "-file" => $annotated_file . ".ranked.txt",
-			      "-extra" => \@sv_extra_fields
-		);
-=cut
 
 open(my $KF, "$known_fusion_file");
 while(<$KF>){
@@ -110,12 +95,6 @@ my %all_svs = ();
 my %sv_seqs = ();
 my @uniq_SVs;
 my $N_col = 0; # number of columns
-#my $out_header;
-#open(my $AF, $annotated_file) || die "Error: Unable to open $annotated_file\n";
-#while(my $line = <$AF>){
-#	chomp($line);
-	#next if(exists($all_svs{$line}));
-#if($line =~ m/posA/){$out_header = $line if(!$out_header); next;}
 while (my $row = $df->get_hash()) {
 
 	next if($row->{readsA} eq 'readsA');
@@ -145,10 +124,8 @@ while (my $row = $df->get_hash()) {
 
 	foreach my $k (keys %{$first_bp}) {
 		$first_bp->{$k} = '' unless(defined($first_bp->{$k}));
-		#print STDERR "$k\t*", $first_bp->{$k}, "*\n"
 	}
 
-	#print STDERR "reads_num: ",$first_bp->{reads_num},"\n";
 	
 	my $second_bp = {
 		reads_num => $row->{readsB},
@@ -197,18 +174,10 @@ while (my $row = $df->get_hash()) {
 =cut
 	my ($sample, $sv_ort, $qseq, $type, $inframe) = ($row->{sample}, $row->{sv_ort}, $row->{contig}, $row->{type}, $row->{sv_inframe});
 
-#	my ($sv_ort, $qseq, $type) = ($fields[11], $fields[28], $fields[29]);
-#	my ($inframe, $sv_refseqA, $sv_refseqA_codon, $sv_refseqB, $sv_refseqB_codon) = 
-#		($row->{sv_inframe}, $row->{sv_refseqA}, $row->{sv_refseqA_codon},$row->{sv_refseqB}, $row->{sv_refseqB_codon});
-	#   ($fields[32], $fields[33], $fields[34], $fields[37],$fields[38]) if($N_col > 31);
-
-	#next unless($type eq 'splicing');
 	my $tmp_SV = {
-		#cicero => $line,
 		junc_seq => $qseq,
 		first_bp => $first_bp,
 		second_bp => $second_bp,
-		#avg_area => $avg_area,
 		ort => $sv_ort,
 		type => $type,
 		sample => $sample,
@@ -222,11 +191,8 @@ while (my $row = $df->get_hash()) {
 		};
 
 	push @uniq_SVs, scoring($tmp_SV) unless(is_dup_SV(\@uniq_SVs, $tmp_SV));
-#	exit;
 }
-#close($AF);
 
-#my @sorted_SVs =  sort { $b->{score} <=> $a->{score} } @uniq_SVs;
 my @sorted_SVs = sort{   $a->{rating} cmp $b->{rating} || 
 			$b->{score} <=> $a->{score}
 		}@uniq_SVs;
@@ -234,13 +200,11 @@ print STDERR "number of SVs: ", scalar @uniq_SVs, "\n";
 
 my $out_header = join("\t", "sample", "geneA", "chrA", "posA", "ortA", "featureA", "geneB", "chrB", "posB", "ortB", 
 			"featureB", "sv_ort", "readsA", "readsB", "matchA", "matchB", "repeatA", "repeatB","coverageA", 
-			#"coverageB", "ratioA", "ratioB", "qposA", "qposB", "contig", "type");
 			"coverageB", "ratioA", "ratioB", "qposA", "qposB", "total_readsA", "total_readsB", "contig", "type");
 $out_header .="\tscore\trating\tmedal\tfunctional effect";
 $out_header = join("\t", $out_header, "frame", "sv_refseqA", "sv_refseqA_codon", "sv_refseqA_exon", "sv_refseqA_anchor_type", "sv_refseqA_coding_base_number", "sv_refseqA_last_coding_base_number", "sv_refseqA_AA_index", "sv_refseqA_contig_index"); 
 $out_header = join("\t", $out_header, "sv_refseqB", "sv_refseqB_codon", "sv_refseqB_exon", "sv_refseqB_anchor_type", "sv_refseqB_coding_base_number", "sv_refseqB_last_coding_base_number", "sv_refseqB_AA_index", "sv_refseqB_contig_index"); 
 $out_header = join("\t", $out_header, "sv_AA", "sv_desc", "sv_processing_exception", "sv_general_info", "sv_interstitial_AA","sv_frame_index"); 
-#print "final output is $out_file\n";
 my $k=0;
 my @HQ_SVs;
 my %HQ_genes=();
@@ -261,9 +225,7 @@ foreach my $sv (@sorted_SVs){
 	}
 
 	last if($sv->{rating} eq 'bad');
-	#print STDERR join(" = ", $sample, $bp1->{reads_num}, $bp2->{reads_num}, $sv->{frame}, $type, $score), "\n";
 	if ($k <= 10 && $bp1->{reads_num} > $min_reads_cnt && $bp2->{reads_num} > $min_reads_cnt){
-			#print STDERR join(" = ", $sample, $bp1->{reads_num}, $bp2->{reads_num}, $qseq, $type, $score), "\n";
 			$sv->{rating} = 'HQ';
 	}
 	elsif($k < 10 || ($bp1->{reads_num} <= $min_reads_cnt || $bp2->{reads_num} <= $min_reads_cnt)){
@@ -292,7 +254,6 @@ foreach my $sv (@final_SVs){
 
 	my ($sample, $bp1, $bp2, $qseq, $type, $score) = 
 	($sv->{sample}, $sv->{first_bp}, $sv->{second_bp}, $sv->{junc_seq}, $sv->{type}, $sv->{score});
-	#print STDERR "final: ", join (" - ", $sample, $bp1, $bp2, $qseq, $type, $score),"\n";
 
 	my $type2 = 'other';
 
@@ -314,7 +275,6 @@ foreach my $sv (@final_SVs){
 	my $out_string = join("\t", $sample, $bp1->{gene}, $bp1->{tname}, $bp1->{tpos}, $bp1->{qstrand}, $bp1->{feature}, 
 	   $bp2->{gene}, $bp2->{tname}, $bp2->{tpos}, $bp2->{qstrand}, $bp2->{feature}, $sv->{ort}, $bp1->{reads_num}, $bp2->{reads_num}, 
 	   $bp1->{matches}, $bp2->{matches}, sprintf("%.3f", $bp1->{repeat}), sprintf("%.3f", $bp2->{repeat}), $bp1->{area}, $bp2->{area},
-	   #sprintf("%.3f",$bp1->{maf}), sprintf("%.3f", $bp2->{maf}), $bp1->{qpos}, $bp2->{qpos}, $qseq, $type);
 	   sprintf("%.3f",$bp1->{maf}), sprintf("%.3f", $bp2->{maf}), $bp1->{qpos}, $bp2->{qpos}, $bp1->{total_reads}, $bp2->{total_reads}, $qseq, $type);
 
 	$out_string .= "\t".join("\t", sprintf("%.2f", $sv->{score}), $sv->{rating}, $sv->{medal}, $type2);
@@ -324,7 +284,6 @@ foreach my $sv (@final_SVs){
 			$bp2->{sv_refseq_coding_base_number},$bp2->{sv_refseq_last_coding_base_number}, $bp2->{sv_refseq_AA_index}, $bp2->{sv_refseq_contig_index}); 
 	$out_string = join("\t", $out_string, $sv->{sv_AA}, $sv->{sv_desc}, $sv->{sv_processing_exception}, $sv->{sv_general_info}, $sv->{sv_interstitial_AA}, $sv->{sv_frame_index}); 
 	print $hFo "$out_string\n";
-	#print $hFo join("\t", $sv->{cicero}, sprintf("%.2f",$sv->{score}), $sv->{rating}, $sv->{medal}, $type2), "\n";
 }
 close($hFo);
 
@@ -351,41 +310,26 @@ sub scoring {
 	}
 
 	my ($matchA, $matchB, $ratioA, $ratioB) = ($bp1->{matches}, $bp2->{matches}, $bp1->{maf}, $bp2->{maf});
-	#$ratioA = $bp1->{expression_ratio} if($bp1->{feature} eq 'intron');
-	#$ratioB = $bp2->{expression_ratio} if($bp2->{feature} eq 'intron');
-	#$ratioA = ($bp1->{reads_num}+0.01)/($bp1->{total_reads}+0.01) if($bp1->{feature} eq 'intron');
-	#$ratioB = ($bp2->{reads_num}+0.01)/($bp2->{total_reads}+0.01) if($bp2->{feature} eq 'intron');
 
 	$ratioA = ($ratioA < $min_ratio) ? exp($min_ratio/$ratioA) : 1 if($ratioA > 0);
 	$ratioB = ($ratioB < $min_ratio) ? exp($min_ratio/$ratioB)  : 1 if($ratioB > 0);
-	#$ratioA = 0.001 if($ratioA == 0); $ratioB = 0.001 if($ratioB == 0);
 
 
 	$matchA = ($matchA < $min_match_len) ? exp(0.5*($matchA - $min_match_len)) : 1;
 	$matchB = ($matchB < $min_match_len) ? exp(0.5*($matchB - $min_match_len)) : 1;
 
-=pod
-	my ($avg_match, $avg_ratio) = (0, 0);
-	$avg_match = 2*$matchA*$matchB/($matchB + $matchB) if($matchA + $matchB > 0);
-	$avg_match = ($avg_match < 100) ?  $avg_match/100 : 1;
-	$avg_ratio = 2*$ratioA*$ratioB/($ratioA + $ratioB) if($ratioA + $ratioB > 0);
-	$avg_ratio = ($avg_ratio < 0.05) ? $avg_ratio/0.05 : 1;
-=cut
 	my $featureA = 0.5; $featureA = 0.8 if($bp1->{feature} =~ m/intron/);
 	$featureA = 0.9 if($bp1->{feature} =~ m/utr/); $featureA = 1 if($bp1->{feature} =~ m/coding/);
 	my $featureB = 0.5; $featureB = 0.8 if($bp2->{feature} =~ m/intron/);
 	$featureB = 0.9 if($bp2->{feature} =~ m/utr/); $featureB = 1 if($bp2->{feature} =~ m/coding/);
-	my $ort = 1; #$ort = 0.5 if($sv->{ort} eq "?" && ($featureA > 0.8 || $featureB > 0.8));
+	my $ort = 1; 
 	$ort = 2 if($sv->{ort} eq ">");
 	my $frame = 1; 
 	$frame = 2 if($sv->{frame} && $sv->{frame} =~ m/1|2/);
 
-	#my $scoreA = $bp1->{area}*$ratioA*$matchB*$featureB*(1-$bp2->{repeat});
-	#my $scoreB = $bp2->{area}*$ratioB*$matchA*$featureA*(1-$bp1->{repeat});
 	my $scoreA = $bp1->{area}*$ratioA*$matchB*(1-$bp2->{repeat});
 	my $scoreB = $bp2->{area}*$ratioB*$matchA*(1-$bp1->{repeat});
 	my $score = 0.5*($scoreA+$scoreB)*$ort*$frame;
-	#my $score = $sv->{avg_area}*$avg_match*$avg_ratio*(1-$bp1->{repeat})*(1-$bp2->{repeat})*$featureA*$featureB*$ort*$frame;
 	$score *= 0.1 if( $frame < 2 && $type eq 'DEL' || $type eq 'read_through');
 	$score *= 0.1 if( $frame < 2 && $type eq 'Internal_dup');
 	$score *= 0.1 if(!exists($known_ITDs{$fg1}) && $type eq 'Internal_dup');
@@ -418,29 +362,6 @@ sub is_dup_SV {
 	}
 	return 0;
 }
-
-=pod
-sub is_dup_SV {
-	my($r_SVs, $sv) = @_;
-#	print STDERR "=== is_dup_SV ===\n";
-	foreach my $s (@{$r_SVs}) {
-
-		return 1
-		if( abs($s->{first_bp}->{tpos} - $sv->{second_bp}->{tpos}) < 20 &&
-			$s->{first_bp}->{tname} eq $sv->{second_bp}->{tname} &&
-			abs($s->{second_bp}->{tpos} - $sv->{first_bp}->{tpos}) < 20 &&
-			$s->{second_bp}->{tname} eq $sv->{first_bp}->{tname} &&
-			$s->{type} eq $sv->{type});
-		return 1
-		if( abs($s->{first_bp}->{tpos} - $sv->{first_bp}->{tpos}) < 20 &&
-			$s->{first_bp}->{tname} eq $sv->{first_bp}->{tname} &&
-			abs($s->{second_bp}->{tpos} - $sv->{second_bp}->{tpos}) < 20 &&
-			$s->{second_bp}->{tname} eq $sv->{second_bp}->{tname} &&
-			$s->{type} eq $sv->{type});
-	}
-	return;
-}
-=cut
 
 =head1 LICENCE AND COPYRIGHT
 Copyright 2019 St. Jude Children's Research Hospital 

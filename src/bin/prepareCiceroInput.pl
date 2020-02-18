@@ -97,6 +97,7 @@ while(<$SCI>){
 		}
 		last if($blk==1);
 
+		# Compute an adjusted gene expression ratio
 		my $expression_ratio = ($cover/($read_len-20))/($r_cnt*$read_len/(2*$mRNA_length));
 		if($expression_ratio > $expression_ratio_cutoff || $SC_MAF > 0.05){
 			push @intra_SCs, [$chr, $site, $strand, $sc_cnt, $sc_cutoff, $expression_ratio, $cover] if($chr);

@@ -45,8 +45,6 @@ my $cap3_options = " -o 25 -z 2 -h 60 -y 10 > /dev/null 2>&1";
 # 2 blat related variables, using blat server and blat standalone
 my $blat_client_exe = "gfClient";
 my $blat_client_options = '-out=psl -nohead > /dev/null 2>&1';
-#my $blat_client_options = '-out=psl -nohead -minIdentity=90 -minScore=25 > /dev/null 2>&1';
-#my $blat_client_options = ' -out=psl -nohead -minIdentity=95 -maxIntron=5';  
 my ($blat_server, $blat_port, $dir_2bit); 
 my ($paired, $rmtmp, $rmdup) = (1, 1, 1);
 # other options 
@@ -104,12 +102,10 @@ pod2usage(1) if($help or $version );
 
 # figure out input file
 if(!$input_bam) {
-#	pod2usage(1);
 	croak "You need specify input bam file(s)";
 }
 
 if(!$sclip_file) {
-#	pod2usage(1);
 	croak "You need to specify the softclipping file";
 }
 $sclip_file = File::Spec->rel2abs($sclip_file);
@@ -119,10 +115,9 @@ $ref_genome = $conf->{'FASTA'} unless ($ref_genome && -e $ref_genome);
 $blat_server = $conf->{'BLAT_HOST'} unless ($blat_server); 
 $blat_port = $conf->{'BLAT_PORT'} unless ($blat_port); 
 $gene_model_file = $conf->{'REFSEQ_REFFLAT'} unless ($gene_model_file && -e $gene_model_file); 
-$dir_2bit = '/';#dirname($conf->{'TWOBIT'}) unless (-d $dir_2bit);
+$dir_2bit = '/';
 
 if(!$ref_genome) {
-#	pod2usage(1);
 	croak "You need to specify the reference genome";
 }
 
@@ -145,7 +140,6 @@ my $assembler = Assembler->new(
 	-OPTIONS => $cap3_options
 );
 
-#print "blat_client_exe:$blat_client_exe\n\n";
 my $mapper = Mapper->new(
 	-PRG => join(' ', ($blat_client_exe, $blat_server, $blat_port)),
 	-OPTIONS => $blat_client_options,
@@ -174,14 +168,11 @@ system("touch $out_dir/unfiltered.fusion.txt");
 system("touch $out_dir/unfiltered.internal.txt"); 
 
 # the softclip file is sorted, so no need to re-sort it
-#print  "sclip_file: $sclip_file\n";
 open my $SCLIP, "<$sclip_file" or croak "can't open $sclip_file:$OS_ERROR";
 while( my $line = <$SCLIP> ) {
 	chomp $line;
-	#my ($chr, $pos, $ort, $sc_cover, $sc_cutoff) = split /\t/, $line;
 	my ($chr, $pos, $ort, $sc_cnt, $sc_cutoff, $cover, $expression_ratio) = split /\t/, $line;
 	next if($sc_cnt < $min_sclip_reads);
-	#last if(!$sc_cutoff);
 	if($sc_cutoff > 0){ 
 		#print STDERR "next if($expression_ratio < $expression_ratio_cutoff)\n";
 		#next if(defined $expression_ratio && $expression_ratio < $expression_ratio_cutoff);
@@ -189,12 +180,9 @@ while( my $line = <$SCLIP> ) {
 	}else{
 		my $cnt = count_coverage($sam_d, $chr, $pos);
 		next if(!$cnt);
-		#next if($sc_cnt < 5);
 		$sc_cutoff = (-1)*$cnt/20;
-		#print STDERR "($cnt < 2000 || $sc_cnt > abs($sc_cutoff))\n";
 		next unless(($cnt < 2000 && $sc_cnt > abs($sc_cutoff)/10) || $sc_cnt > abs($sc_cutoff));
 	}
-	#next if(($sc_cover<5 && $sc_cover<=$sc_cutoff) || ($sc_cover>=5 && 2*$sc_cover<=$sc_cutoff));
 	my $clip = ($ort eq '-')? LEFT_CLIP: RIGHT_CLIP;
 	print STDERR "detect_SV($sam_d, $chr, $pos, $sc_cnt, $sc_cutoff, $clip)\n" if($debug);
 	detect_SV($sam_d, $chr, $pos, $sc_cnt, $sc_cutoff, $clip);
@@ -204,7 +192,6 @@ close $SCLIP;
 sub count_coverage {
 	my ($sam, $chr, $pos) = @_;
 	my $seg = $sam->segment(-seq_id => $chr, -start => $pos, -end => $pos);
-	#print STDERR "seg: ", $seg, "\n";
 	return 0 unless $seg;
 	my $n = 0;
 	my $itr = $seg->features(-iterator => 1);
@@ -228,11 +215,9 @@ sub detect_SV{
 
 	# to fix the inaccurate soft-clipping
 	$fixSC = 1 if($sc_cover < 10 && abs($sc_cutoff) < 10); 
-	#$unmapped_cutoff = $sc_cover + 1 if($sc_cover < 10*$sc_cutoff && $sc_cover > 10);
 	my $fa_file = "$tmp_dir/". join(".", $chr, $sc_site, ($clip+1), "fa");
 	my $now_string = localtime;  # e.g., "Thu Oct 13 04:54:34 1994"
 
-	#my $sttime = time;
 	print STDERR "prepare_reads_file:", join("\n", $fa_file, $sam_d, $chr, $sc_site, $clip, $validator, $paired, $rmdup, $min_sclip_reads, $min_sclip_len, $unmapped_cutoff),"\n" if($debug);
 	prepare_reads_file(-OUT => $fa_file,
 		           -SAM => $sam_d,
@@ -247,10 +232,6 @@ sub detect_SV{
 			-UNMAPPED_CUTOFF => $unmapped_cutoff,
 			-FIXSC => $fixSC,
 	        	);
-
-	#my $entime = time;
-	#my $elapse = $entime - $sttime;
-	#print STDERR join("\t", "chr$chr", $sc_site, $sc_cover, $sc_cutoff, $clip, $elapse), "\n";
 
 	return unless(-f $fa_file && -s $fa_file);
 	print STDERR "start to assemble reads: at $fa_file", "\n" if($debug);
@@ -321,9 +302,7 @@ sub detect_SV{
 			my ($f_tree1, $r_tree1) = ($gm->sub_model($g1_chr, "+"), $gm->sub_model($g1_chr, "-"));
 			my ($f_tree2, $r_tree2) = ($gm->sub_model($g2_chr, "+"), $gm->sub_model($g2_chr, "-"));
 			push @genes, $f_tree1->intersect([$g1_start, $g1_end]) if(defined($f_tree1));
-			#print STDERR join("\t", "forward", $g1_chr, $g1_start, $g1_end), "\n", join("@", @genes),"\n" if($debug);
 			push @genes, $r_tree1->intersect([$g1_start, $g1_end]) if(defined($r_tree1));
-			#print STDERR join("\t", "reverse", $g1_chr, $g1_start, $g1_end), "\n", join("@", @genes),"\n" if($debug);
 			push @genes2, $f_tree2->intersect([$g2_start, $g2_end]) if(defined($f_tree2)); 
 			push @genes2, $r_tree2->intersect([$g2_start, $g2_end]) if(defined($r_tree2));
 
