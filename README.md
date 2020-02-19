@@ -43,16 +43,18 @@ Once you have the output from CICERO, use the following [guide](https://www.stju
     - Tree
     - warnings
 
-### Downloading RNApeg
+### Generate junctions file with RNApeg
 
-RNApeg is required to generate a junctions file for use by CICERO. You can get RNApeg from both docker and singularity.
+RNApeg is required to generate a junctions file for use by CICERO. You can get RNApeg from both Docker and Singularity.
 
 Running RNApeg via Docker:
-* docker run mnedmonson/public:rnapeg RNApeg.sh
-
+```
+docker run mnedmonson/public:rnapeg RNApeg.sh -b bamfile -f fasta -r refflat [-rg refflat]
+```
 Running RNApeg via Singularity:
-* singularity run docker://mnedmonson/public:rnapeg
-* singularity run docker://mnedmonson/public:rnapeg RNApeg.sh
+```
+singularity run docker://mnedmonson/public:rnapeg RNApeg.sh -b bamfile -f fasta -r refflat [-rg refflat]
+```
 
 ### Downloading reference files
 
