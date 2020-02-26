@@ -17,6 +17,7 @@ use MiscUtils qw(dump_die);
 use FAI;
 use GenomeUtils qw(complement);
 use CacheManager;
+use DebugRAM qw(debug_ram);
 
 use MethodMaker qw(
 rows
@@ -107,6 +108,10 @@ sub parse_file {
   my $is_aceview = $type eq "aceview";
   my $is_ucsc = $type eq "refflat";
   my $fuzzy_lookup = $options{"-fuzzy"};
+  my $no_junctions = $options{"-no-junctions"};
+  my $no_md5 = $options{"-no-md5"};
+  my $skip_nr = $options{"-skip-nr"};
+  my $lite = $options{"-lite"};
 
   my %priority = (
     "refgene" => 1,
@@ -115,6 +120,8 @@ sub parse_file {
     "aceview" => 4
       );
   my $priority = $priority{$type} || die;
+
+  debug_ram("refflat parse", "start") if $ENV{DEBUG_RAM};
 
   #
   #  map transcript IDs to genes:
@@ -174,6 +181,8 @@ sub parse_file {
     }
 
     @r{@headers} = @f;
+    next if $skip_nr and $r{name} =~ /^NR_/;
+
     $r{priority} = $priority;
 
     if ($canonical_only) {
@@ -229,6 +238,18 @@ sub parse_file {
     die unless @starts == @ends;
     die "exon count doesn't match starts for " . $r{gene} unless $r{exonCount} == scalar @starts;
 
+    if ($lite) {
+      # - tweak to save RAM for some use cases
+      # - may break some features of this module!
+      delete $r{exonStarts};
+      delete $r{exonEnds};
+      # for code that just uses parsed exons array
+      delete $r{priority};
+      delete $r{exonCount};
+      delete $r{bin};
+#      dump_die(\%r);
+    }
+
     unless ($self->preserve_interbase()) {
       # coordinates are interbase:
       # convert starts to in-base
@@ -247,24 +268,29 @@ sub parse_file {
     }
     $r{exons} = \@exons;
 
-    # generate junctions:
-    my @junctions;
-    for (my $i = 0; $i < (@starts - 1); $i++) {
-      my %junction;
-      $junction{start} = $ends[$i];
-      $junction{end} = $starts[$i + 1];
-      push @junctions, \%junction;
+    unless ($no_junctions) {
+      # generate junctions:
+      my @junctions;
+      for (my $i = 0; $i < (@starts - 1); $i++) {
+	my %junction;
+	$junction{start} = $ends[$i];
+	$junction{end} = $starts[$i + 1];
+	push @junctions, \%junction;
+      }
+      $r{junctions} = \@junctions;
     }
-    $r{junctions} = \@junctions;
 
-    my @md5 = ($r{chrom}, $r{strand});
-    push @md5, map {$_->{start}, $_->{end}} @exons;
-    $r{md5} = md5_hex(@md5);
-    # for duplicate-checking porpoises
-
+    unless ($no_md5) {
+      my @md5 = ($r{chrom}, $r{strand});
+      push @md5, map {$_->{start}, $_->{end}} @exons;
+      $r{md5} = md5_hex(@md5);
+      # for duplicate-checking porpoises
+    }
     push @{$rows}, \%r;
   }
   close RF;
+
+  debug_ram("refflat parse", "end") if $ENV{DEBUG_RAM};
 }
 
 sub get_reporter {
@@ -744,6 +770,7 @@ sub get_rows {
 }
 
 sub find_by_gene {
+  # TO DO: add GeneSymbolMapper, in case query symbol is older?
   my ($self, $gene) = @_;
   my $idx = $self->idx_gene();
   unless ($idx) {
@@ -760,9 +787,11 @@ sub find_by_gene {
 sub find_gene_interval {
   my ($self, %options) = @_;
   my $gene = $options{"-gene"} || die;
-  my $buffer = $options{"-buffer"} || die "-buffer";
+  my $buffer = $options{"-buffer"};
+  die "-buffer" unless defined $buffer;
   my $single = $options{"-single"};
   confess "-single [0|1]" unless defined $single;
+  my $buffer_upstream = $options{"-buffer-upstream"};
 
   my $wanted = $self->find_by_gene($gene);
   die "no rows for $gene" unless $wanted;
@@ -772,23 +801,52 @@ sub find_gene_interval {
     # Good for creating a superset of isoform, however may not
     # be what you want if there are multiple mappings far away on
     # the same chrom.
-    my %chr;
-    my %strand;
-    my @starts;
-    my @ends;
-    foreach my $r (@{$wanted}) {
-      $chr{$r->{chrom}}++;
-      $strand{$r->{strand}}++;
-      push @starts, $r->{txStart} || die;
-      push @ends, $r->{txEnd} || die;
-    }
-    die "multiple chroms" if scalar keys %chr > 1;
-    die "multiple strands" if scalar keys %strand > 1;
 
-    my ($chr) = keys %chr;
-    my $start = min(@starts) - $buffer;
-    my $end = max(@ends) + $buffer;
-    return ($chr, $start, $end);
+    my %bucket;
+    # bucket results by chrom and strand; some genes are mapped to
+    # multiple chroms (e.g. DUX4), some to multiple strands within
+    # a chrom (e.g. SSX2)
+    foreach my $r (@{$wanted}) {
+      my $key = join "_", @{$r}{qw(chrom strand)};
+      push @{$bucket{$key}}, $r;
+    }
+
+    my @results;
+    foreach my $key (sort keys %bucket) {
+      # separate rows by chrom for e.g. DUX4
+      my (@starts, @ends, $chr, $strand);
+      foreach my $r (@{$bucket{$key}}) {
+	push @starts, $r->{txStart} || die;
+	push @ends, $r->{txEnd} || die;
+	$chr = $r->{chrom} || die;
+	$strand = $r->{strand} || die;
+      }
+
+      my $start = min(@starts) - $buffer;
+      my $end = max(@ends) + $buffer;
+      if ($buffer_upstream) {
+#	printf STDERR "before %s\n", join ",", $gene, $chr, $start, $end, $strand;
+	if ($strand eq "+") {
+	  # translation begins at genomic mapping start
+	  $start -= $buffer_upstream;
+	} elsif ($strand eq "-") {
+	  # translation begins at genomic mapping end
+	  $end += $buffer_upstream;
+	}
+#	printf STDERR "after %s\n", join ",", $gene, $chr, $start, $end, $strand;
+      }
+      push @results, [ $chr, $start, $end ];
+    }
+
+    if (@results > 1) {
+      if ($options{"-multi-ok"}) {
+	return \@results;
+      } else {
+	die "multiple chroms for $gene, specify -multi-ok to return arrayref of results";
+      }      
+    } else {
+      return @{$results[0]};
+    }
   } else {
     #
     # separate interval for each mapping (safer)
@@ -802,6 +860,7 @@ sub find_gene_interval {
       my $start = $r->{txStart} || die;
       my $end = $r->{txEnd} || die;
       push @intervals, [$chrom, $start - $buffer, $end + $buffer];
+      die "not implemented" if $buffer_upstream;
     }
     return \@intervals;
   }

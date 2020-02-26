@@ -5,10 +5,12 @@ package TemporaryFileWrangler;
 
 use strict;
 use Carp qw(confess cluck);
+use Exporter;
+use File::Spec;
+use File::Temp qw(mktemp tmpnam);
+# changed from POSIX::tmpnam as this was deprecated and removed in later Perls
 
 use Configurable;
-use Exporter;
-use POSIX qw(tmpnam);
 
 @TemporaryFileWrangler::ISA = qw(Configurable Exporter);
 @TemporaryFileWrangler::EXPORT_OK = qw();
@@ -17,11 +19,13 @@ my %WARNED;
 
 use MethodMaker qw(
 use_mktemp
+use_mktemp_internal
 	auto_unlink
 tempfiles
 globfiles
 verbose
 mktemp_local_disk
+
 		  );
 
 sub new {
@@ -34,6 +38,8 @@ sub new {
   $self->use_mktemp(1) unless $ENV{NO_MKTEMP};
   # SJ requirement, see
   # http://hc-wiki.stjude.org/display/compbio/Source+Code+Policies
+  $self->use_mktemp_internal(1);
+  # shelling out to mktemp can be surprisingly slow if many calls are made
 
   foreach my $dir ("/scratch_local",
 		   "/scratch_space") {
@@ -61,29 +67,49 @@ sub get_tempfile {
   my $fn;
 
   if ($self->use_mktemp) {
-    my $cmd = "mktemp";
-    my $local_dir = $self->mktemp_local_disk();
-    if ($local_dir) {
-      if (-d $local_dir) {
-	if (-w $local_dir) {
-	  $cmd .= sprintf ' --tmpdir=%s', $local_dir;
-	} else {
-	  printf STDERR "WARNING: specified temp root %s is not writable\n", $local_dir;
-	}
+    if ($self->use_mktemp_internal()) {
+      my $local_dir = $self->mktemp_local_disk();
+      if ($local_dir and -d $local_dir and -w $local_dir) {
+	$fn = mktemp(sprintf "%s/tmp.XXXXXXXXXX", $local_dir);
+	# same length as local mktemp file output.
+	#
+	# File::Temp recommends using tmpnam() instead, however I
+	# can't figure out how to override the temporary directory.
+	# It seems overridding $ENV{TMPDIR} does not work at runtime
+	# for purposes of tmpnam(), however it DOES work if the
+	# variable is set before the perl process starts.  Maybe
+	# File::Temp copies the ENV variable in BEGIN block, etc.?
+	# Anyway while this hack this isn't very portable it should
+	# only be invoked in SJ environment.
       } else {
-	printf STDERR "WARNING: specified temp root %s does not exist!\n", $local_dir unless $WARNED{$local_dir};
-	$WARNED{$local_dir} = 1;
+	$fn = File::Temp->new();
+	# more portable
       }
-    }
-    $fn = `$cmd`;
-    chomp $fn;
-    if ($? or not($fn)) {
-      printf STDERR "ERROR: can't create tempfile, file=%s exit=%s; using tmpnam()", ($fn || "undef"), $?;
-      $fn = tmpnam();
+    } else {
+      my $cmd = "mktemp";
+      my $local_dir = $self->mktemp_local_disk();
+      if ($local_dir) {
+	if (-d $local_dir) {
+	  if (-w $local_dir) {
+	    $cmd .= sprintf ' --tmpdir=%s', $local_dir;
+	  } else {
+	    printf STDERR "WARNING: specified temp root %s is not writable\n", $local_dir;
+	  }
+	} else {
+	  printf STDERR "WARNING: specified temp root %s does not exist!\n", $local_dir unless $WARNED{$local_dir};
+	  $WARNED{$local_dir} = 1;
+	}
+      }
+      $fn = `$cmd`;
+      chomp $fn;
+      if ($? or not($fn)) {
+	printf STDERR "ERROR: can't create tempfile via mktemp, file=%s exit=%s; using File::Temp", ($fn || "undef"), $?;
+	$fn = File::Temp->new();
+      }
     }
 #    cluck "create tempfile $fn";
   } else {
-    $fn = tmpnam();
+    $fn = File::Temp->new();
   }
 
   $self->add_tempfile($fn);

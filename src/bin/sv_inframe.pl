@@ -27,12 +27,13 @@ use 5.10.1;
 # many 3rd-party modules installed only for this version
 
 use Getopt::Long;
-use Carp qw(confess);
+use Carp qw(confess cluck);
 
 use File::Basename;
-use List::Util qw(min max);
-
+use List::Util qw(min max sum);
+use Algorithm::Combinatorics qw(combinations);
 use Bio::Tools::CodonTable;
+use Set::IntSpan;
 
 use MiscUtils qw(dump_die);
 use DelimitedFile;
@@ -48,6 +49,7 @@ use GenomeUtils qw(reverse_complement);
 use AnnotationField;
 use RefFlatFile;
 use TdtConfig;
+use Counter;
 
 #my $MIN_AA_FOR_GENE_A = 10;
 #my $MIN_AA_FOR_GENE_B = 10;
@@ -96,87 +98,126 @@ use constant CICERO_FEATURE_INTERGENIC => "intergenic";
 
 my $VERBOSE = 0;
 
+my $FULL_LENGTH_MIN_GENE_A_ANCHOR = 10;
+#my $FULL_LENGTH_MIN_BLAT_IDENTITY_TO_MERGE = 0.93;
+my $FULL_LENGTH_MIN_BLAT_IDENTITY_TO_MERGE = 0.95;
+my $FULL_LENGTH_START_COMPARE_LENGTH = 10;
+
+my $FULL_LENGTH_DIGEST_EXCLUDE_INTERSTITIAL_STOP = 1;
+# when creating summaries of full-length sequences, discard those
+# predicted to have an interstitial stop codon between geneA and geneB.
+# Note that this may eliminate ALL results for some fusions.
+
+my $PRESORT = 1;
+my $PROGRESS_PING = 10;
+use constant DEFAULT_CHROM_CACHE_LIMIT => 2;
+# only if pre-sort enabled
+# a value of 2 likely quickly prunes still-needed chroms so there
+# will be some repetitive re-loading, however process memory usage
+# will be kept down which is one of our goals
+
+my $CACHE_TRANSCRIPT_MAPPINGS = 1;
+use constant DEFAULT_TRANSCRIPT_CACHE_LIMIT => 25;
+
 my %KNOWN_FEATURES = map {$_, 1} qw(
-				     intron
-				     coding
-				     intergenic
-				     5utr
-				     3utr
-				  );
+                                     intron
+                                     coding
+                                     intergenic
+                                     5utr
+                                     3utr
+                                  );
 
 my @params = (
-	      "-single=s",
-	      "-list=s",
+              "-single=s",
+              "-list=s",
 
-	      "-genome=s",
+              "-genome=s",
 
-	      "-refflat=s",
-	      # refFlat.txt used in CICERO run, e.g.
-	      # /nfs_exports/genomes/1/Homo_sapiens/Hg19/mRNA/RefSeq/refFlat.txt
-	      "-fasta=s",
+              "-refflat=s",
+              # refFlat.txt used in CICERO run, e.g.
+              # /nfs_exports/genomes/1/Homo_sapiens/Hg19/mRNA/RefSeq/refFlat.txt
+              "-fasta=s",
 
-	      "-refgene2protein=s",
-	      # mapping of refseq accession to protein,
-	      # see refgene2protein.pl
+              "-refgene2protein=s",
+              # mapping of refseq accession to protein,
+              # see refgene2protein.pl
 
-	      "-save-tempfiles",
+              "-save-tempfiles",
 
-	      "-test-single=s",
-	      "-test-all",
+              "-test-single=s",
+              "-test-all",
 
-	      "-verbose-r2g",
-	      "-verbose" => \$VERBOSE,
+              "-verbose-r2g",
+              "-verbose" => \$VERBOSE,
 
-	      "-sj-tag-outfile",
+              "-sj-tag-outfile",
 
-	      "-extract-example=s",
+              "-extract-example=s",
 
-	      "-cache",
-	      # don't overwrite outfiles if already exist
-	      "-force",
+              "-cache",
+              # don't overwrite outfiles if already exist
+              "-force",
 
-	      "-no-blat",
+              "-no-blat",
 
-	      "-ignore-duplicate-outfile",
-	      # debug only
+              "-ignore-duplicate-outfile",
+              # debug only
 
-	      "-cache-genome-mappings",
+              "-cache-genome-mappings=i" => \$CACHE_TRANSCRIPT_MAPPINGS,
 
-	      "-hack-extract-inframe",
+              "-hack-extract-inframe",
 
-	      "-force-refflat-map",
-	      # accept refFlat.txt mappings even if they disagree
-	      # with refSeq AA.  DEBUGGING ONLY!
+              "-force-refflat-map",
+              # accept refFlat.txt mappings even if they disagree
+              # with refSeq AA.  DEBUGGING ONLY!
 
-	      "-utr-frame-tests",
+              "-utr-frame-tests",
 
-	      "-fq",
-	      "-cluster",
+              "-fq",
+              "-cluster",
 
-	      "-restrict-a-nm=s",
-	      "-restrict-b-nm=s",
-	      # debug
-	      "-restrict-junction=s",
+              "-restrict-a-nm=s",
+              "-restrict-b-nm=s",
+              # debug
+              "-restrict-junction=s",
 
-	      "-junction-mode",
+              "-junction-mode",
 
-	      "-infer-aa",
-	      "-blat-min-score=i",
-	      "-junction-flanking=i",
+              "-infer-aa",
+              "-blat-min-score=i",
+              "-junction-flanking=i",
 
-	      "-not-inframe-if-utr3=i" => \$NOT_INFRAME_IF_ENTIRELY_UTR3,
+              "-not-inframe-if-utr3=i" => \$NOT_INFRAME_IF_ENTIRELY_UTR3,
 
-	      "-report-coding-base-number",
+              "-report-coding-base-number",
 
-	      "-patch-coding-base-number",
+              "-patch-coding-base-number",
 
-	      "-hack2",
+              "-hack2",
 
-	      "-generate-qpos",
+              "-generate-qpos",
 
-	      "-min-aa-tuple=i" => \$MIN_TUPLE_AA,
-	      "-min-aa-blat=i" => \$BLAT_AA_MIN_IDENTICAL,
+              "-min-aa-tuple=i" => \$MIN_TUPLE_AA,
+              "-min-aa-blat=i" => \$BLAT_AA_MIN_IDENTICAL,
 
+	      "-enable-full-length",
+
+
+	      "-digest-full-length=s",
+	      "-prep-excerpt=s",
+	      "-run-digest",
+	      "-fusions=s",
+
+	      "-frame-debug=s",
+
+	      "-crest",
+
+	      "-cache-whole-chrom=i",
+	      "-limit-chrom-cache=i",
+	      "-limit-transcript-cache=i",
+
+	      "-presort=i" => \$PRESORT,
+	      "-ping=i" => \$PROGRESS_PING,
 	     );
 
 my %FLAGS;
@@ -219,7 +260,7 @@ if (my $acc = $FLAGS{"test-single"}) {
 } elsif ($FLAGS{"hack-extract-inframe"}) {
   extract_inframe_hack();
   exit(0);
-} elsif ($FLAGS{hack2}){ 
+} elsif ($FLAGS{hack2}){
   hack2();
   exit(0);
 } elsif ($FLAGS{"utr-frame-tests"}) {
@@ -228,6 +269,15 @@ if (my $acc = $FLAGS{"test-single"}) {
 } elsif ($FLAGS{cluster}) {
   # submit jobs to cluster
   cluster_jobs();
+  exit(0);
+} elsif ($FLAGS{"digest-full-length"}) {
+  digest_full_length();
+  exit(0);
+} elsif ($FLAGS{"prep-excerpt"}) {
+  prep_excerpt_files();
+  exit(0);
+} elsif ($FLAGS{"frame-debug"}) {
+  frame_debug();
   exit(0);
 }
 
@@ -252,6 +302,25 @@ sub get_infiles {
 }
 
 sub process_svs {
+  printf STDERR "configuration:\n";
+  printf STDERR "  pre-sorting data: ";
+  if ($PRESORT) {
+    $FLAGS{"limit-chrom-cache"} = DEFAULT_CHROM_CACHE_LIMIT unless exists $FLAGS{"limit-chrom-cache"};
+    printf STDERR "yes\n";
+    printf STDERR "    cache whole chromosomes: %s\n", $FLAGS{"cache-whole-chrom"} ? "yes" : "no";
+    printf STDERR "    chromosome cache limit: %d\n", $FLAGS{"limit-chrom-cache"};
+  } else {
+    print STDERR "no\n";
+  }
+
+  print STDERR "  cache transcript mappings?: ";
+  if ($CACHE_TRANSCRIPT_MAPPINGS) {
+    $FLAGS{"limit-transcript-cache"} = DEFAULT_TRANSCRIPT_CACHE_LIMIT unless exists $FLAGS{"limit-transcript-cache"};
+    printf STDERR "yes (accession cache limit=%d)\n", $FLAGS{"limit-transcript-cache"};
+  } else {
+    print STDERR "no\n";
+  }
+
   my $infiles = get_infiles();
 
   my $r2g = get_r2g();
@@ -260,10 +329,10 @@ sub process_svs {
   my $infer_aa = $FLAGS{"infer-aa"};
 
   my $ga = new GeneAnnotation(
-  			      "-style" => "refgene_flatfile",
-  			      "-refgene_flatfile" => $refgene_fn,
-#			      "-verbose" => 1
-  			     );
+                                "-style" => "refgene_flatfile",
+                                "-refgene_flatfile" => $refgene_fn,
+#                              "-verbose" => 1
+                               );
   # quickly find transcript IDs from regions
 
   if ($infer_aa) {
@@ -273,58 +342,62 @@ sub process_svs {
   }
 
   my $junction_mode = $FLAGS{"junction-mode"};
+  if ($junction_mode and $PRESORT) {
+    printf STDERR "junction mode: disabling presort option\n";
+    $PRESORT = 0;
+  }
 
   my @sv_extra_fields;
   if ($junction_mode) {
     # add columns for generated CICERO-format fields
     push @sv_extra_fields, qw(
-			       chrA
-			       posA
-			       ortA
-			       featureA
+                               chrA
+                               posA
+                               ortA
+                               featureA
 
-			       chrB
-			       posB
-			       ortB
-			       featureB
+                               chrB
+                               posB
+                               ortB
+                               featureB
 
-			       sv_ort
-			       contig
-			   );
+                               sv_ort
+                               contig
+                           );
   }
 
   push @sv_extra_fields, (
-			 "sv_any_inframe",
-			 "sv_any_inframe_canonical",
+                         "sv_any_inframe",
+                         "sv_any_inframe_canonical",
 
-			 "sv_inframe",
-			 #					   "sv_inframe_aa",
+                         "sv_inframe",
+                         #                                           "sv_inframe_aa",
  # AA predicted from contig sequence, in-frame for GeneA transcript
 
-			 "sv_refseqA",
-			 "sv_refseqA_codon",
-			 "sv_refseqA_exon",
-			 "sv_refseqA_anchor_type",
+                         "sv_refseqA",
+                         "sv_refseqA_codon",
+                         "sv_refseqA_exon",
+                         "sv_refseqA_anchor_type",
 
-			 "sv_refseqB",
-			 "sv_refseqB_codon",
-			 "sv_refseqB_exon",
-			 "sv_refseqB_anchor_type",
-			 "sv_posB_adjusted",
-			 "sv_AA",
-			 "sv_desc",
+                         "sv_refseqB",
+                         "sv_refseqB_codon",
+                         "sv_refseqB_exon",
+                         "sv_refseqB_anchor_type",
+                         "sv_posB_adjusted",
+                         "sv_AA",
+                         "sv_desc",
 
-			 "sv_processing_exception",
-			 "sv_general_info",
-			);
+                         "sv_processing_exception",
+                         "sv_general_info",
+                        );
 
   if ($junction_mode) {
     push @sv_extra_fields, (
-			    "sv_refseqA_inframe",
-#			    "sv_refseqA_inframe_transcripts",
-			    "sv_refseqB_inframe",
-#			    "sv_refseqB_inframe_transcripts",
-			   );
+                            "sv_refseqA_inframe",
+#                            "sv_refseqA_inframe_transcripts",
+                            "sv_refseqB_inframe",
+#                            "sv_refseqB_inframe_transcripts",
+                           );
     # on second thought don't report the transcripts for now:
     # if geneA status is inferred from results, the list may not
     # be comprehensive, because it relies on geneB being synced first.
@@ -335,9 +408,9 @@ sub process_svs {
     # leave separate code block, may want to optionally add in the
     # future for comparisons
     push @sv_extra_fields, (
-			    "sv_refseqA_annot",
-			    "sv_refseqB_annot",
-			   );
+                            "sv_refseqA_annot",
+                            "sv_refseqB_annot",
+                           );
   }
 
   if ($FLAGS{"report-coding-base-number"}) {
@@ -347,31 +420,33 @@ sub process_svs {
   }
 
   push @sv_extra_fields, (
-			  "sv_refseqA_AA_index",
-			  # last codon in geneA
-			  "sv_refseqB_AA_index",
-			  # first codon in geneB
-			  "sv_refseqA_contig_index",
-			  # contig index of last base of last codon of
-			  # geneA anchor
-			  "sv_refseqB_contig_index",
-			  # contig index of 1st base of 1st codon of
-			  # geneB anchor
-			  "sv_interstitial_AA",
-			  # AA sequence between geneA and geneB mapping
-			  "sv_frame_index",
-			 );
+                          "sv_refseqA_AA_index",
+                          # last codon in geneA
+                          "sv_refseqB_AA_index",
+                          # first codon in geneB
+                          "sv_refseqA_contig_index",
+                          # contig index of last base of last codon of
+                          # geneA anchor
+                          "sv_refseqB_contig_index",
+                          # contig index of 1st base of 1st codon of
+                          # geneB anchor
+                          "sv_interstitial_AA",
+                          # AA sequence between geneA and geneB mapping
+                          "sv_frame_index",
+                         );
   # 2/2016
 
   unique_outfile_check($infiles);
+
+  my $enable_full_length = $FLAGS{"enable-full-length"};
 
   foreach my $cicero (@{$infiles}) {
     printf STDERR "%s: processing file %s...\n", scalar(localtime()), $cicero;
     my $start_time = time;
     my $df = new DelimitedFile(
-			       "-file" => $cicero,
-			       "-headers" => 1,
-			      );
+                               "-file" => $cicero,
+                               "-headers" => 1,
+                              );
     my $outfile = get_outfile($cicero);
 
     if ($FLAGS{cache} and -s $outfile and not($FLAGS{force})) {
@@ -381,22 +456,101 @@ sub process_svs {
 
 
     my $rpt = $df->get_reporter(
-				"-file" => $outfile,
-				"-extra" => \@sv_extra_fields
-			       );
+                                "-file" => $outfile,
+                                "-extra" => \@sv_extra_fields
+                               );
     $rpt->auto_qc(1);
 
+    my $rpt_full_length;
+    my %nm2protein;
+    my $f_out_full_length = $outfile . ".full_length.tab";
+    if ($enable_full_length) {
+      my $f_r2p = get_r2p_file();
+      my $df = new DelimitedFile("-file" => $f_r2p,
+				 "-headers" => 1,
+				);
+      while (my $r = $df->get_hash()) {
+	$nm2protein{$r->{accession}} = $r->{protein};
+      }
+
+      $rpt_full_length = new Reporter(
+				      "-file" => $f_out_full_length,
+				      "-delimiter" => "\t",
+				      "-labels" => [
+						    "sample",
+						    "geneA",
+						    "geneB",
+						    "gene_a_nm",
+						    "gene_b_nm",
+						    "contig",
+						    "contig_frame",
+
+						    "AA_gene_a_full",
+						    "AA_gene_b_full",
+
+						    "AA_gene_a",
+						    "AA_interstitial",
+						    "AA_gene_b",
+						    "QC_span",
+						    "QC_pass",
+						    "full_length_sequence",
+						    "full_length_sequence_length",
+						    "full_length_sequence_contains_entire_gene_b",
+						    "notes",
+						   ]
+				     );
+    }
+
     # while (my $row = $df->next("-ref" => 1)) {  # headerless
+
+    my @rows_raw;
     while (my $row = $df->get_hash()) {
+      push @rows_raw, $row;
+    }
+    my @rows_process = @rows_raw;
+    my $c = new Counter(\@rows_raw, "-mod" => $PROGRESS_PING);
+
+    if ($PRESORT) {
+      foreach my $h (qw(chrA chrB geneA geneB)) {
+	dump_die($rows_raw[0], "where is $h") unless exists $rows_raw[0]->{$h};
+      }
+
+      @rows_process = sort {$a->{chrA} cmp $b->{chrA} ||
+			      $a->{chrB} cmp $b->{chrB} ||
+				$a->{geneA} cmp $b->{geneA} ||
+				  $a->{geneB} cmp $b->{geneB}}
+	@rows_raw;
+
+#      foreach my $r (@rows_process) {
+#	printf "%s\n", join " ", @{$r}{qw(chrA chrB geneA geneB)};
+#      }
+    }
+
+    foreach my $row (@rows_process) {
+      $c->next(join ".", @{$row}{qw(chrA chrB geneA geneB)});
+      if ($FLAGS{crest}) {
+	# experiment: attempt to use CREST-format input
+	$row->{qposA} = ($row->{posA} || dump_die($row, "no CREST qposA field"));
+	# in CICERO, qposA/qposB are the breakpoint locations in the CONTIG.
+	# 3346068
+
+
+	$row->{featureA} = $row->{featureB} = "coding";
+	# HACK
+
+	# need:
+	# annotateA / annotateB (just used as backup if featureA empty?)
+
+      }
 
       my $junction_peptide;
       if ($junction_mode) {
-	if (my $r = $FLAGS{"restrict-junction"}) {
-	  next unless $row->{junction} eq $r;
-	}
+        if (my $r = $FLAGS{"restrict-junction"}) {
+          next unless $row->{junction} eq $r;
+        }
 
-	junction_setup($row, $ga, $r2g);
-	$junction_peptide = $row->{junction_peptide};
+        junction_setup($row, $ga, $r2g);
+        $junction_peptide = $row->{junction_peptide};
       }
 
       dump_die($row, "starting processing", 1) if $VERBOSE;
@@ -414,38 +568,38 @@ sub process_svs {
       my $is_cicero = is_cicero($row);
 
       if ($is_cicero) {
-	my $orientation = $row->{sv_ort} || die;
-	if ($orientation ne ">") {
-	  foreach my $f (@sv_extra_fields) {
-	    $row->{$f} = "" unless defined $row->{$f};
-	  }
-#	  dump_die($row);
-	  $row->{sv_processing_exception} = "unhandled orientation $orientation";
-	  $rpt->end_row($row);
-	  next;
-	  # hacktacular: we "should" if/then block this but indents are
-	  # already severe  :(
-	}
+        my $orientation = $row->{sv_ort} || die;
+        if ($orientation ne ">") {
+          foreach my $f (@sv_extra_fields) {
+            $row->{$f} = "" unless defined $row->{$f};
+          }
+#          dump_die($row);
+          $row->{sv_processing_exception} = "unhandled orientation $orientation";
+#          $rpt->end_row($row);
+          next;
+          # hacktacular: we "should" if/then block this but indents are
+          # already severe  :(
+        }
       }
 
       my $frames = get_frames($contig);
       # possible AA frames for this sequence
 
       my $frames_masked = mask_frames_for_gene_a(
-						 "-row" => $row,
-						 "-frames" => $frames
-						);
+                                                 "-row" => $row,
+                                                 "-frames" => $frames
+                                                );
 
       my $b_nms = find_nms_from_ga(
-				   "-ga" => $ga,
-				   "-row" => $row,
-				   "-which" => "B"
-				  );
+                                   "-ga" => $ga,
+                                   "-row" => $row,
+                                   "-which" => "B"
+                                  );
 
       # find all transcripts touched by breakpoint B
       if (my $restrict = $FLAGS{"restrict-b-nm"}) {
-	die "restrict-b-nm failed" unless grep {$_ eq $restrict} @{$b_nms};
-	$b_nms = [ $restrict ];
+        die "restrict-b-nm failed" unless grep {$_ eq $restrict} @{$b_nms};
+        $b_nms = [ $restrict ];
       }
 
       my @pairs;
@@ -453,9 +607,9 @@ sub process_svs {
       my @geneb_utr_matches;
 
       if (@{$b_nms}) {
-	$annot_global->add("geneB_transcripts", $b_nms);
+        $annot_global->add("geneB_transcripts", $b_nms);
       } else {
-	$annot_trouble->add("geneB_no_transcripts");
+        $annot_trouble->add("geneB_no_transcripts");
       }
 
       my $b_chrom = get_chrom($row, "B") || die;
@@ -465,11 +619,11 @@ sub process_svs {
       # my $b_seek_dir;
       # # seek direction to go downstream in the transcript mapping for GeneB
       # if ($b_ort eq "+") {
-      # 	$b_seek_dir = 1;
+      #         $b_seek_dir = 1;
       # } elsif ($b_ort eq "-") {
-      # 	$b_seek_dir = -1;
+      #         $b_seek_dir = -1;
       # } else {
-      # 	die;
+      #         die;
       # }
       my $b_feature = get_feature($row, "B") || die "can't find feature B";
 
@@ -486,114 +640,136 @@ sub process_svs {
       #  This is done because some events only require a mapping to B.
       #
       foreach my $b_nm (@{$b_nms}) {
-	#
-	# find the codon containing the breakpoint site
-	# - for geneA, breakpoint is the last mapped nt before the break
-	# - however site may not be perfectly accurate (blat)
-	#
+        #
+        # find the codon containing the breakpoint site
+        # - for geneA, breakpoint is the last mapped nt before the break
+        # - however site may not be perfectly accurate (blat)
+        #
 
-	printf STDERR "new B: %s\n", $b_nm if $VERBOSE;
-	my $set_passed = get_transcript_mappings(
-						 "-end" => "B",
-						 "-accession" => $b_nm,
-						 "-row" => $row,
-						 "-r2g" => $r2g,
-						 "-annot-global" => $annot_global,
-						 "-annot-trouble" => $annot_trouble
-						);
+        printf STDERR "new B: %s\n", $b_nm if $VERBOSE;
+        my $set_passed = get_transcript_mappings(
+                                                 "-end" => "B",
+                                                 "-accession" => $b_nm,
+                                                 "-row" => $row,
+                                                 "-r2g" => $r2g,
+                                                 "-annot-global" => $annot_global,
+                                                 "-annot-trouble" => $annot_trouble
+                                                );
 
-	#
-	#  we now know which transcript mapping touches the GeneB breakpoint
-	#  and exactly where the breakpoint falls in the mapping
-	#
-	my %gene_b_inframe;
-	my $processing_exception;
-	my %frame_blat;
+        #
+        #  we now know which transcript mapping touches the GeneB breakpoint
+        #  and exactly where the breakpoint falls in the mapping
+        #
+        my %gene_b_inframe;
+        my $processing_exception;
+        my %frame_blat;
 
-	if (@{$set_passed}) {
-	  my ($hit, $codon_index, $b_codon_number, $b_final_pos, $b_coding_basenum) = @{$set_passed->[0]};
+        if (@{$set_passed}) {
+          my ($hit, $codon_index, $b_codon_number, $b_final_pos, $b_coding_basenum) = @{$set_passed->[0]};
 
-#	  dump_die($hit);
+#          dump_die($hit);
 
-	  my $b_aa = $r2g->get_aa("-accession" => $b_nm);
-	  printf STDERR "GeneB AA: %s\n", ($b_aa || die) if $VERBOSE;
+          my $b_aa = $r2g->get_aa("-accession" => $b_nm);
+          printf STDERR "GeneB AA: %s\n", ($b_aa || die) if $VERBOSE;
 
-	  #
-	  #  - perform single BLAT of geneB AA vs all 3 frames
-	  #  - cache results by subject sequence and use in frame_search()
-	  #  - this is much more efficient than running an
-	  #    individual BLAT for each frame.
-	  #  - results only used if tuple lookup fails (e.g. CDS mismatch)
-	  #
-	  my $blat = get_blat();
-	  $blat->verbose(1) if $VERBOSE;
+          #
+          #  - perform single BLAT of geneB AA vs all 3 frames
+          #  - cache results by subject sequence and use in frame_search()
+          #  - this is much more efficient than running an
+          #    individual BLAT for each frame.
+          #  - results only used if tuple lookup fails (e.g. CDS mismatch)
+          #
+          my $blat = get_blat();
+          $blat->verbose(1) if $VERBOSE;
 
-	  my $parser = $blat->blat(
-				   "-query" => {
-						$b_nm => ($r2g->get_aa("-accession" => $b_nm) || die),
+          my $parser = $blat->blat(
+                                   "-query" => {
+                                                $b_nm => ($r2g->get_aa("-accession" => $b_nm) || die),
 
-					       },
-#				   "-database" => $frames,
-				   "-database" => $frames_masked,
-				   "-protein" => 1,
-				  );
-	  my $result = $parser->next_result;
-	  # one object per query sequence (only one query seq)
-	  if ($result) {
-	    while (my $hit = $result->next_hit()) {
-	      # hits from this query to a database sequence
-	      # (Bio::Search::Hit::HitI)
-	      push @{$frame_blat{$hit->name()}}, $hit;
-	    }
-	  }
+                                               },
+#                                   "-database" => $frames,
+                                   "-database" => $frames_masked,
+                                   "-protein" => 1,
+                                  );
+          my $result = $parser->next_result;
+          # one object per query sequence (only one query seq)
+          if ($result) {
+            while (my $hit = $result->next_hit()) {
+              # hits from this query to a database sequence
+              # (Bio::Search::Hit::HitI)
+              push @{$frame_blat{$hit->name()}}, $hit;
+            }
+          }
 
-	  if ($junction_peptide) {
-	    my $junction_peptide_found;
-	    foreach my $fid (keys %{$frames}) {
-	      my $frame = $frames->{$fid};
-	      if (index($frame, $junction_peptide) != -1) {
-		$junction_peptide_found = 1;
-	      }
-	    }
+          if ($junction_peptide) {
+            my $junction_peptide_found;
+            foreach my $fid (keys %{$frames}) {
+              my $frame = $frames->{$fid};
+              if (index($frame, $junction_peptide) != -1) {
+                $junction_peptide_found = 1;
+              }
+            }
 
-	    $annot_trouble->add("ERROR_no_frames_match_user_peptide")
-	      unless ($junction_peptide_found);
-	    # serious problem: why no match?  transcript sync issue?
-	  }
+            $annot_trouble->add("ERROR_no_frames_match_user_peptide")
+              unless ($junction_peptide_found);
+            # serious problem: why no match?  transcript sync issue?
+          }
 
-	  foreach my $fid (keys %{$frames}) {
-	    my $frame = $frames->{$fid};
+          foreach my $fid (keys %{$frames}) {
+            my $frame = $frames->{$fid};
 
-	    next if $junction_peptide and
-	      index($frame, $junction_peptide) == -1;
-	    # match required if peptide specified
+            next if $junction_peptide and
+              index($frame, $junction_peptide) == -1;
+            # match required if peptide specified
 
-	    my ($idx, $fragment, $frame_error, $utr_codons, $blat_mode) = frame_search(
+            my ($idx, $fragment, $frame_error, $utr_codons, $blat_mode) = frame_search(
+                                                "-row" => $row,
+                                                "-r2g" => $r2g,
+                                                "-frame" => $frame,
+                                                "-hit" => $hit,
+                                                "-index" => $codon_index,
+                                                "-length" => $MIN_TUPLE_AA,
+                                                "-direction" => 1,
+                                                "-blat" => $frame_blat{$fid},
+                                                  "-annot-global" => $annot_global,
+                                                "-annot-trouble" => $annot_trouble,
+                                                "-end" => "B",
+                                               );
+            # find unique anchoring in AA.  The fragment size will
+            # be expanded for uniqueness if necessary.
+            # the formal codon number is taken from the RefFlat2Genome mapping,
+            # however the string lookup is required to separate the
+            # GeneA portion from the GeneB portion for lookup for GeneB.
+            #
+            # the fragment will NOT include the codon at the breakpoint
+            # as this might not match Cicero's contig sequence (see
+            # comments in get_aa_fragment()), and will be 1 AA away in the
+            # appropriate direction.
+
+	    my $fragment_extended = $fragment;
+
+	    if ($utr_codons) {
+	      $annot_global->add("geneb_utr_codons", $utr_codons);
+	      # debug for evaluation/testing
+
+	      my ($idx2, $fragment2, $frame_error2, $utr_codons2, $blat_mode2) = frame_search(
 						"-row" => $row,
 						"-r2g" => $r2g,
 						"-frame" => $frame,
 						"-hit" => $hit,
 						"-index" => $codon_index,
-						"-length" => $MIN_TUPLE_AA,
+						"-length" => $MIN_TUPLE_AA + abs($b_codon_number) + 20,
 						"-direction" => 1,
 						"-blat" => $frame_blat{$fid},
   					        "-annot-global" => $annot_global,
 						"-annot-trouble" => $annot_trouble,
 						"-end" => "B",
 					       );
-	    # find unique anchoring in AA.  The fragment size will
-	    # be expanded for uniqueness if necessary.
-	    # the formal codon number is taken from the RefFlat2Genome mapping,
-	    # however the string lookup is required to separate the
-	    # GeneA portion from the GeneB portion for lookup for GeneB.
-	    #
-	    # the fragment will NOT include the codon at the breakpoint
-	    # as this might not match Cicero's contig sequence (see
-	    # comments in get_aa_fragment()), and will be 1 AA away in the
-	    # appropriate direction.
-
-	    $annot_global->add("geneb_utr_codons", $utr_codons) if $utr_codons;
-	    # debug for evaluation/testing
+	      $fragment_extended = $fragment2;
+	      # find a longer anchor that definitely extends into the
+	      # start of geneB.  This is critical for generating full-length
+	      # sequences where geneB lands in 5' UTR.
+	    }
 
 	    if ($frame_error) {
 	      # special case: no upstream fragment!  e.g. in 1st codon,
@@ -610,127 +786,127 @@ sub process_svs {
 	      # global flag indicating at least one transcript for
 	      # geneB is in-frame.
 
-	      unless ($blat_mode) {
-		if (length($fragment) > $MIN_TUPLE_AA) {
-		  $annot_global->add("geneB_expanded_tuple_required", $fragment);
-		  printf STDERR "final expanded fragment: %s\n", $fragment;
-		} elsif (length($fragment) < $MIN_TUPLE_AA) {
-		  $annot_global->add("geneB_truncated_tuple_required", $fragment);
-		  printf STDERR "final truncated fragment: %s\n", $fragment;
-		}
-	      }
+              unless ($blat_mode) {
+                if (length($fragment) > $MIN_TUPLE_AA) {
+                  $annot_global->add("geneB_expanded_tuple_required", $fragment);
+                  printf STDERR "final expanded fragment: %s\n", $fragment;
+                } elsif (length($fragment) < $MIN_TUPLE_AA) {
+                  $annot_global->add("geneB_truncated_tuple_required", $fragment);
+                  printf STDERR "final truncated fragment: %s\n", $fragment;
+                }
+              }
 
-	      my $frame_raw = $frames->{$fid};
+              my $frame_raw = $frames->{$fid};
 
-	      my ($upstream, $upstream_full, $downstream);
+              my ($upstream, $upstream_full, $downstream);
 
-	      if ($idx == 0) {
-		# match is at start of sequence (!)
-		# mapping site ambiguity?
-		# ambiguous sequence?
-		$upstream = $upstream_full = "";
-		$downstream = $frame_raw;
-	      } else {
-		# get portion of AA contig involving geneA:
-		#
-#		$upstream = substr($frame_raw, 0, $idx - 1);
-		# -1: don't include codon at breakpoint which may touch
-		# both transcripts and be altered, which may interfere
-		# with mapping to geneA.
-		$upstream = substr($frame_raw, 0, $idx);
-		# revise:
-		# - skipping a base introduces a gap for perfect SVs
-		# - BLAT is used as a backup
-		$upstream_full = substr($frame_raw, 0, $idx);
-		$downstream = substr($frame_raw, $idx);
-	      }
+              if ($idx == 0) {
+                # match is at start of sequence (!)
+                # mapping site ambiguity?
+                # ambiguous sequence?
+                $upstream = $upstream_full = "";
+                $downstream = $frame_raw;
+              } else {
+                # get portion of AA contig involving geneA:
+                #
+#                $upstream = substr($frame_raw, 0, $idx - 1);
+                # -1: don't include codon at breakpoint which may touch
+                # both transcripts and be altered, which may interfere
+                # with mapping to geneA.
+                $upstream = substr($frame_raw, 0, $idx);
+                # revise:
+                # - skipping a base introduces a gap for perfect SVs
+                # - BLAT is used as a backup
+                $upstream_full = substr($frame_raw, 0, $idx);
+                $downstream = substr($frame_raw, $idx);
+              }
 
-	      if ($VERBOSE) {
-		printf STDERR "upstream: %s idx=%d\n", $upstream, $idx;
-		printf STDERR "upstream_full: %s\n", $upstream_full;
-		printf STDERR "downstream: %s\n", $downstream;
-	      }
+              if ($VERBOSE) {
+                printf STDERR "upstream: %s idx=%d\n", $upstream, $idx;
+                printf STDERR "upstream_full: %s\n", $upstream_full;
+                printf STDERR "downstream: %s\n", $downstream;
+              }
 
-	      #
-	      #  special checks for GeneB which do not require
-	      #  anchoring of GeneA:
-	      #
-	      my $map = $hit->{codon_map} || die;
-	      my %cm = map {$_->{ref_base_num}, $_} @{$map};
-	      my $cm_min = min(keys %cm);
-	      my $cm_max = max(keys %cm);
+              #
+              #  special checks for GeneB which do not require
+              #  anchoring of GeneA:
+              #
+              my $map = $hit->{codon_map} || die;
+              my %cm = map {$_->{ref_base_num}, $_} @{$map};
+              my $cm_min = min(keys %cm);
+              my $cm_max = max(keys %cm);
 
-	      my $last_cn;
-	      my $utr_call = SV_MATCH_CODE_FRAMESHIFT;
-	      # if none of below checks pass, consider out of frame
+              my $last_cn;
+              my $utr_call = SV_MATCH_CODE_FRAMESHIFT;
+              # if none of below checks pass, consider out of frame
 
-	      my $max_seek = length($downstream);
-	      # only search the sequence present in contig downstream
+              my $max_seek = length($downstream);
+              # only search the sequence present in contig downstream
 
-	      my $b_seek_dir;
-	      # seek direction to go downstream in the transcript mapping for GeneB
-	      if ($hit->{strand} eq "+") {
-		$b_seek_dir = 1;
-	      } elsif ($hit->{strand} eq "-") {
-		$b_seek_dir = -1;
-	      } else {
-		die;
-	      }
+              my $b_seek_dir;
+              # seek direction to go downstream in the transcript mapping for GeneB
+              if ($hit->{strand} eq "+") {
+                $b_seek_dir = 1;
+              } elsif ($hit->{strand} eq "-") {
+                $b_seek_dir = -1;
+              } else {
+                die;
+              }
 
-	      my $j = $b_final_pos;
-	      for (my $try = 0; $try < $max_seek; $try++) {
-		my $e = $cm{$j};
-		#		dump_die($e);
-		if (defined $e->{codon_number}) {
-		  my $cn = $e->{codon_number};
-		  die "direction sanity check failed: last_CN=$last_cn this_CN=$cn" if defined($last_cn) and $cn < $last_cn;
-		  # sanity check: make sure we're proceeding
-		  # down the GeneB transcript
-		  $last_cn = $cn;
-		  if (($e->{AA} || "") eq "M" and $cn == 1) {
-		    # found canonical start codon for GeneB
-		    # from Yongjin's email 9/3/2014:
-		    # "Search start codon M in s2, if the start codon M is the
-		    #  same with geneB, then mark it as 2
-		    #  (5UTR fusion, like P2RY8-CRLF2)"
-		    $utr_call = SV_MATCH_CODE_UTR5_GENEB_COMPLETE_CDS;
-		    last;
-		  }
-		}
-		$j += $b_seek_dir;
-		last if $j < $cm_min or $j > $cm_max;
-	      }
+              my $j = $b_final_pos;
+              for (my $try = 0; $try < $max_seek; $try++) {
+                my $e = $cm{$j};
+                #                dump_die($e);
+                if (defined $e->{codon_number}) {
+                  my $cn = $e->{codon_number};
+                  die "direction sanity check failed: last_CN=$last_cn this_CN=$cn" if defined($last_cn) and $cn < $last_cn;
+                  # sanity check: make sure we're proceeding
+                  # down the GeneB transcript
+                  $last_cn = $cn;
+                  if (($e->{AA} || "") eq "M" and $cn == 1) {
+                    # found canonical start codon for GeneB
+                    # from Yongjin's email 9/3/2014:
+                    # "Search start codon M in s2, if the start codon M is the
+                    #  same with geneB, then mark it as 2
+                    #  (5UTR fusion, like P2RY8-CRLF2)"
+                    $utr_call = SV_MATCH_CODE_UTR5_GENEB_COMPLETE_CDS;
+                    last;
+                  }
+                }
+                $j += $b_seek_dir;
+                last if $j < $cm_min or $j > $cm_max;
+              }
 
-#	      printf STDERR "debug: downstream=%s\n", $downstream;
+#              printf STDERR "debug: downstream=%s\n", $downstream;
 
-	      if (not($utr_call) and
-		  find_qualifying_coding_frame(
-					       "-frame" => $frame_raw,
-					       "-upstream" => $upstream_full,
-					       "-downstream" => $downstream
-					      )) {
-		# "if M is within geneB and there is some AAs
-		# matches after M then return 3 (potential 5UTR
-		# fusion, like ZEB2-CXCR4)"
-		$utr_call = SV_MATCH_CODE_POTENTIAL_UTR5_FUSION;
-	      }
-	      # QUESTION: what if M occurs late in the contig sequence?
-	      # is M + 9 AA really bad if AA may continue past contig?
+              if (not($utr_call) and
+                  find_qualifying_coding_frame(
+                                               "-frame" => $frame_raw,
+                                               "-upstream" => $upstream_full,
+                                               "-downstream" => $downstream
+                                              )) {
+                # "if M is within geneB and there is some AAs
+                # matches after M then return 3 (potential 5UTR
+                # fusion, like ZEB2-CXCR4)"
+                $utr_call = SV_MATCH_CODE_POTENTIAL_UTR5_FUSION;
+              }
+              # QUESTION: what if M occurs late in the contig sequence?
+              # is M + 9 AA really bad if AA may continue past contig?
 
-	      if (1) {
-		my %info;
-		$info{gene_a_nm} = "";
-		$info{gene_a_codon_number} = "";
-		$info{gene_a_anchor_type} = "";
-		# n/a
-		$info{gene_b_nm} = $b_nm;
-		$info{gene_b_final_pos} = $b_final_pos;
-		$info{gene_b_anchor_type} = $blat_mode ? "blat" : "tuple";
-		$info{gene_b_codon_number} = $b_codon_number;
-		$info{inframe_call} = $utr_call;
+              if (1) {
+                my %info;
+                $info{gene_a_nm} = "";
+                $info{gene_a_codon_number} = "";
+                $info{gene_a_anchor_type} = "";
+                # n/a
+                $info{gene_b_nm} = $b_nm;
+                $info{gene_b_final_pos} = $b_final_pos;
+                $info{gene_b_anchor_type} = $blat_mode ? "blat" : "tuple";
+                $info{gene_b_codon_number} = $b_codon_number;
+                $info{inframe_call} = $utr_call;
 
-		push @geneb_utr_matches, \%info;
-	      }
+                push @geneb_utr_matches, \%info;
+              }
 
 	      #
 	      #  compare GeneB frame with GeneA transcripts:
@@ -738,6 +914,7 @@ sub process_svs {
 	      my $info = {};
 	      $info->{gene_b_nm} = $b_nm;
 	      $info->{gene_b_aa_downstream} = $fragment;
+	      $info->{gene_b_aa_downstream_extended} = $fragment_extended;
 	      $info->{gene_b_final_pos} = $b_final_pos;
 	      $info->{gene_b_anchor_type} = $blat_mode ? "blat" : "tuple";
 	      $info->{frame_id} = $fid;
@@ -746,233 +923,233 @@ sub process_svs {
 	      $info->{frame_raw} = $frame_raw;
 	      $info->{frame_index} = frame_offset($fid);
 
-	      printf STDERR "raw frame in-frame for GeneB: %s\n", $frame_raw if $VERBOSE;
+              printf STDERR "raw frame in-frame for GeneB: %s\n", $frame_raw if $VERBOSE;
 
-	      $info->{frame_upstream} = $upstream;
-	      # the portion of the frame in-frame for GeneB upstream
-	      # of the GeneB match (i.e. containing GeneA)
-	      $info->{gene_b_codon_number} = $b_codon_number;
-	      $info->{gene_b_coding_basenum} = $b_coding_basenum;
+              $info->{frame_upstream} = $upstream;
+              # the portion of the frame in-frame for GeneB upstream
+              # of the GeneB match (i.e. containing GeneA)
+              $info->{gene_b_codon_number} = $b_codon_number;
+              $info->{gene_b_coding_basenum} = $b_coding_basenum;
 
 
-	      $gene_b_inframe{$fid} = $info;
-	      # QC / sanity
+              $gene_b_inframe{$fid} = $info;
+              # QC / sanity
 
-	      #
-	      #  compare frame aligned with GeneB's AA translation to
-	      #  GeneA's AA translation to determine whether in-frame
-	      #
+              #
+              #  compare frame aligned with GeneB's AA translation to
+              #  GeneA's AA translation to determine whether in-frame
+              #
 
-	      # - find GeneA transcript(s)
-	      my $a_nms = find_nms_from_ga(
-					   "-ga" => $ga,
-					   "-row" => $row,
-					   "-which" => "A"
-					  );
-#	      die join "\n", @{$a_nms};
+              # - find GeneA transcript(s)
+              my $a_nms = find_nms_from_ga(
+                                           "-ga" => $ga,
+                                           "-row" => $row,
+                                           "-which" => "A"
+                                          );
+#              die join "\n", @{$a_nms};
 
-	      if (my $restrict = $FLAGS{"restrict-a-nm"}) {
-		die "restrict-a-nm failed" unless grep {$_ eq $restrict} @{$a_nms};
-		$a_nms = [ $restrict ];
-	      }
+              if (my $restrict = $FLAGS{"restrict-a-nm"}) {
+                die "restrict-a-nm failed" unless grep {$_ eq $restrict} @{$a_nms};
+                $a_nms = [ $restrict ];
+              }
 
-	      $annot_trouble->add("geneA_no_transcript_IDs_found") unless @{$a_nms};
+              $annot_trouble->add("geneA_no_transcript_IDs_found") unless @{$a_nms};
 
-	      foreach my $a_nm (@{$a_nms}) {
+              foreach my $a_nm (@{$a_nms}) {
 
-		if ($VERBOSE) {
-		  printf STDERR "pair: B=%s A=%s fid=%s\n", $b_nm, $a_nm, $fid;
-		  printf STDERR "geneB AA: %s\n", $r2g->get_aa("-accession" => $b_nm);
-		  printf STDERR "upstream: %s\n", $upstream;
-		}
+                if ($VERBOSE) {
+                  printf STDERR "pair: B=%s A=%s fid=%s\n", $b_nm, $a_nm, $fid;
+                  printf STDERR "geneB AA: %s\n", $r2g->get_aa("-accession" => $b_nm);
+                  printf STDERR "upstream: %s\n", $upstream;
+                }
 
-		my %pair_info = %{$info};
-		$pair_info{gene_a_nm} = $a_nm;
+                my %pair_info = %{$info};
+                $pair_info{gene_a_nm} = $a_nm;
 
-		my ($a_codon_number, $is_inframe, $a_anchor_type, $a_upstream_idx_end);
+                my ($a_codon_number, $is_inframe, $a_anchor_type, $a_upstream_idx_end);
 
-#		foreach my $try_utr5 (0, 1) {
-		foreach my $try_utr5 (0) {
-		  # disable 5' UTR check
-		  ($a_codon_number,
-		   $is_inframe,
-		   $a_anchor_type,
-		   $a_upstream_idx_end) = match_a(
-				   "-row" => $row,
-				   "-upstream" => $upstream,
-				   "-nm" => $a_nm,
-				   "-r2g" => $r2g,
-				   "-try-utr5" => $try_utr5,
-				   "-annot-trouble" => $annot_trouble,
-				   "-annot-global" => $annot_global,
-				  );
-		  last if $is_inframe;
-		}
+#                foreach my $try_utr5 (0, 1) {
+                foreach my $try_utr5 (0) {
+                  # disable 5' UTR check
+                  ($a_codon_number,
+                   $is_inframe,
+                   $a_anchor_type,
+                   $a_upstream_idx_end) = match_a(
+                                   "-row" => $row,
+                                   "-upstream" => $upstream,
+                                   "-nm" => $a_nm,
+                                   "-r2g" => $r2g,
+                                   "-try-utr5" => $try_utr5,
+                                   "-annot-trouble" => $annot_trouble,
+                                   "-annot-global" => $annot_global,
+                                  );
+                  last if $is_inframe;
+                }
 
-		if (length($is_inframe) and $is_inframe == SV_MATCH_CODE_INFRAME) {
-		  die "undef A idx end" unless defined $a_upstream_idx_end;
+                if (length($is_inframe) and $is_inframe == SV_MATCH_CODE_INFRAME) {
+                  die "undef A idx end" unless defined $a_upstream_idx_end;
 
-		  my $after_a = substr($upstream_full, $a_upstream_idx_end);
-		  my $fail;
+                  my $after_a = substr($upstream_full, $a_upstream_idx_end);
+                  my $fail;
 
-		  my @check = $after_a;
-		  push @check, $fragment if $utr_codons;
-		  # for 5' UTR types, a stop may also appear in
-		  # geneB lookup start, so search the fragment too.
-		  #
-		  # FIX ME: what if additional stops downstream but
-		  # before canonical start??
+                  my @check = $after_a;
+                  push @check, $fragment if $utr_codons;
+                  # for 5' UTR types, a stop may also appear in
+                  # geneB lookup start, so search the fragment too.
+                  #
+                  # FIX ME: what if additional stops downstream but
+                  # before canonical start??
 
-#		  foreach ($after_a, $fragment) {
-		  foreach (@check) {
-		    next unless $_;
-		    $fail = 1 if index($_, STOP_CODON_CODE) != -1;
-		  }
+#                  foreach ($after_a, $fragment) {
+                  foreach (@check) {
+                    next unless $_;
+                    $fail = 1 if index($_, STOP_CODON_CODE) != -1;
+                  }
 
-		  if ($fail) {
-		    $is_inframe = SV_MATCH_CODE_FRAMESHIFT;
-		    # not exactly
-		    $annot_global->add("not_inframe_due_to_intermediate_stop_codon");
-		  }
-		}
+                  if ($fail) {
+                    $is_inframe = SV_MATCH_CODE_FRAMESHIFT;
+                    # not exactly
+                    $annot_global->add("not_inframe_due_to_intermediate_stop_codon");
+                  }
+                }
 
-		#
-		#  generate exon # annotation, if possible:
-		#
-		add_exon_annotation($row, \%pair_info, $r2g);
-		# FIX ME: may 'splode unless both genes anchorable
+                #
+                #  generate exon # annotation, if possible:
+                #
+                add_exon_annotation($row, \%pair_info, $r2g);
+                # FIX ME: may 'splode unless both genes anchorable
 
-		$pair_info{inframe_call} = $is_inframe;
-		$pair_info{gene_a_codon_number} = $a_codon_number;
-		$pair_info{gene_a_anchor_type} = $a_anchor_type;
-		if (defined $a_upstream_idx_end) {
-		  my $ai = $a_upstream_idx_end - 1;
-		  # change to be the last position of gene A,
-		  # similar to gene_b_index (first position of gene B)
-		  $pair_info{gene_a_index} = $ai;
-		  my $bi = $pair_info{gene_b_index};
-		  my $aa_between = "";
-		  if ($bi > $ai) {
-		    $aa_between = substr($frame_raw, $ai + 1, $bi - $ai - 1);
-		  }
-		  $pair_info{interstitial_AA} = $aa_between;
+                $pair_info{inframe_call} = $is_inframe;
+                $pair_info{gene_a_codon_number} = $a_codon_number;
+                $pair_info{gene_a_anchor_type} = $a_anchor_type;
+                if (defined $a_upstream_idx_end) {
+                  my $ai = $a_upstream_idx_end - 1;
+                  # change to be the last position of gene A,
+                  # similar to gene_b_index (first position of gene B)
+                  $pair_info{gene_a_index} = $ai;
+                  my $bi = $pair_info{gene_b_index};
+                  my $aa_between = "";
+                  if ($bi > $ai) {
+                    $aa_between = substr($frame_raw, $ai + 1, $bi - $ai - 1);
+                  }
+                  $pair_info{interstitial_AA} = $aa_between;
 
-		  my $fo = frame_offset($fid);
+                  my $fo = frame_offset($fid);
 
-		  my $contig_index_a = ($ai * 3) + $fo + 2;
-		  # contig index of last base of last codon of geneA anchor
+                  my $contig_index_a = ($ai * 3) + $fo + 2;
+                  # contig index of last base of last codon of geneA anchor
 
-		  my $contig_index_b = ($bi * 3) + $fo;
-		  # contig index of 1st base of 1st codon of geneB anchor
+                  my $contig_index_b = ($bi * 3) + $fo;
+                  # contig index of 1st base of 1st codon of geneB anchor
 
-		  $pair_info{gene_a_contig_index} = $contig_index_a;
-		  $pair_info{gene_b_contig_index} = $contig_index_b;
-		}
+                  $pair_info{gene_a_contig_index} = $contig_index_a;
+                  $pair_info{gene_b_contig_index} = $contig_index_b;
+                }
 
-		if ($pair_info{gene_a_anchor_type} and
-		    $pair_info{gene_b_anchor_type} and
-		    not($is_inframe)) {
-#		  dump_die(\%pair_info, "WTF: 2 anchors but no inframe call?");
-		  # => stop codon in AA sequence, see above
-		}
+                if ($pair_info{gene_a_anchor_type} and
+                    $pair_info{gene_b_anchor_type} and
+                    not($is_inframe)) {
+#                  dump_die(\%pair_info, "WTF: 2 anchors but no inframe call?");
+                  # => stop codon in AA sequence, see above
+                }
 
-		foreach my $f (qw(inframe_call gene_a_codon_number gene_a_anchor_type)) {
-		  die "$f not defined" unless defined $pair_info{$f};
-		}
+                foreach my $f (qw(inframe_call gene_a_codon_number gene_a_anchor_type)) {
+                  die "$f not defined" unless defined $pair_info{$f};
+                }
 
-		push @pairs, \%pair_info;
-	      }
-	    } else { # $idx != -1
-	      $b_global_inframe = 0 unless length($b_global_inframe);
-	      # evaluated but not found: init result code if necessary
-	    }
-	  }  # $fid
-	} else {
-	  # refSeq IDs identified for GeneB, but no fully-mapped CDS matches
-	  # - gene model mapping problem?
-	  $processing_exception = 1;
-	  $annot_trouble->add("geneB_breakpoint_not_mapped_to_CDS", $b_nm);
-	}
+                push @pairs, \%pair_info;
+              }
+            } else { # $idx != -1
+              $b_global_inframe = 0 unless length($b_global_inframe);
+              # evaluated but not found: init result code if necessary
+            }
+          }  # $fid
+        } else {
+          # refSeq IDs identified for GeneB, but no fully-mapped CDS matches
+          # - gene model mapping problem?
+          $processing_exception = 1;
+          $annot_trouble->add("geneB_breakpoint_not_mapped_to_CDS", $b_nm);
+        }
 
-	unless ($processing_exception) {
-	  #
-	  # post-processing QC for GeneB:
-	  #
-	  my $hit_frame_count = scalar keys %gene_b_inframe;
-	  if ($hit_frame_count > 1) {
-	    $annot_trouble->add("ERROR_geneB_multiple_matching_frames", $b_nm);
-	  } elsif ($hit_frame_count == 0) {
-	    #
-	    # unable to identify frame compatible with GeneB excerpt
-	    #
+        unless ($processing_exception) {
+          #
+          # post-processing QC for GeneB:
+          #
+          my $hit_frame_count = scalar keys %gene_b_inframe;
+          if ($hit_frame_count > 1) {
+            $annot_trouble->add("ERROR_geneB_multiple_matching_frames", $b_nm);
+          } elsif ($hit_frame_count == 0) {
+            #
+            # unable to identify frame compatible with GeneB excerpt
+            #
 
-	    if (%frame_blat) {
-	      # WTF: successful BLAT of GeneB AA vs. frames
-#	      die "no frame alignment for GeneA, but blat hit, CHECK ME";
-	      $annot_trouble->add("geneB_anchor_fail_but_found_blat_hit", $b_nm);
-	      # possibly subtle mismatch between
-	      #   (a) geneA AA derived from reference sequence
-	      #   (b) geneA AA in refSeq record
-	      #   (c) geneA AA segment derived from Cicero contig sequence
-	      # and/or breakpoint site problems
-	      # see no_frames_but_blat_hit.tab + slides
-	      #
-	      # => hopefully this code now no longer reachable since
-	      #    BLAT results are used in frame_search()
-	    } else {
-	      # no BLAT hit
-	      # not sure if we ever want to lower minScore,
-	      # e.g. no_geneA_frame_match_blat_minscore19.tab;
-	      # in this case a hit of 10 with 1 mismatch, nothing further
-	      printf STDERR "GeneB: no frames found and no BLAT hit\n";
-	      $annot_trouble->add("geneB_no_inframe_contig_found");
-	    }
-	  }
-	}
-      }				# $b_nm
+            if (%frame_blat) {
+              # WTF: successful BLAT of GeneB AA vs. frames
+#              die "no frame alignment for GeneA, but blat hit, CHECK ME";
+              $annot_trouble->add("geneB_anchor_fail_but_found_blat_hit", $b_nm);
+              # possibly subtle mismatch between
+              #   (a) geneA AA derived from reference sequence
+              #   (b) geneA AA in refSeq record
+              #   (c) geneA AA segment derived from Cicero contig sequence
+              # and/or breakpoint site problems
+              # see no_frames_but_blat_hit.tab + slides
+              #
+              # => hopefully this code now no longer reachable since
+              #    BLAT results are used in frame_search()
+            } else {
+              # no BLAT hit
+              # not sure if we ever want to lower minScore,
+              # e.g. no_geneA_frame_match_blat_minscore19.tab;
+              # in this case a hit of 10 with 1 mismatch, nothing further
+              printf STDERR "GeneB: no frames found and no BLAT hit\n";
+              $annot_trouble->add("geneB_no_inframe_contig_found");
+            }
+          }
+        }
+      }                                # $b_nm
 
       my $sv_refseqA_inframe;
       my %sv_refseqA_inframe_transcripts;
       if ($junction_mode and $df->headers->{junction_peptide}) {
-	#
-	#  in junction mode with user-specified peptide,
-	#  separate reporting of GeneA in-frame status.
-	#
-	foreach my $p (@pairs) {
-	  if ($p->{inframe_call} == SV_MATCH_CODE_INFRAME) {
-	    $sv_refseqA_inframe = 1;
-	    # derivable from existing results
-	    $sv_refseqA_inframe_transcripts{$p->{gene_a_nm}} = 1;
-	  }
-	}
+        #
+        #  in junction mode with user-specified peptide,
+        #  separate reporting of GeneA in-frame status.
+        #
+        foreach my $p (@pairs) {
+          if ($p->{inframe_call} == SV_MATCH_CODE_INFRAME) {
+            $sv_refseqA_inframe = 1;
+            # derivable from existing results
+            $sv_refseqA_inframe_transcripts{$p->{gene_a_nm}} = 1;
+          }
+        }
 
-	unless ($sv_refseqA_inframe) {
-	  # evaluation needed
-	  my @hits;
-	  foreach my $fid (keys %{$frames}) {
-	    my $frame = $frames->{$fid};
-	    push @hits, $frame unless index($frame, $junction_peptide) == -1;
-	  }
-	  if (@hits) {
-	    # might not be any matches if user peptide doesn't match
-	    # any of the 3 frames (rare)
-	    die "expected 1 hit, got " . scalar @hits unless @hits == 1;
+        unless ($sv_refseqA_inframe) {
+          # evaluation needed
+          my @hits;
+          foreach my $fid (keys %{$frames}) {
+            my $frame = $frames->{$fid};
+            push @hits, $frame unless index($frame, $junction_peptide) == -1;
+          }
+          if (@hits) {
+            # might not be any matches if user peptide doesn't match
+            # any of the 3 frames (rare)
+            die "expected 1 hit, got " . scalar @hits unless @hits == 1;
 
-	    my $frame = $hits[0];
-	    # frame in-frame with user-specified peptide
+            my $frame = $hits[0];
+            # frame in-frame with user-specified peptide
 
-	    $sv_refseqA_inframe = genea_frame_check(
-						    "-frame" => $hits[0],
-						    "-row" => $row,
-						    "-ga" => $ga,
-						    "-r2g" => $r2g,
-						    "-annot-global" => $annot_global,
-						    "-annot-trouble" => $annot_trouble,
-						    "-results" => \%sv_refseqA_inframe_transcripts
-						   );
-	  }
+            $sv_refseqA_inframe = genea_frame_check(
+                                                    "-frame" => $hits[0],
+                                                    "-row" => $row,
+                                                    "-ga" => $ga,
+                                                    "-r2g" => $r2g,
+                                                    "-annot-global" => $annot_global,
+                                                    "-annot-trouble" => $annot_trouble,
+                                                    "-results" => \%sv_refseqA_inframe_transcripts
+                                                   );
+          }
 
-	}
+        }
       }
 
 #      dump_die($row, "> 1 pairs evaluated") if @pairs > 1;
@@ -1006,216 +1183,216 @@ sub process_svs {
       my @eval = @pairs;
       my $report_utr = 1;
       foreach my $pair (@eval) {
-	$report_utr = 0 if $pair->{inframe_call};
-	# if paired inframe eval
+        $report_utr = 0 if $pair->{inframe_call};
+        # if paired inframe eval
       }
       push @eval, @geneb_utr_matches if $report_utr;
       # if any paired comparisons are in-frame, no need to
       # report checks for geneB alone
 
       if (@eval) {
-	#
-	#  sometimes geneB is anchored to more than one putative frame.
-	#  If one of these is in-frame with geneA and one isn't,
-	#  just keep the in-frame result.
-	#
-	my %saw;
-	foreach my $pair (@eval) {
-	  my $nm_a = $pair->{gene_a_nm} || next;
-	  my $nm_b = $pair->{gene_b_nm} || next;
-	  my $inframe = $pair->{inframe_call};
-	  next unless length($inframe);
-	  $saw{$nm_a}{$nm_b}{$inframe} = 1;
-	}
+        #
+        #  sometimes geneB is anchored to more than one putative frame.
+        #  If one of these is in-frame with geneA and one isn't,
+        #  just keep the in-frame result.
+        #
+        my %saw;
+        foreach my $pair (@eval) {
+          my $nm_a = $pair->{gene_a_nm} || next;
+          my $nm_b = $pair->{gene_b_nm} || next;
+          my $inframe = $pair->{inframe_call};
+          next unless length($inframe);
+          $saw{$nm_a}{$nm_b}{$inframe} = 1;
+        }
 
-	my %prune;
-	foreach my $nm_a (keys %saw) {
-	  foreach my $nm_b (keys %{$saw{$nm_a}}) {
-	    my $types = $saw{$nm_a}{$nm_b};
-	    $prune{$nm_a}{$nm_b} = 1 if $types->{SV_MATCH_CODE_FRAMESHIFT()} and $types->{SV_MATCH_CODE_INFRAME()};
-	  }
-	}
+        my %prune;
+        foreach my $nm_a (keys %saw) {
+          foreach my $nm_b (keys %{$saw{$nm_a}}) {
+            my $types = $saw{$nm_a}{$nm_b};
+            $prune{$nm_a}{$nm_b} = 1 if $types->{SV_MATCH_CODE_FRAMESHIFT()} and $types->{SV_MATCH_CODE_INFRAME()};
+          }
+        }
 
-	if (%prune) {
-	  my @filtered;
-	  foreach my $pair (@eval) {
-	    my $usable = 1;
-	    my $nm_a = $pair->{gene_a_nm} || next;
-	    my $nm_b = $pair->{gene_b_nm} || next;
-	    my $inframe = $pair->{inframe_call};
-	    if ($prune{$nm_a}{$nm_b} and $inframe == SV_MATCH_CODE_FRAMESHIFT) {
-	      $usable = 0;
-	      printf STDERR "prune %s %s\n", $nm_a, $nm_b;
-	    }
-	    push @filtered, $pair if $usable;
-	  }
-	  @eval = @filtered;
-	}
+        if (%prune) {
+          my @filtered;
+          foreach my $pair (@eval) {
+            my $usable = 1;
+            my $nm_a = $pair->{gene_a_nm} || next;
+            my $nm_b = $pair->{gene_b_nm} || next;
+            my $inframe = $pair->{inframe_call};
+            if ($prune{$nm_a}{$nm_b} and $inframe == SV_MATCH_CODE_FRAMESHIFT) {
+              $usable = 0;
+              printf STDERR "prune %s %s\n", $nm_a, $nm_b;
+            }
+            push @filtered, $pair if $usable;
+          }
+          @eval = @filtered;
+        }
 
       }
 
       if (@eval) {
-	#
-	# some evaluations were made
-	#
-	my %inframe_symbols;
+        #
+        # some evaluations were made
+        #
+        my %inframe_symbols;
 
-	foreach my $pair (@eval) {
-	  my $call = $pair->{inframe_call};
-	  if (length($call)) {
-	    # actual call (non-blank)
-	    unless (length($sv_any_inframe)) {
-	      # initialize output only if at least one call is available
-	      $sv_any_inframe = 0;
-	      $sv_any_inframe_canonical = 0;
-	    }
-	    if ($call) {
-	      $sv_any_inframe = 1;
+        foreach my $pair (@eval) {
+          my $call = $pair->{inframe_call};
+          if (length($call)) {
+            # actual call (non-blank)
+            unless (length($sv_any_inframe)) {
+              # initialize output only if at least one call is available
+              $sv_any_inframe = 0;
+              $sv_any_inframe_canonical = 0;
+            }
+            if ($call) {
+              $sv_any_inframe = 1;
 
-	      my @inframe_ends;
-	      if ($call eq SV_MATCH_CODE_INFRAME) {
-		# both ends in-frame
-		$sv_any_inframe_canonical = 1;
-		@inframe_ends = qw(a b);
-	      } elsif ($call eq SV_MATCH_CODE_UTR5_GENEB_COMPLETE_CDS) {
-		# geneB only
-		@inframe_ends = qw(b);
-	      }
+              my @inframe_ends;
+              if ($call eq SV_MATCH_CODE_INFRAME) {
+                # both ends in-frame
+                $sv_any_inframe_canonical = 1;
+                @inframe_ends = qw(a b);
+              } elsif ($call eq SV_MATCH_CODE_UTR5_GENEB_COMPLETE_CDS) {
+                # geneB only
+                @inframe_ends = qw(b);
+              }
 
-	      foreach my $end (@inframe_ends) {
-		my $nm = $pair->{"gene_" . $end . "_nm"} || die;
-		my $gene = $ga->find_accession($nm, "-symbol" => 1) || die;
-		$inframe_symbols{$end}{$gene} = 1;
-	      }
+              foreach my $end (@inframe_ends) {
+                my $nm = $pair->{"gene_" . $end . "_nm"} || die;
+                my $gene = $ga->find_accession($nm, "-symbol" => 1) || die;
+                $inframe_symbols{$end}{$gene} = 1;
+              }
 
-	    }
-	  }
-	}
+            }
+          }
+        }
 
-	if ($REANNOTATE_INFRAME_GENES) {
-	  foreach my $end (qw(a b)) {
-	    if ($inframe_symbols{$end}) {
-	      my @syms = keys %{$inframe_symbols{$end}};
-	      if (@syms == 1) {
-		# exactly one symbol in in-frame on this end
-		my $key = sprintf 'gene%s', uc($end);
-		my $current = $row->{$key};
-		if ($current and $current ne $syms[0]) {
-		  $annot_global->add(sprintf 'reannotated %s from %s to %s',
-				     $key, $current, $syms[0]);
-		  $row->{$key} = $syms[0];
-		}
-	      }
-	    }
-	  }
-	}
+        if ($REANNOTATE_INFRAME_GENES) {
+          foreach my $end (qw(a b)) {
+            if ($inframe_symbols{$end}) {
+              my @syms = keys %{$inframe_symbols{$end}};
+              if (@syms == 1) {
+                # exactly one symbol in in-frame on this end
+                my $key = sprintf 'gene%s', uc($end);
+                my $current = $row->{$key};
+                if ($current and $current ne $syms[0]) {
+                  $annot_global->add(sprintf 'reannotated %s from %s to %s',
+                                     $key, $current, $syms[0]);
+                  $row->{$key} = $syms[0];
+                }
+              }
+            }
+          }
+        }
 
-	$sv_aa = join ",", map {$_->{frame_raw} || ""} @eval;
-	$sv_refseqA = join ",", map {$_->{gene_a_nm}} @eval;
-	$sv_refseqB = join ",", map {$_->{gene_b_nm}} @eval;
-	$sv_refseqA_codon = join ",", map {$_->{gene_a_codon_number}} @eval;
-	$sv_refseqB_codon = join ",", map {$_->{gene_b_codon_number}} @eval;
-	$sv_refseqA_exon = join ",", map {$_->{gene_a_exon_number} || ""} @eval;
-	$sv_refseqB_exon = join ",", map {$_->{gene_b_exon_number} || ""} @eval;
-#	$sv_refseqB_coding_base_number = join ",", map {$_->{gene_b_coding_basenum} || ""} @eval;
-	$sv_refseqA_anchor = join ",", map {$_->{gene_a_anchor_type}} @eval;
-	$sv_refseqB_anchor = join ",", map {$_->{gene_b_anchor_type}} @eval;
-	$sv_inframe = join ",", map {$_->{inframe_call}} @eval;
-	$sv_posB_adjusted = join ",", map {$_->{gene_b_final_pos}} @eval;
-#	$sv_refseqA_AA_index = join ",", map {$_->{gene_a_index}} @eval;
-	$sv_refseqA_AA_index = build_cdl(\@eval, "gene_a_index");
-	$sv_refseqB_AA_index = build_cdl(\@eval, "gene_b_index");
-	$sv_interstitial_AA = build_cdl(\@eval, "interstitial_AA");
-	$sv_refseqA_contig_index = build_cdl(\@eval, "gene_a_contig_index");
-	$sv_refseqB_contig_index = build_cdl(\@eval, "gene_b_contig_index");
-	$sv_inframe_desc = join ";", map {$_->{inframe_desc} || ""} @eval;
-	$sv_frame_index = build_cdl(\@eval, "frame_index");
+        $sv_aa = join ",", map {$_->{frame_raw} || ""} @eval;
+        $sv_refseqA = join ",", map {$_->{gene_a_nm}} @eval;
+        $sv_refseqB = join ",", map {$_->{gene_b_nm}} @eval;
+        $sv_refseqA_codon = join ",", map {$_->{gene_a_codon_number}} @eval;
+        $sv_refseqB_codon = join ",", map {$_->{gene_b_codon_number}} @eval;
+        $sv_refseqA_exon = join ",", map {$_->{gene_a_exon_number} || ""} @eval;
+        $sv_refseqB_exon = join ",", map {$_->{gene_b_exon_number} || ""} @eval;
+#        $sv_refseqB_coding_base_number = join ",", map {$_->{gene_b_coding_basenum} || ""} @eval;
+        $sv_refseqA_anchor = join ",", map {$_->{gene_a_anchor_type}} @eval;
+        $sv_refseqB_anchor = join ",", map {$_->{gene_b_anchor_type}} @eval;
+        $sv_inframe = join ",", map {$_->{inframe_call}} @eval;
+        $sv_posB_adjusted = join ",", map {$_->{gene_b_final_pos}} @eval;
+#        $sv_refseqA_AA_index = join ",", map {$_->{gene_a_index}} @eval;
+        $sv_refseqA_AA_index = build_cdl(\@eval, "gene_a_index");
+        $sv_refseqB_AA_index = build_cdl(\@eval, "gene_b_index");
+        $sv_interstitial_AA = build_cdl(\@eval, "interstitial_AA");
+        $sv_refseqA_contig_index = build_cdl(\@eval, "gene_a_contig_index");
+        $sv_refseqB_contig_index = build_cdl(\@eval, "gene_b_contig_index");
+        $sv_inframe_desc = join ";", map {$_->{inframe_desc} || ""} @eval;
+        $sv_frame_index = build_cdl(\@eval, "frame_index");
       } else {
-	#
-	# no paired evaluations made.
-	#
-	# 12/2015: report accessions even in these cases
-	#
-	my $nms_a = find_nms_from_ga(
-				     "-ga" => $ga,
-				     "-row" => $row,
-				     "-which" => "A"
-	 			    );
-	my $nms_b = find_nms_from_ga(
-				     "-ga" => $ga,
-				     "-row" => $row,
-				     "-which" => "B"
-	 			    );
+        #
+        # no paired evaluations made.
+        #
+        # 12/2015: report accessions even in these cases
+        #
+        my $nms_a = find_nms_from_ga(
+                                     "-ga" => $ga,
+                                     "-row" => $row,
+                                     "-which" => "A"
+                                     );
+        my $nms_b = find_nms_from_ga(
+                                     "-ga" => $ga,
+                                     "-row" => $row,
+                                     "-which" => "B"
+                                     );
 
-	my $any_intergenic_salvaged;
+        my $any_intergenic_salvaged;
 
-	$any_intergenic_salvaged = 1 if salvage_intergenic_genes(
-				 "-row" => $row,
-				 "-which" => "A",
-				 "-nms" => $nms_a,
-				 "-rff" => $r2g->rff(),
-				);
-	$any_intergenic_salvaged = 1 if salvage_intergenic_genes(
-				 "-row" => $row,
-				 "-which" => "B",
-				 "-nms" => $nms_b,
-				 "-rff" => $r2g->rff(),
-				);
-	# for intergenic events, find nearby refseqs
+        $any_intergenic_salvaged = 1 if salvage_intergenic_genes(
+                                 "-row" => $row,
+                                 "-which" => "A",
+                                 "-nms" => $nms_a,
+                                 "-rff" => $r2g->rff(),
+                                );
+        $any_intergenic_salvaged = 1 if salvage_intergenic_genes(
+                                 "-row" => $row,
+                                 "-which" => "B",
+                                 "-nms" => $nms_b,
+                                 "-rff" => $r2g->rff(),
+                                );
+        # for intergenic events, find nearby refseqs
 
-	if ((@{$nms_a} and !@{$nms_b}) or
-	    (@{$nms_b} and !@{$nms_a})) {
-	  # we have a refSeq on one end but not the other (e.g. IGH)
-	  # create a dummy entry for the empty set so we will at
-	  # least report the refSeq for the other gene.
-	  push @{$nms_a}, "" unless @{$nms_a};
-	  push @{$nms_b}, "" unless @{$nms_b};
-	}
+        if ((@{$nms_a} and !@{$nms_b}) or
+            (@{$nms_b} and !@{$nms_a})) {
+          # we have a refSeq on one end but not the other (e.g. IGH)
+          # create a dummy entry for the empty set so we will at
+          # least report the refSeq for the other gene.
+          push @{$nms_a}, "" unless @{$nms_a};
+          push @{$nms_b}, "" unless @{$nms_b};
+        }
 
-	my @eval;
-	# generate a pairing for each A/B refGene as if processing
-	# proceeded normally
+        my @eval;
+        # generate a pairing for each A/B refGene as if processing
+        # proceeded normally
 
-	foreach my $nm_a (@{$nms_a}) {
-	  foreach my $nm_b (@{$nms_b}) {
-	    my %r;
-	    $r{gene_a_nm} = $nm_a;
-	    $r{gene_b_nm} = $nm_b;
-	    push @eval, \%r;
-	  }
-	}
- 	$sv_refseqA = join ",", map {$_->{gene_a_nm}} @eval;
- 	$sv_refseqB = join ",", map {$_->{gene_b_nm}} @eval;
+        foreach my $nm_a (@{$nms_a}) {
+          foreach my $nm_b (@{$nms_b}) {
+            my %r;
+            $r{gene_a_nm} = $nm_a;
+            $r{gene_b_nm} = $nm_b;
+            push @eval, \%r;
+          }
+        }
+         $sv_refseqA = join ",", map {$_->{gene_a_nm}} @eval;
+         $sv_refseqB = join ",", map {$_->{gene_b_nm}} @eval;
 
-	my @blank = map {""} @eval;
+        my @blank = map {""} @eval;
 
-	foreach my $v (
-		       \$sv_inframe,
-		       \$sv_aa,
-		       \$sv_refseqA_codon,
-		       \$sv_refseqB_codon,
-		       \$sv_refseqA_exon,
-		       \$sv_refseqB_exon,
-		       \$sv_refseqB_coding_base_number,
-		       \$sv_refseqA_anchor,
-		       \$sv_refseqB_anchor,
-		       \$sv_posB_adjusted,
-		       \$sv_refseqA_AA_index,
-		       \$sv_refseqB_AA_index,
-		       \$sv_interstitial_AA,
-		       \$sv_refseqA_contig_index,
-		       \$sv_refseqB_contig_index,
-		       \$sv_frame_index,
-		      ) {
-	  $$v = join ",", @blank;
-	}
-	$sv_inframe_desc = join ";", @blank;
+        foreach my $v (
+                       \$sv_inframe,
+                       \$sv_aa,
+                       \$sv_refseqA_codon,
+                       \$sv_refseqB_codon,
+                       \$sv_refseqA_exon,
+                       \$sv_refseqB_exon,
+                       \$sv_refseqB_coding_base_number,
+                       \$sv_refseqA_anchor,
+                       \$sv_refseqB_anchor,
+                       \$sv_posB_adjusted,
+                       \$sv_refseqA_AA_index,
+                       \$sv_refseqB_AA_index,
+                       \$sv_interstitial_AA,
+                       \$sv_refseqA_contig_index,
+                       \$sv_refseqB_contig_index,
+                       \$sv_frame_index,
+                      ) {
+          $$v = join ",", @blank;
+        }
+        $sv_inframe_desc = join ";", @blank;
 
-	if ($any_intergenic_salvaged) {
-	  # call event not in frame for intergenic events.
-	  # HOWEVER: what if before 5' UTR?
-	  $sv_inframe = join ",", map {0} @eval;
-	}
+        if ($any_intergenic_salvaged) {
+          # call event not in frame for intergenic events.
+          # HOWEVER: what if before 5' UTR?
+          $sv_inframe = join ",", map {0} @eval;
+        }
       }
 
       $row->{sv_general_info} = $annot_global->get_field();
@@ -1250,21 +1427,44 @@ sub process_svs {
       $row->{sv_refseqA_contig_index} = $sv_refseqA_contig_index;
       $row->{sv_refseqB_contig_index} = $sv_refseqB_contig_index;
       foreach my $end (qw(A B)) {
-	my $key = sprintf 'sv_refseq%s_annot', $end;
-	$row->{$key} = gene_feature_annot(
-					  "-row" => $row,
-					  "-which" => $end,
-					  "-ga" => $ga
-					 );
+        my $key = sprintf 'sv_refseq%s_annot', $end;
+        $row->{$key} = gene_feature_annot(
+                                          "-row" => $row,
+                                          "-which" => $end,
+                                          "-ga" => $ga
+                                         );
       }
 
       patch_row_coding_bases("-row" => $row,
-			     "-r2g" => $r2g);
+                             "-r2g" => $r2g);
+#      $rpt->end_row($row);
 
-      $rpt->end_row($row);
+      if ($rpt_full_length) {
+	report_full_length(
+			   "-row" => $row,
+			   "-eval" => \@eval,
+			   "-nm2protein" => \%nm2protein,
+			   "-rpt" => $rpt_full_length,
+			   "-r2g" => $r2g,
+			  );
+	# may have to be updated to deal with pre-sorting if necessary
+      }
     }
 
+    foreach my $r (@rows_raw) {
+      # write rows in ORIGINAL order regardless of whether they were
+      # processed in a sorted order
+      $rpt->end_row($r);
+    }
     $rpt->finish();
+
+    if ($rpt_full_length) {
+      $rpt_full_length->finish();
+      if ($FLAGS{"run-digest"}) {
+	$FLAGS{"digest-full-length"} = $f_out_full_length;
+	digest_full_length();
+      }
+    }
 
     my $end_time = time;
     printf STDERR "processing time: %d\n", $end_time - $start_time if $VERBOSE;
@@ -1335,26 +1535,26 @@ sub find_nms_from_ga {
     }
 
     if ($ga->find(
-		  "-reference" => $ref_name,
-		  "-start" => $seek_start,
-		  "-end" => $seek_end
-		 )) {
+                  "-reference" => $ref_name,
+                  "-start" => $seek_start,
+                  "-end" => $seek_end
+                 )) {
       my $hits = $ga->results_rows();
 
       if ($junction_strand) {
-	my @filtered;
-	foreach my $h (@{$hits}) {
-	  push @filtered, $h if $h->{strand} eq $junction_strand;
-	  # if user specified junction strand orientation,
-	  # only process isoforms w/that strand
-	}
-	$hits = \@filtered;
+        my @filtered;
+        foreach my $h (@{$hits}) {
+          push @filtered, $h if $h->{strand} eq $junction_strand;
+          # if user specified junction strand orientation,
+          # only process isoforms w/that strand
+        }
+        $hits = \@filtered;
       }
 
       if ($strand_mode) {
-	%nm = map {($_->{strand} || die "no strand"), 1} @{$hits};
+        %nm = map {($_->{strand} || die "no strand"), 1} @{$hits};
       } else {
-	%nm = map {($_->{name} || die "no acc"), $_} @{$hits};
+        %nm = map {($_->{name} || die "no acc"), $_} @{$hits};
       }
       die "TEST ME: found gene after expanding search" if $try;
       last;
@@ -1387,12 +1587,12 @@ sub test_single {
   #
   my ($acc) = @_;
   my $r2g = new RefFlat2Genome(
-			       "-fasta" => get_fasta_file()
-			      );
+                               "-fasta" => get_fasta_file()
+                              );
   $r2g->parse(
-	      "-refflat" => get_refflat_file(),
-	      "-refgene2protein" => get_r2p_file()
-	     );
+              "-refflat" => get_refflat_file(),
+              "-refgene2protein" => get_r2p_file()
+             );
 
   $r2g->verbose(1);
 
@@ -1434,12 +1634,12 @@ sub test_all {
   #  verify all translations:
   #
   my $r2g = new RefFlat2Genome(
-			       "-fasta" => get_fasta_file()
-			      );
+                               "-fasta" => get_fasta_file()
+                              );
   $r2g->parse(
-	      "-refflat" => ($FLAGS{refgene} || die),
-	      "-refgene2protein" => get_r2p_file()
-	     );
+              "-refflat" => ($FLAGS{refgene} || die),
+              "-refgene2protein" => get_r2p_file()
+             );
 
   my $set = $r2g->by_accession();
   printf "total:%d\n", scalar keys %{$set};
@@ -1492,9 +1692,9 @@ sub get_aa_fragment {
       $utr_codons{$cnum} = 1;
       if ($utr_type == 3) {
       } elsif ($utr_type == 5) {
-	$all_utr3 = 0;
+        $all_utr3 = 0;
       } else {
-	die "unknown UTR code";
+        die "unknown UTR code";
       }
     } else {
       $utr_wiggle_enabled = 0;
@@ -1505,29 +1705,29 @@ sub get_aa_fragment {
     unless ($saw_codons{$cnum}) {
       my $aa = $map->[$i]->{AA};
       unless ($aa) {
-	if ($i <= 1 or (@{$map} - $i <= 2)) {
-	  # if at extreme end of 5' or 3' UTR, it's possible to
-	  # have orphaned bases which are insufficient to form a
-	  # fake codon.  Not an error, just no data
-	  last;
-	} else {
-	  # shouldn't happen
-	  dump_die($map->[$i], "no AA entry and not at UTR end! " . scalar @{$map} . " " . $i);
-	}
+        if ($i <= 1 or (@{$map} - $i <= 2)) {
+          # if at extreme end of 5' or 3' UTR, it's possible to
+          # have orphaned bases which are insufficient to form a
+          # fake codon.  Not an error, just no data
+          last;
+        } else {
+          # shouldn't happen
+          dump_die($map->[$i], "no AA entry and not at UTR end! " . scalar @{$map} . " " . $i);
+        }
       }
 
       if ($utr_wiggle_enabled) {
-	# a leading UTR codon which may be troublesome if posA/B mapping
-	# is not accurate
-	$utr_wiggle_enabled--;
-	# toss codon
+        # a leading UTR codon which may be troublesome if posA/B mapping
+        # is not accurate
+        $utr_wiggle_enabled--;
+        # toss codon
       } else {
-	if ($direction > 0) {
-	  push @aa, $aa;
-	} else {
-	  unshift @aa, $aa;
-	}
-	last if @aa == $build_length;
+        if ($direction > 0) {
+          push @aa, $aa;
+        } else {
+          unshift @aa, $aa;
+        }
+        last if @aa == $build_length;
       }
 
       $saw_codons{$cnum} = 1;
@@ -1628,11 +1828,11 @@ sub frame_search {
 
   while (1) {
     ($fragment, $utr_codons, $all_utr3) = get_aa_fragment(
-					       "-hit" => $hit,
-					       "-index" => $codon_index,
-					       "-length" => $length,
-					       "-direction" => $direction
-					      );
+                                               "-hit" => $hit,
+                                               "-index" => $codon_index,
+                                               "-length" => $length,
+                                               "-direction" => $direction
+                                              );
 
     $utr3_fail = 1 if $all_utr3 and $NOT_INFRAME_IF_ENTIRELY_UTR3;
 
@@ -1677,11 +1877,11 @@ sub frame_search {
       # if not, expand length of search AA fragment
       my $idx2 = index($frame, $fragment, $idx + 1);
       if ($idx2 == -1) {
-	# fragment is unique, stop
-	last;
+        # fragment is unique, stop
+        last;
       } else {
-	printf STDERR "WARNING: multiple hits in AA for fragment %s in %s; expanding fragment\n", $fragment, $frame;
-	$length++;
+        printf STDERR "WARNING: multiple hits in AA for fragment %s in %s; expanding fragment\n", $fragment, $frame;
+        $length++;
       }
     }
   }
@@ -1700,20 +1900,20 @@ sub frame_search {
     my %hsp_problems;
     while (my $hsp = $bhit->next_hsp) {
       if (hsp_filter($hsp, \%hsp_problems)) {
-	printf STDERR "    score:%s strand:%s q:%d-%d subj:%d-%d num_identical:%d frac_identical_query:%s query_span:%d ref_span:%d total_span=%d query_string=%s hit_string=%s\n",
-	  $hsp->score,
-	    $hsp->strand,
-	      $hsp->range("query"),
-		$hsp->range("hit"),
-		  $hsp->num_identical(),
-		    $hsp->frac_identical("query"),
-		      $hsp->length("query"),
-			$hsp->length("hit"),
-			  $hsp->length("total"),
-			    $hsp->query_string(),
-			      $hsp->hit_string();
+        printf STDERR "    score:%s strand:%s q:%d-%d subj:%d-%d num_identical:%d frac_identical_query:%s query_span:%d ref_span:%d total_span=%d query_string=%s hit_string=%s\n",
+          $hsp->score,
+            $hsp->strand,
+              $hsp->range("query"),
+                $hsp->range("hit"),
+                  $hsp->num_identical(),
+                    $hsp->frac_identical("query"),
+                      $hsp->length("query"),
+                        $hsp->length("hit"),
+                          $hsp->length("total"),
+                            $hsp->query_string(),
+                              $hsp->hit_string();
 
-	push @hsp, $hsp;
+        push @hsp, $hsp;
       }
     }
 
@@ -1731,15 +1931,15 @@ sub frame_search {
       $idx = ($hsp->range("hit"))[0] - 1;
       $fragment = substr($frame, $idx);
       if (length($fragment) > $MIN_TUPLE_AA) {
-	# trim the fragment to size expected by ordinary tuple check.
-	# Leaving it full length may interfere with other checks, e.g.
-	# for a stop in 5' UTR.
-	$fragment = substr($fragment, 0, $MIN_TUPLE_AA);
+        # trim the fragment to size expected by ordinary tuple check.
+        # Leaving it full length may interfere with other checks, e.g.
+        # for a stop in 5' UTR.
+        $fragment = substr($fragment, 0, $MIN_TUPLE_AA);
       }
       # TO DO: ANCHOR IN UTR5 ALSO?
     } elsif (%hsp_problems) {
       $annot_trouble->add(sprintf("gene%s_blat_issues", $end),
-			  [ sort keys %hsp_problems ]);
+                          [ sort keys %hsp_problems ]);
     }
   }
 
@@ -1832,11 +2032,11 @@ sub extract_inframe_hack {
 
   my $infile = "PHL5.final_fusions.txt";
   my $df = new DelimitedFile("-file" => $infile,
-			     "-headers" => 1,
-			     );
+                             "-headers" => 1,
+                             );
   my $rpt = $df->get_reporter(
-			      "-file" => $infile . ".inframe.tab",
-			     );
+                              "-file" => $infile . ".inframe.tab",
+                             );
 
   my @delete;
 
@@ -1936,61 +2136,61 @@ sub utr_frame_tests {
   my @tests;
 
   push @tests, {
-		"-desc" => "stop is 1st codon in GeneB",
-		"-upstream" => "XXXXXXXXXXM1234567890",
-		"-downstream" => "*YYYYYYYYYYYYYYYYYYYY",
-		"-expected-usable" => 1
-	       };
+                "-desc" => "stop is 1st codon in GeneB",
+                "-upstream" => "XXXXXXXXXXM1234567890",
+                "-downstream" => "*YYYYYYYYYYYYYYYYYYYY",
+                "-expected-usable" => 1
+               };
 
   push @tests, {
-		"-desc" => "downstream at border",
-		"-upstream" => "YYYYYYYYYY",
-		"-downstream" => "M1234567890*",
-		"-expected-usable" => 1
-	       };
+                "-desc" => "downstream at border",
+                "-upstream" => "YYYYYYYYYY",
+                "-downstream" => "M1234567890*",
+                "-expected-usable" => 1
+               };
 
   push @tests, {
-		"-desc" => "split, ends in B",
-		"-upstream" => "YYYYYYM123456789",
-		"-downstream" => "0*YYYYYYYYYY",
-		"-expected-usable" => 1
-	       };
+                "-desc" => "split, ends in B",
+                "-upstream" => "YYYYYYM123456789",
+                "-downstream" => "0*YYYYYYYYYY",
+                "-expected-usable" => 1
+               };
 
   push @tests, {
-		"-desc" => "ends in B, no stop",
-		"-upstream" => "XXXXXXXXXX",
-		"-downstream" => "YYYYYYYYYYM12345678901",
-		"-expected-usable" => 1
-	       };
+                "-desc" => "ends in B, no stop",
+                "-upstream" => "XXXXXXXXXX",
+                "-downstream" => "YYYYYYYYYYM12345678901",
+                "-expected-usable" => 1
+               };
 
   push @tests, {
-		"-desc" => "size OK, but entirely in geneA",
-		"-upstream" => "M1234567890*",
-		"-downstream" => "YYYYYYYYYYYYYYYYYYYY",
-		"-expected-usable" => 0
-	       };
+                "-desc" => "size OK, but entirely in geneA",
+                "-upstream" => "M1234567890*",
+                "-downstream" => "YYYYYYYYYYYYYYYYYYYY",
+                "-expected-usable" => 0
+               };
 
   push @tests, {
-		"-desc" => "2 matches, only 1 long enough",
-		"-upstream" => "M12345*XXXXXXXXX",
-		"-downstream" => "YYYM12345678901",
-		"-expected-usable" => 1
-	       };
+                "-desc" => "2 matches, only 1 long enough",
+                "-upstream" => "M12345*XXXXXXXXX",
+                "-downstream" => "YYYM12345678901",
+                "-expected-usable" => 1
+               };
 
   push @tests, {
-		"-desc" => "too short, and in upstream",
-		"-upstream" => "M123456789*",
-		"-downstream" => "YYYYYYYYYYYYYYYYYYYY",
-		"-expected-usable" => 0
-	       };
+                "-desc" => "too short, and in upstream",
+                "-upstream" => "M123456789*",
+                "-downstream" => "YYYYYYYYYYYYYYYYYYYY",
+                "-expected-usable" => 0
+               };
   # to add:
   # - example w/multiple matches but only one good one
 
   foreach my $test (@tests) {
     my ($status) = find_qualifying_coding_frame(
-						%{$test},
-						"-no-sanity" => 1
-					       );
+                                                %{$test},
+                                                "-no-sanity" => 1
+                                               );
     my $exp = $test->{"-expected-usable"};
     dump_die($test, "no expected usable status") unless defined $exp;
     printf "%s: expected %d, got %d\n", $test->{"-desc"}, $exp, $status;
@@ -2073,70 +2273,70 @@ sub add_exon_annotation {
     my $bn = get_base_number($row, $end_code) || die;
 
     my $set_raw = $r2g->find(
-			     "-accession" => $nm,
-			     "-reference" => $chrom,
-			    );
+                             "-accession" => $nm,
+                             "-reference" => $chrom,
+                            );
     # a transcript may be mapped to multiple chroms and/or positions
 
     my @set_passed;
     foreach my $hit (@{$set_raw}) {
       if ($hit->{aa_trans_status} > 0 or
-	  # validated mapping
-	  $hit->{aa_trans_status} == RefFlat2Genome::STATUS_ERROR_AA_MISMATCH_MINOR
-	 ) {
-	# usable
+          # validated mapping
+          $hit->{aa_trans_status} == RefFlat2Genome::STATUS_ERROR_AA_MISMATCH_MINOR
+         ) {
+        # usable
 
-	my $map = $hit->{codon_map} || die;
+        my $map = $hit->{codon_map} || die;
 
-	my $seek_dir;
-	# genomic seek direction to anchor the mapping to an exon,
-	# if necessary.
-	my $strand = $hit->{strand} || die;
-	if ($end_code eq "A") {
-	  # for GeneA, seek upstream
-	  $seek_dir = $strand eq "+" ? -1 : 1;
-	} elsif ($end_code eq "B") {
-	  # for GeneB, seek downstream
-	  $seek_dir = $strand eq "+" ? 1 : -1;
-	} else {
-	  die;
-	}
+        my $seek_dir;
+        # genomic seek direction to anchor the mapping to an exon,
+        # if necessary.
+        my $strand = $hit->{strand} || die;
+        if ($end_code eq "A") {
+          # for GeneA, seek upstream
+          $seek_dir = $strand eq "+" ? -1 : 1;
+        } elsif ($end_code eq "B") {
+          # for GeneB, seek downstream
+          $seek_dir = $strand eq "+" ? 1 : -1;
+        } else {
+          die;
+        }
 
-	my %cm;
-	# index genomic positions
-	my %exons;
-	foreach my $entry (@{$map}) {
-	  $cm{$entry->{ref_base_num}} = $entry;
-	  $exons{$entry->{exon_number}} = 1 if $entry->{exon_number};
-	}
+        my %cm;
+        # index genomic positions
+        my %exons;
+        foreach my $entry (@{$map}) {
+          $cm{$entry->{ref_base_num}} = $entry;
+          $exons{$entry->{exon_number}} = 1 if $entry->{exon_number};
+        }
 
-	$pair_info->{sprintf 'gene_%s_exon_count', lc($end_code)} = max(keys %exons);
+        $pair_info->{sprintf 'gene_%s_exon_count', lc($end_code)} = max(keys %exons);
 
-	my $final_pos;
+        my $final_pos;
 
-	my $cm_min = min(keys %cm);
-	my $cm_max = max(keys %cm);
-	my $max_tries = $cm_max - $cm_min;
+        my $cm_min = min(keys %cm);
+        my $cm_max = max(keys %cm);
+        my $max_tries = $cm_max - $cm_min;
 
-	for (my $try = 0; $try <= $max_tries; $try++) {
-	  # find the nearest exon
-	  my $search_pos = $bn + ($try * $seek_dir);
-	  printf STDERR "code %s, try %d, pos %d\n", $end_code, $try, $search_pos if $VERBOSE;
-	  if (my $entry = $cm{$search_pos}) {
-	    # hit a mapped base
-	    dump_die($entry) unless $entry->{exon_number};
-	    $final_pos = $search_pos;
-	    last;
-	  }
-	}
+        for (my $try = 0; $try <= $max_tries; $try++) {
+          # find the nearest exon
+          my $search_pos = $bn + ($try * $seek_dir);
+          printf STDERR "code %s, try %d, pos %d\n", $end_code, $try, $search_pos if $VERBOSE;
+          if (my $entry = $cm{$search_pos}) {
+            # hit a mapped base
+            dump_die($entry) unless $entry->{exon_number};
+            $final_pos = $search_pos;
+            last;
+          }
+        }
 
-	my $exno = -1;
-	if ($final_pos) {
-	  my $entry = $cm{$final_pos};
-	  $exno = $entry->{exon_number} || die;
-	}
-	my $key = sprintf 'gene_%s_exon_number', lc($end_code);
-	$pair_info->{$key} = $exno;
+        my $exno = -1;
+        if ($final_pos) {
+          my $entry = $cm{$final_pos};
+          $exno = $entry->{exon_number} || die;
+        }
+        my $key = sprintf 'gene_%s_exon_number', lc($end_code);
+        $pair_info->{$key} = $exno;
       }
     }
   }
@@ -2193,13 +2393,13 @@ sub junction_setup {
       my $pos = $j->{$type}{base_number};
 
       my $strands = find_nms_from_ga(
-				     "-ga" => $ga,
-				     "-chrom" => $chr,
-				     "-position" => $pos,
-				     "-strand" => 1
-				    );
+                                     "-ga" => $ga,
+                                     "-chrom" => $chr,
+                                     "-position" => $pos,
+                                     "-strand" => 1
+                                    );
       foreach (@{$strands}) {
-	$strands{$_} = 1;
+        $strands{$_} = 1;
       }
     }
   }
@@ -2273,18 +2473,18 @@ sub parse_junction {
   die unless @f == 2;
   my %result;
   foreach my $ref (
-		   [ "start", $f[0] ],
-		   [ "end", $f[1] ]
-		  ) {
+                   [ "start", $f[0] ],
+                   [ "end", $f[1] ]
+                  ) {
     my ($tag, $spec) = @{$ref};
     my @g = split /:/, $spec;
     die "$spec must be :-delimited and have 3 fields" unless @g == 3;
     my ($ref_name, $base_number, $strand) = @g;
     $result{$tag} = {
-		     ref_name => $ref_name,
-		     base_number => $base_number,
-		     strand => $strand
-		    };
+                     ref_name => $ref_name,
+                     base_number => $base_number,
+                     strand => $strand
+                    };
   }
   return \%result;
 }
@@ -2311,22 +2511,22 @@ sub genea_frame_check {
   # junction site is present in the sequence.
 
   my $a_nms = find_nms_from_ga(
-			       "-ga" => $ga,
-			       "-row" => $row,
-			       "-which" => "A",
-			      );
+                               "-ga" => $ga,
+                               "-row" => $row,
+                               "-which" => "A",
+                              );
 
   my (%in_frame, %not_in_frame);
 
   foreach my $a_nm (@{$a_nms}) {
     my $set_passed = get_transcript_mappings(
-					     "-end" => "A",
-					     "-accession" => $a_nm,
-					     "-row" => $row,
-					     "-r2g" => $r2g,
-					     "-annot-global" => $annot_global,
-					     "-annot-trouble" => $annot_trouble
-					    );
+                                             "-end" => "A",
+                                             "-accession" => $a_nm,
+                                             "-row" => $row,
+                                             "-r2g" => $r2g,
+                                             "-annot-global" => $annot_global,
+                                             "-annot-trouble" => $annot_trouble
+                                            );
 
     my %frame_blat;
 
@@ -2345,33 +2545,33 @@ sub genea_frame_check {
       $blat->verbose(1);
 
       my $parser = $blat->blat(
-			       "-query" => {
-					    $a_nm => $a_aa
-					   },
-			       "-database" => \%frames,
-			       "-protein" => 1,
-			      );
+                               "-query" => {
+                                            $a_nm => $a_aa
+                                           },
+                               "-database" => \%frames,
+                               "-protein" => 1,
+                              );
       my $result = $parser->next_result;
       # one object per query sequence (only one query seq)
       if ($result) {
-	while (my $hit = $result->next_hit()) {
-	  # hits from this query to a database sequence
-	  # (Bio::Search::Hit::HitI)
-	  push @{$frame_blat{$hit->name()}}, $hit;
-	}
+        while (my $hit = $result->next_hit()) {
+          # hits from this query to a database sequence
+          # (Bio::Search::Hit::HitI)
+          push @{$frame_blat{$hit->name()}}, $hit;
+        }
       }
 
       my ($idx, $fragment, $frame_error, $utr_codons, $blat_mode) = frame_search(
-					 "-frame" => $a_frame_fragment,
-					 "-hit" => $hit,
-					 "-index" => $codon_index,
-					 "-length" => $MIN_TUPLE_AA,
-					 "-direction" => -1,
-					 # upstream back into geneA
+                                         "-frame" => $a_frame_fragment,
+                                         "-hit" => $hit,
+                                         "-index" => $codon_index,
+                                         "-length" => $MIN_TUPLE_AA,
+                                         "-direction" => -1,
+                                         # upstream back into geneA
 
-					 "-blat" => $frame_blat{$fid},
-					 "-end" => "A",
-										);
+                                         "-blat" => $frame_blat{$fid},
+                                         "-end" => "A",
+                                                                                );
       # find unique anchoring in AA.  The fragment size will
       # be expanded for uniqueness if necessary.
       # the formal codon number is taken from the RefFlat2Genome mapping,
@@ -2384,23 +2584,23 @@ sub genea_frame_check {
       # appropriate direction.
 
       if ($frame_error) {
-	# special case: no upstream fragment!  e.g. in 1st codon,
-	# how to handle??
-	$annot_trouble->add($frame_error, $a_nm);
-	# will be reported multiple times; good example for
-	# converting to hash model for this field
+        # special case: no upstream fragment!  e.g. in 1st codon,
+        # how to handle??
+        $annot_trouble->add($frame_error, $a_nm);
+        # will be reported multiple times; good example for
+        # converting to hash model for this field
       } elsif ($idx == -1) {
-	# not in-frame
-	$not_in_frame{$a_nm} = 1;
+        # not in-frame
+        $not_in_frame{$a_nm} = 1;
       } else {
-	#
-	#  in-frame
-	#
-	$in_frame{$a_nm} = 1;
-#	$annot_global->add("TEST ME: geneA blat required for inframe call") if $blat_mode;
-	$transcripts_a_ref->{$a_nm} = 1;
-	#	last;
-	# don't stop since we need to identify all inframe accessions
+        #
+        #  in-frame
+        #
+        $in_frame{$a_nm} = 1;
+#        $annot_global->add("TEST ME: geneA blat required for inframe call") if $blat_mode;
+        $transcripts_a_ref->{$a_nm} = 1;
+        #        last;
+        # don't stop since we need to identify all inframe accessions
       }
     }
   }
@@ -2432,9 +2632,9 @@ sub get_transcript_mappings {
   my $annot_global = $options{"-annot-global"} || die;
 
   my $set_raw = $r2g->find(
-			   "-accession" => $nm,
-			   "-reference" => $chrom,
-			  );
+                           "-accession" => $nm,
+                           "-reference" => $chrom,
+                          );
   # a transcript may be mapped to multiple chroms and/or positions on
   # the chrom.
 
@@ -2444,23 +2644,23 @@ sub get_transcript_mappings {
     unless ($hit->{aa_trans_status} > 0) {
       # only use transcripts where AA mapping to genome has been validated
       $annot_trouble->add(sprintf("gene%s_CDS_mapping_exception", $end),
-			  sprintf "%s:%s", $nm, $hit->{aa_trans_status});
+                          sprintf "%s:%s", $nm, $hit->{aa_trans_status});
       if ($hit->{aa_trans_status} == RefFlat2Genome::STATUS_ERROR_AA_MISMATCH_MINOR) {
-	# occasional small mismatches, e.g. NM_000014 which has
-	# a single-AA mismatch.  Continue anyway, though this could
-	# potentially lead to AA matching problems.  Failure to anchor
-	# to GeneA will still be caught and reported anyway.
+        # occasional small mismatches, e.g. NM_000014 which has
+        # a single-AA mismatch.  Continue anyway, though this could
+        # potentially lead to AA matching problems.  Failure to anchor
+        # to GeneA will still be caught and reported anyway.
       } elsif ($FLAGS{"force-refflat-map"}) {
-	printf STDERR "debug: tolerating broken CDS mapping\n";
+        printf STDERR "debug: tolerating broken CDS mapping\n";
       } else {
-	# don't process other exception types, more serious
-	next;
+        # don't process other exception types, more serious
+        next;
       }
     }
 
     if ($ort ne $hit->{strand}) {
       $annot_global->add(sprintf("gene%s_transcript_strand_disagree", $end),
-			 $hit->{name});
+                         $hit->{name});
       # might be nothing: maybe a transcript unrelated to the SV call?
     }
     my $seek_dir;
@@ -2476,7 +2676,7 @@ sub get_transcript_mappings {
       die;
     }
 
-    #	  dump_die($hit);
+    #          dump_die($hit);
 
     my $map = $hit->{codon_map} || die;
     my %cm;
@@ -2528,18 +2728,18 @@ sub get_transcript_mappings {
 #      printf STDERR "try %d, pos %d\n", $try, $search_pos;
 
       if (my $entry = $cm{$search_pos}) {
-	# hit a mapped base
-	push @set_passed, [ $hit, $entry->{entry_index}, $entry->{codon_number}, $search_pos, $entry->{coding_base_number} ];
-	$found = 1;
-	last;
-	# found site
+        # hit a mapped base
+        push @set_passed, [ $hit, $entry->{entry_index}, $entry->{codon_number}, $search_pos, $entry->{coding_base_number} ];
+        $found = 1;
+        last;
+        # found site
       }
     }
 
     if (not($found) and $r2g->is_intronic(
-					  "-entry" => $hit,
-					  "-base-number" => $bn
-					 )) {
+                                          "-entry" => $hit,
+                                          "-base-number" => $bn
+                                         )) {
       # we have a good transcript->genome mapping, but target
       # site was not found.  Look for evidence site is intronic.
       $annot_global->add(sprintf("gene%s_intronic", $end), $nm);
@@ -2597,12 +2797,12 @@ sub mask_frames_for_gene_a {
 
       my $qposa = $row->{qposA};
       unless ($qposa) {
-	if ($FLAGS{"generate-qpos"}) {
-	  $qposa = int((length($raw) * 3) / 2);
-	  # nucleotide contig coordinates
-	} else {
-	  die "no qposA field";
-	}
+        if ($FLAGS{"generate-qpos"}) {
+          $qposa = int((length($raw) * 3) / 2);
+          # nucleotide contig coordinates
+        } else {
+          die "no qposA field";
+        }
       }
 
       $mask_until = int((($qposa - 10) / 3) - 1);
@@ -2629,11 +2829,11 @@ sub gene_feature_annot {
   my $ga = $options{"-ga"} || die;
 
   my $rows = find_nms_from_ga(
-			      "-ga" => $ga,
-			      "-row" => $row,
-			      "-which" => $which,
-			      "-return-rows" => 1
-			     );
+                              "-ga" => $ga,
+                              "-row" => $row,
+                              "-which" => $which,
+                              "-return-rows" => 1
+                             );
 
   my %all_types;
   my $rf = new RefFlatFile();
@@ -2642,9 +2842,9 @@ sub gene_feature_annot {
     my $base_num = get_base_number($row, $which) || die;
     foreach my $rf_row (@{$rows}) {
       my $type = $rf->get_annotation_for_position(
-						  "-row" => $rf_row,
-						  "-base" => $base_num,
-						 ) || die;
+                                                  "-row" => $rf_row,
+                                                  "-base" => $base_num,
+                                                 ) || die;
       my $acc = $rf_row->{name} || die;
       $all_types{$type}{$acc} = 1;
     }
@@ -2696,23 +2896,23 @@ sub patch_coding_base_numbers {
     my $outfile = ($FLAGS{fq} ? $infile : basename($infile)) . ".patch.tab";
 
     my $df = new DelimitedFile("-file" => $infile,
-			       "-headers" => 1,
-			      );
+                               "-headers" => 1,
+                              );
     my $rpt = $df->get_reporter(
-				"-file" => $outfile,
-				"-extra" => [
-					     qw(
+                                "-file" => $outfile,
+                                "-extra" => [
+                                             qw(
                                                sv_refseqA_coding_base_number
                                                sv_refseqB_coding_base_number
                                                sv_refseqB_last_coding_base_number
-					      )
-					    ]
-			       );
+                                              )
+                                            ]
+                               );
 
     # while (my $row = $df->next("-ref" => 1)) {  # headerless
     while (my $row = $df->get_hash()) {
       patch_row_coding_bases("-row" => $row,
-			     "-r2g" => $r2g);
+                             "-r2g" => $r2g);
       $rpt->end_row($row);
     }
     $rpt->finish();
@@ -2746,16 +2946,16 @@ sub patch_row_coding_bases {
       my $basenum = "";
       my $basenum_end = "";
       if ($acc) {
-	# find nearest coding base for each accession
-	# - main: RefGene2Genome.pm
-	# - possible backup method: RefFlatFile::get_base_translations
-	#   (simpler range-based model, could be modified to add cds #)
-	($basenum, $basenum_end) = get_nearest_cds_base(
-					"-end" => $end,
-					"-accession" => $acc,
-					"-row" => $row,
-					"-r2g" => $r2g,
-				       );
+        # find nearest coding base for each accession
+        # - main: RefGene2Genome.pm
+        # - possible backup method: RefFlatFile::get_base_translations
+        #   (simpler range-based model, could be modified to add cds #)
+        ($basenum, $basenum_end) = get_nearest_cds_base(
+                                        "-end" => $end,
+                                        "-accession" => $acc,
+                                        "-row" => $row,
+                                        "-r2g" => $r2g,
+                                       );
       }
       push @basenum, $basenum || "";
       push @basenum_cds_end, $basenum_end || "";
@@ -2773,10 +2973,17 @@ sub get_r2g {
   my $refgene_fn = get_refflat_file();
   my $r2p_fn = get_r2p_file();
 
+  my $cwc = $FLAGS{"cache-whole-chrom"} || 0;
+  my $lcc = $FLAGS{"limit-chrom-cache"} || 0;
+  my $ltc = $FLAGS{"limit-transcript-cache"};
+
   my $r2g = new RefFlat2Genome(
-			       "-fasta" => get_fasta_file()
-			      );
-  $r2g->cache_genome_mappings(1) if $FLAGS{"cache-genome-mappings"};
+                               "-fasta" => get_fasta_file(),
+			       "-cache_whole_chrom" => $cwc,
+			       "-limit_chrom_cache" => $lcc,
+			       "-limit_transcript_cache" => $ltc,
+                              );
+  $r2g->cache_genome_mappings(1) if $CACHE_TRANSCRIPT_MAPPINGS;
 
   $r2g->verbose(1) if $FLAGS{"verbose-r2g"};
 
@@ -2784,9 +2991,9 @@ sub get_r2g {
   $r2g->infer_aa(1) if $infer_aa;
 
   $r2g->parse(
-	      "-refflat" => $refgene_fn,
-	      "-refgene2protein" => $r2p_fn
-	     );
+              "-refflat" => $refgene_fn,
+              "-refgene2protein" => $r2p_fn
+             );
   return $r2g;
 }
 
@@ -2805,9 +3012,9 @@ sub get_nearest_cds_base {
   my $feature = get_feature($row, $end) || die;
 
   my $set_raw = $r2g->find(
-			   "-accession" => $nm,
-			   "-reference" => $chrom,
-			  );
+                           "-accession" => $nm,
+                           "-reference" => $chrom,
+                          );
   # a transcript may be mapped to multiple chroms and/or positions on
   # the chrom.
 
@@ -2862,11 +3069,11 @@ sub get_nearest_cds_base {
       # (if we were anchoring to GeneA first, we'd seek
       # upstream.)
       foreach my $seek_dir (1, -1) {
-	my $search_pos = $bn + ($try * $seek_dir);
-	#      printf STDERR "try %d, pos %d\n", $try, $search_pos;
+        my $search_pos = $bn + ($try * $seek_dir);
+        #      printf STDERR "try %d, pos %d\n", $try, $search_pos;
 
-	last if $found_entry = $cm{$search_pos};
-	# hit a mapped base
+        last if $found_entry = $cm{$search_pos};
+        # hit a mapped base
       }
       last if $found_entry;
     }
@@ -2876,27 +3083,27 @@ sub get_nearest_cds_base {
       my ($search_start, $search_dir, $search_end);
       my $last_coding_base_number;
       if ($strand eq "+") {
-	# stop codon should be first coding entry from the end
-	$search_start = $#genomic;
-	$search_dir = -1;
-	$search_end = 0;
+        # stop codon should be first coding entry from the end
+        $search_start = $#genomic;
+        $search_dir = -1;
+        $search_end = 0;
       } elsif ($strand eq "-") {
-	# stop should be first coding entry from the start
-	$search_start = 0;
-	$search_dir = 1;
-	$search_end = @genomic;
+        # stop should be first coding entry from the start
+        $search_start = 0;
+        $search_dir = 1;
+        $search_end = @genomic;
       } else {
-	die;
+        die;
       }
 
       for (my $i = $search_start; $i != $search_end; $i += $search_dir) {
-	my $e = $cm{$genomic[$i]};
-#	dump_die($e, "debug", 1);
-	if ($e->{in_cds} and !$e->{in_utr}) {
-	  $last_coding_base_number = $e->{coding_base_number};
-	  printf STDERR "last coding base number in %s/%s: %d\n", $hit->{name}, $strand, $last_coding_base_number if $VERBOSE;
-	  last;
-	}
+        my $e = $cm{$genomic[$i]};
+#        dump_die($e, "debug", 1);
+        if ($e->{in_cds} and !$e->{in_utr}) {
+          $last_coding_base_number = $e->{coding_base_number};
+          printf STDERR "last coding base number in %s/%s: %d\n", $hit->{name}, $strand, $last_coding_base_number if $VERBOSE;
+          last;
+        }
       }
       $found_entry->{last_coding_base_number} = $last_coding_base_number || die "can't find last coding base";
       # hack
@@ -2941,28 +3148,30 @@ sub salvage_intergenic_genes {
       my $pos = $row->{"pos" . $end};
       my $rows = $rff->find_by_gene($gene);
       if ($rows and (@{$rows})) {
-	my %distance;
-	foreach my $r (@{$rows}) {
-	  if (chrom_compare($chrom, $r->{chrom} || die)) {
-	    # mapping to same chromosome as SV
-	    my $tx_start = $r->{txStart} || die;
-	    my $tx_end = $r->{txEnd} || die;
-	    my $distance;
-	    if ($pos < $tx_start) {
-	      $distance = $tx_start - $pos;
-	    } else {
-	      $distance = $pos - $tx_end;
-	    }
-	    push @{$distance{$distance}}, $r unless $r->{name} =~ /NR_/;
-	    # skip non-coding
-	  }
-	}
-	my ($closest) = sort {$a <=> $b} keys %distance;
-	foreach my $r (@{$distance{$closest}}) {
-	  my $nm = $r->{name} || die;
-	  push @{$nms}, $nm;
-	  $any_added = 1;
-	}
+        my %distance;
+        foreach my $r (@{$rows}) {
+          if (chrom_compare($chrom, $r->{chrom} || die)) {
+            # mapping to same chromosome as SV
+            my $tx_start = $r->{txStart} || die;
+            my $tx_end = $r->{txEnd} || die;
+            my $distance;
+            if ($pos < $tx_start) {
+              $distance = $tx_start - $pos;
+            } else {
+              $distance = $pos - $tx_end;
+            }
+            push @{$distance{$distance}}, $r unless $r->{name} =~ /NR_/;
+            # skip non-coding
+          }
+        }
+        if(%distance) {
+          my ($closest) = sort {$a <=> $b} keys %distance;
+          foreach my $r (@{$distance{$closest}}) {
+            my $nm = $r->{name} || die;
+            push @{$nms}, $nm;
+            $any_added = 1;
+          }
+        }
       }
     }
   }
@@ -3006,9 +3215,9 @@ sub intronic_frame_search {
   my ($idx, $fragment);
 
   if ($r2g->is_intronic(
-			"-entry" => $hit,
-			"-base-number" => $sv_pos,
-		       )) {
+                        "-entry" => $hit,
+                        "-base-number" => $sv_pos,
+                       )) {
     my $strand = $map->[1]->{ref_base_num} > $map->[0]->{ref_base_num} ? "+" : "-";
     dump_die($map->[$codon_index], "debug", 1);
 #    die join ",", $map->[0]->{ref_base_num}, $map->[1]->{ref_base_num};
@@ -3046,7 +3255,7 @@ sub intronic_frame_search {
       my $tbase = $r{ref_base_genome};
       if ($strand eq "+") {
       } else {
-	$tbase = reverse_complement($tbase);
+        $tbase = reverse_complement($tbase);
       }
       $r{ref_base_transcript} = $tbase;
 
@@ -3054,8 +3263,8 @@ sub intronic_frame_search {
       # since we are always moving back from exon edge,
       # codon base (and fake codon number) will always decrease
       if ($codon_base < 1) {
-	$codon_base = 3;
-	$last_codon_number--;
+        $codon_base = 3;
+        $last_codon_number--;
       }
       $last_codon_base = $codon_base;
       $r{codon_base} = $codon_base;
@@ -3074,23 +3283,23 @@ sub intronic_frame_search {
     my $ct = new Bio::Tools::CodonTable();
     foreach my $codon_number (sort {$a <=> $b} keys %encode) {
       if (scalar(keys %{$encode{$codon_number}}) == 3) {
-	my $codon = join "", @{$encode{$codon_number}}{qw(1 2 3)};
-	$codon2aa{$codon_number} = $ct->translate($codon);
+        my $codon = join "", @{$encode{$codon_number}}{qw(1 2 3)};
+        $codon2aa{$codon_number} = $ct->translate($codon);
       }
     }
 
     if (1) {
       print STDERR "dump fake codons:\n";
       foreach my $pos (sort keys %map) {
-	my $ref = $map{$pos};
-	printf STDERR "%s\n", join " ",
-	  $ref->{ref_base_num},
-	    $ref->{codon_number},
-	      $codon2aa{$ref->{codon_number}},
-		$ref->{ref_base_genome},
-		  $ref->{ref_base_transcript},
-		    $ref->{codon_base};
-	  }
+        my $ref = $map{$pos};
+        printf STDERR "%s\n", join " ",
+          $ref->{ref_base_num},
+            $ref->{codon_number},
+              $codon2aa{$ref->{codon_number}},
+                $ref->{ref_base_genome},
+                  $ref->{ref_base_transcript},
+                    $ref->{codon_base};
+          }
     }
 
     # start at SV site
@@ -3105,13 +3314,13 @@ sub intronic_frame_search {
       my $entry = $map{$pos} || last;
       my $codon_number = $entry->{codon_number};
       unless ($codon_number == $sv_codon_number) {
-	# skip codon number associated with site as it may contain
-	# some sequence from other end of SV and so a different AA
-	unless ($saw{$codon_number}) {
-	  push @aa, $codon2aa{$codon_number} || die;
-	  last if @aa == $length;
-	  $saw{$codon_number} = 1;
-	}
+        # skip codon number associated with site as it may contain
+        # some sequence from other end of SV and so a different AA
+        unless ($saw{$codon_number}) {
+          push @aa, $codon2aa{$codon_number} || die;
+          last if @aa == $length;
+          $saw{$codon_number} = 1;
+        }
       }
       $pos += $reverse_direction;
     }
@@ -3184,26 +3393,26 @@ sub match_a {
   if ($try_utr5) {
     my $annot_null = new AnnotationField("-unique" => 1);
     my $set_passed = get_transcript_mappings(
-					     "-end" => "A",
-					     "-accession" => $a_nm,
-					     "-row" => $row,
-					     "-r2g" => $r2g,
-					     "-annot-global" => $annot_null,
-					     "-annot-trouble" => $annot_null
-					    );
+                                             "-end" => "A",
+                                             "-accession" => $a_nm,
+                                             "-row" => $row,
+                                             "-r2g" => $r2g,
+                                             "-annot-global" => $annot_null,
+                                             "-annot-trouble" => $annot_null
+                                            );
     if (@{$set_passed}) {
       my ($hit, $codon_index, $codon_number, $final_pos) = @{$set_passed->[0]};
       $a_aa = $r2g->get_utr5_aa_from_map("-hit" => $hit);
     } else {
       printf STDERR "ERROR: no passed AA for %s\n", $a_nm;
       $a_aa = $r2g->get_aa(
-			   "-accession" => $a_nm,
-			  );
+                           "-accession" => $a_nm,
+                          );
     }
   } else {
     $a_aa = $r2g->get_aa(
-			 "-accession" => $a_nm,
-			);
+                         "-accession" => $a_nm,
+                        );
 #    die "WTF" unless $a_aa;
   }
   printf STDERR "UTR5:%d AA:%s\n", $try_utr5, ($a_aa || "");
@@ -3215,13 +3424,13 @@ sub match_a {
     # to initialize these.
     my $annot_null = new AnnotationField("-unique" => 1);
     my $set_passed = get_transcript_mappings(
-					     "-end" => "A",
-					     "-accession" => $a_nm,
-					     "-row" => $row,
-					     "-r2g" => $r2g,
-					     "-annot-global" => $annot_null,
-					     "-annot-trouble" => $annot_null
-					    );
+                                             "-end" => "A",
+                                             "-accession" => $a_nm,
+                                             "-row" => $row,
+                                             "-r2g" => $r2g,
+                                             "-annot-global" => $annot_null,
+                                             "-annot-trouble" => $annot_null
+                                            );
     $a_aa = $r2g->get_aa("-accession" => $a_nm);
   }
 
@@ -3268,34 +3477,34 @@ sub match_a {
     }
 
     for (my $i = $us_len - $MIN_TUPLE_AA;
-	 $i >= 0; $i--) {
+         $i >= 0; $i--) {
       my $tuple = substr($upstream, $i, $MIN_TUPLE_AA);
       my $idx = index($a_aa, $tuple);
       printf STDERR "geneA search tuple: %s, idx=%d\n", $tuple, $idx if $VERBOSE;
       if ($idx != -1) {
-	# hit
-	my $idx2 = index($a_aa, $tuple, $idx + 1);
-	if ($idx2 != -1) {
-	  # AMBIGUOUS TUPLE, NEEDS WORK,
-	  # but can be tricky, see
-	  # gene_b_ambiguous_tuple_tricky_run_of_S.tab where
-	  # extending the tuple fails beyond the S run  :(
-	  # extend tuple as above?
-	  # this is important because we want to report
-	  # the affected codon # unambiguously
-	  printf STDERR "ambiguous tuple %s!!\n", $tuple;
-	  $annot_global->add("ERROR_geneA_ambiguous_tuple_anchor", $a_nm);
-	  # record problem but continue processing;
-	  # maybe a later tuple will be be okay
-	} else {
-	  $is_inframe = SV_MATCH_CODE_INFRAME;
-	  $a_codon_number = $idx + 1 + $MIN_TUPLE_AA;
-	  # first match to canonical AA in GeneA near breakpoint
-	  # (approximate codon at breakpoint site)
-	  $a_anchor_type = "tuple";
-	  $a_upstream_idx_end = $i + $MIN_TUPLE_AA;
-	  last;
-	}
+        # hit
+        my $idx2 = index($a_aa, $tuple, $idx + 1);
+        if ($idx2 != -1) {
+          # AMBIGUOUS TUPLE, NEEDS WORK,
+          # but can be tricky, see
+          # gene_b_ambiguous_tuple_tricky_run_of_S.tab where
+          # extending the tuple fails beyond the S run  :(
+          # extend tuple as above?
+          # this is important because we want to report
+          # the affected codon # unambiguously
+          printf STDERR "ambiguous tuple %s!!\n", $tuple;
+          $annot_global->add("ERROR_geneA_ambiguous_tuple_anchor", $a_nm);
+          # record problem but continue processing;
+          # maybe a later tuple will be be okay
+        } else {
+          $is_inframe = SV_MATCH_CODE_INFRAME;
+          $a_codon_number = $idx + 1 + $MIN_TUPLE_AA;
+          # first match to canonical AA in GeneA near breakpoint
+          # (approximate codon at breakpoint site)
+          $a_anchor_type = "tuple";
+          $a_upstream_idx_end = $i + $MIN_TUPLE_AA;
+          last;
+        }
       }
     }
   }
@@ -3311,14 +3520,14 @@ sub match_a {
     # (i.e. not really in frame if event aligns after a stop)
 
     my $parser = $blat->blat(
-			     "-query" => {
-					  "contig_upstream" => $upstream
-					 },
-			     "-database" => {
-					     "geneA_AA" => $a_aa
-					    },
-			     "-protein" => 1,
-			    );
+                             "-query" => {
+                                          "contig_upstream" => $upstream
+                                         },
+                             "-database" => {
+                                             "geneA_AA" => $a_aa
+                                            },
+                             "-protein" => 1,
+                            );
     # blat sequence downstream of in-frame GeneA hit vs. GeneB AA
     my $result = $parser->next_result();
     # one result object per query sequence
@@ -3329,25 +3538,25 @@ sub match_a {
       my %hsp_problems;
 
       while (my $hit = $result->next_hit()) {
-	# hits from this query to a database sequence
-	# (Bio::Search::Hit::HitI)
-	push @hits, $hit;
-	while (my $hsp = $hit->next_hsp) {
-	  printf STDERR "    score:%s strand:%s q:%d-%d subj:%d-%d num_identical:%d frac_identical_query:%s query_span:%d ref_span:%d total_span=%d query_string=%s hit_string=%s\n",
-	    $hsp->score,
-	      $hsp->strand,
-		$hsp->range("query"),
-		  $hsp->range("hit"),
-		    $hsp->num_identical(),
-		      $hsp->frac_identical("query"),
-			$hsp->length("query"),
-			  $hsp->length("hit"),
-			    $hsp->length("total"),
-			      $hsp->query_string(),
-				$hsp->hit_string();
+        # hits from this query to a database sequence
+        # (Bio::Search::Hit::HitI)
+        push @hits, $hit;
+        while (my $hsp = $hit->next_hsp) {
+          printf STDERR "    score:%s strand:%s q:%d-%d subj:%d-%d num_identical:%d frac_identical_query:%s query_span:%d ref_span:%d total_span=%d query_string=%s hit_string=%s\n",
+            $hsp->score,
+              $hsp->strand,
+                $hsp->range("query"),
+                  $hsp->range("hit"),
+                    $hsp->num_identical(),
+                      $hsp->frac_identical("query"),
+                        $hsp->length("query"),
+                          $hsp->length("hit"),
+                            $hsp->length("total"),
+                              $hsp->query_string(),
+                                $hsp->hit_string();
 
-	  push @hsp, $hsp if hsp_filter($hsp, \%hsp_problems);
-	}
+          push @hsp, $hsp if hsp_filter($hsp, \%hsp_problems);
+        }
       }
 
       my @blat_problems;
@@ -3358,27 +3567,27 @@ sub match_a {
       # also fail above
 
       if (@blat_problems) {
-	# serious issue: ambiguity, etc.
-	$annot_trouble->add("ERROR_geneA_blat_exception", \@blat_problems);
-	$a_codon_number = "";
-	$a_anchor_type = "";
+        # serious issue: ambiguity, etc.
+        $annot_trouble->add("ERROR_geneA_blat_exception", \@blat_problems);
+        $a_codon_number = "";
+        $a_anchor_type = "";
       } elsif (@hsp) {
-	# acceptable match
-	$is_inframe = SV_MATCH_CODE_INFRAME;
-	$a_codon_number = ($hsp[0]->range("hit"))[0];
-	# point at which blat hit starts, which might
-	# exclude e.g. some inserted sequence
-	$a_anchor_type = "blat";
+        # acceptable match
+        $is_inframe = SV_MATCH_CODE_INFRAME;
+        $a_codon_number = ($hsp[0]->range("hit"))[0];
+        # point at which blat hit starts, which might
+        # exclude e.g. some inserted sequence
+        $a_anchor_type = "blat";
 
-	my @query_range = $hsp[0]->range("query");
-	$a_upstream_idx_end = $query_range[1];
+        my @query_range = $hsp[0]->range("query");
+        $a_upstream_idx_end = $query_range[1];
       } else {
-	# not handled
-	$annot_trouble->add("ERROR_geneA_inframe_failed_but_has_blat_hit", $a_nm);
-	# not specifically diagnosed
-	$annot_trouble->add("geneA_blat_issues", [ sort keys %hsp_problems ]) if %hsp_problems;
-	$a_codon_number = "";
-	$a_anchor_type = "";
+        # not handled
+        $annot_trouble->add("ERROR_geneA_inframe_failed_but_has_blat_hit", $a_nm);
+        # not specifically diagnosed
+        $annot_trouble->add("geneA_blat_issues", [ sort keys %hsp_problems ]) if %hsp_problems;
+        $a_codon_number = "";
+        $a_anchor_type = "";
       }
     } else {
       # no BLAT hit, so we now have some confidence
@@ -3390,12 +3599,14 @@ sub match_a {
       $a_codon_number = "";
       $a_anchor_type = "";
     }
-  }				# blat
+  }                                # blat
 
   if ($try_utr5) {
     # codon numbering won't work if based on UTR5 matching
     $a_codon_number = "";
   }
+
+#  die join ",", $a_codon_number, $is_inframe, $a_anchor_type, $a_upstream_idx_end;
 
   return ($a_codon_number, $is_inframe, $a_anchor_type, $a_upstream_idx_end);
 
@@ -3412,17 +3623,828 @@ sub build_cdl {
   return join ",", @v;
 }
 
-=head1 LICENCE AND COPYRIGHT
-Copyright 2019 St. Jude Children's Research Hospital 
+sub report_full_length {
+  my %options = @_;
+  my $row_src = $options{"-row"} || die;
+#  dump_die($row_src, "Debug", 1);
 
-Licensed under a modified version of the Apache License, Version 2.0
-(the "License") for academic research use only; you may not use this
-file except in compliance with the License. To inquire about commercial
-use, please contact the St. Jude Office of Technology Licensing at
-scott.elmer@stjude.org.
+  my $eval = $options{"-eval"} || die;
+  my $rpt = $options{"-rpt"} || die;
+  my $nm2protein = $options{"-nm2protein"} || die;
+  my $r2g = $options{"-r2g"} || die;
 
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+  foreach my $row (@{$eval}) {
+    dump_die($row, "debug", 1);
+    next unless $row->{inframe_call};
+    # only applicable for in-frame calls
+
+    my @notes;
+
+    my %r;
+    foreach my $f (qw(sample contig)) {
+      # fields from CICERO row
+      $r{$f} = $row_src->{$f} || dump_die($row_src, "no data for $f");
+    }
+
+    my $fail;
+    foreach my $f (qw(gene_a_nm gene_b_nm frame_raw)) {
+      # fields from transcript-specific row
+#      $r{$f} = $row->{$f} || dump_die($row, "no data for $f");
+      $r{$f} = $row->{$f};
+      $fail = 1 unless $r{$f};
+    }
+    next if $fail;
+    # geneA info might be missing for e.g. in-frame call code 2
+
+    $r{contig_frame} = $row->{frame_raw};
+
+    $r{geneA} = $r2g->get_gene($row->{gene_a_nm}) || $row->{gene_a_nm};
+    $r{geneB} = $r2g->get_gene($row->{gene_b_nm}) || $row->{gene_b_nm};
+    # gene symbols for this transcript pairing
+
+    my $geneA_protein = $nm2protein->{$row->{gene_a_nm}} || die;
+    my $geneB_protein = $nm2protein->{$row->{gene_b_nm}} || die;
+    $r{AA_gene_a_full} = $geneA_protein;
+    $r{AA_gene_b_full} = $geneB_protein;
+
+    my $interstitial = $row->{interstitial_AA};
+#    dump_die($row, "interstitial AA, test me!!") if $interstitial;
+    $r{AA_interstitial} = $interstitial;
+    push @notes, "contains_interstitial_sequence" if $interstitial;
+
+#    my $geneA_upstream = $row->{"frame_upstream"} || die;
+    # large fragment from contig.  Note this includes geneA sequence
+    # PLUS ANY INTERSTITIAL SEQUENCE.
+    my $idx_geneA_end = $row->{"gene_a_index"};
+    my $idx_geneB_start = $row->{"gene_b_index"};
+    die unless defined $idx_geneA_end and defined $idx_geneB_start;
+    my $geneA_upstream = substr($row->{"frame_upstream"}, 0, $idx_geneA_end + 1);
+    # the upstream sequence, EXCLUDING any interstitial AA
+
+    my $geneB_downstream = $row->{"gene_b_aa_downstream"} || die;
+    # small fragment: anchor to larger piece?
+    my $geneB_downstream_extended = $row->{gene_b_aa_downstream_extended};
+    # only longer if site is in 5' UTR
+
+    my $geneA_upstream_anchor = $geneA_upstream;
+
+    # require anchor matches exactly once.  however the contig may go
+    # out of sync upstream, possibly because it's genomic sequence
+    # and so intronic regions won't match mRNA from refFlat record.
+    if (unique_in_string($geneA_protein, $geneA_upstream_anchor)) {
+      # success
+    } elsif (my $chunk = unique_in_substring($geneA_protein, $geneA_upstream_anchor)) {
+      # a substring uniquely matches geneA, record trimming required
+      $geneA_upstream_anchor = $chunk;
+      push @notes, sprintf "geneA_anchor_trim_bases=%d", index($geneA_upstream, $chunk);
+    }
+
+    # if (length($geneA_upstream_anchor) < $FULL_LENGTH_MIN_GENE_A_ANCHOR) {
+    unless (unique_in_string($geneA_protein, $geneA_upstream_anchor)) {
+      my $msg = "ERROR: can't anchor to geneA, geneA_upstream=$geneA_upstream geneA=$geneA_protein";
+      push @notes, $msg;
+      foreach my $f (qw(
+    			 AA_gene_a
+    			 AA_gene_b
+    			 full_length_sequence
+    			 full_length_sequence_length
+    			 full_length_sequence_contains_entire_gene_b
+    			 QC_span
+    		      )) {
+    	$r{$f} = "";
+      }
+      $r{notes} = join ",", @notes;
+
+      $rpt->end_row(\%r);
+      next;
+    }
+
+    $geneA_protein =~ /^(.*$geneA_upstream_anchor)/i || die;
+    my $upstream_full = $1;
+    $r{AA_gene_a} = $upstream_full;
+
+#    die "geneB anchor fail for $geneB_downstream in $geneB_protein" unless unique_in_string($geneB_protein, $geneB_downstream);
+    # short so might not be unique?
+
+    my @ahits = $geneB_protein =~ /${geneB_downstream}/ig;
+#    printf STDERR "ahits=%d\n", scalar @ahits;
+
+    my $full_sequence;
+    if (unique_in_string($geneB_protein, $geneB_downstream)) {
+      $geneB_protein =~ /($geneB_downstream.*)$/i || die;
+      my $downstream_full = $1;
+
+      $r{AA_gene_b} = $downstream_full;
+
+      $full_sequence = join "", $upstream_full, $interstitial, $downstream_full;
+    } elsif (my $substr = unique_in_substring($geneB_protein, $geneB_downstream)) {
+      # the downstream sequence doesn't perfectly match geneB, but a substring
+      # does: possibly leading 5' UTR or intronic sequence, or anchoring
+      # requiring blat rather than a substring
+      $geneB_protein =~ /($substr.*)$/i || die;
+      my $downstream_full = $1;
+      $r{AA_gene_b} = $downstream_full;
+
+      my $idx = index($geneB_downstream, $substr) || die;
+      $interstitial .= substr($geneB_downstream, 0, $idx);
+      $r{AA_interstitial} = $interstitial;
+
+      $full_sequence = join "", $upstream_full, $interstitial, $downstream_full;
+    } elsif ($row->{gene_b_codon_number} < 1) {
+      #
+      # geneB site is upstream of start / possibly 5' UTR
+      #
+      my $feature_b = $row_src->{featureB} || die;
+      if ($feature_b eq "5utr") {
+	push @notes, "geneB_5_prime_UTR";
+      } elsif ($feature_b eq "intron") {
+	push @notes, "geneB_intron";
+      } else {
+	push @notes, "geneB_potential_intron_or_5_prime_UTR";
+	push @notes, sprintf "cicero_geneB_feature=%s", $feature_b;
+      }
+
+      my $idx_up = index($row->{frame_raw}, $geneA_upstream_anchor);
+#      dump_die($row, "can't anchor geneA $geneA_upstream_anchor idx=$idx_up") unless $idx_up == 0;
+      die if $idx_up == -1;
+
+      my $frame_down = substr($row->{frame_raw}, $idx_up + length($geneA_upstream_anchor));
+      # downstream portion of the frame AFTER geneA, including any interstitial
+      # sequence, and presumably at some point the start of geneB
+
+      my $dl = length($frame_down);
+
+      for (my $i = 0; $i < $dl; $i++) {
+	my $chunk = substr($frame_down, $i);
+	$chunk = substr($chunk, 0, $MIN_TUPLE_AA) if length($chunk) > $MIN_TUPLE_AA;
+	last if length($chunk) < 7;
+	# hack
+
+	if (unique_in_string($geneB_protein, $chunk)) {
+#	  printf STDERR "unique hit for $chunk\n";
+	  my $interstitial = "";
+	  $interstitial = substr($frame_down, 0, $i) if ($i > 0);
+
+	  $geneB_protein =~ /($chunk.*)$/i || die;
+	  my $downstream_full = $1;
+	  $r{AA_gene_b} = $downstream_full;
+
+#	  printf STDERR "FINAL:\n%s\n", join "\n", $upstream_full, $interstitial, $downstream_full;
+
+	  $r{AA_interstitial} = $interstitial;
+	  $full_sequence = join "", $upstream_full, $interstitial, $downstream_full;
+	  last;
+	}
+      }
+
+      unless ($full_sequence) {
+	push @notes, "geneB_direct_frame_coding_anchor_failed";
+	# can't anchor to geneB coding sequence directly from frame sequence
+	my $b_start_frag = substr($geneB_protein, 0, $MIN_TUPLE_AA);
+	my $bi = index($geneB_downstream_extended, $b_start_frag);
+	die "geneB start anchor fail, can't find $b_start_frag in $geneB_downstream_extended" unless $bi >= 0;
+	# ensure geneB coding start is found in downstream extended sequence
+	die unless unique_in_string($geneB_downstream_extended, $b_start_frag);
+
+	my $interstitial_pt1 = "";
+	for (my $i=0; $i < length($frame_down); $i++) {
+	  my $chunk = substr($frame_down, $i);
+	  if (index($geneB_downstream_extended, $chunk) == 0) {
+	    # done
+	    last;
+	  } else {
+	    $interstitial_pt1 .= substr($frame_down, $i, 1);
+	  }
+	}
+
+	my $interstitial_pt2 = substr($geneB_downstream_extended, 0, $bi);
+
+	$r{AA_interstitial} = join "", $interstitial_pt1, $interstitial_pt2;
+
+	$full_sequence = join "", $upstream_full, $interstitial_pt1, $interstitial_pt2, $geneB_protein;
+	$r{AA_gene_b} = $geneB_protein;
+
+	dump_die($row, sprintf("geneB UTR5 anchor, frame:%s geneB_down:%s down_ext:%s frame_down:%s geneB_full:%s codon:%s interstitial1:%s interstitial2:%s final_full:%s",
+		 $row->{frame_raw},
+		 $geneB_downstream,
+		 $geneB_downstream_extended,
+		 $frame_down,
+		 $geneB_protein,
+                 $row->{gene_b_codon_number},
+		 $interstitial_pt1,
+		 $interstitial_pt2,
+			       $full_sequence
+			      ), 1
+		);
+      }
+#    } elsif (($geneB_protein =~ /${geneB_downstream}/ig) > 1) {
+# WTF?  why doesn't this work??
+    } elsif (@ahits > 1) {
+      #
+      # anchoring sequence is ambiguous in geneB
+      #
+      my $target_codon = $row->{gene_b_codon_number} || die;
+      # codon number nearest to geneB position
+
+      #
+      # find index closest to the annotated codon #:
+      #
+      my $last = -1;
+      my %distance;
+      while (1) {
+	my $idx = index($geneB_protein, $geneB_downstream, $last + 1);
+	last if $idx == -1;
+#	print "idx $idx\n";
+	$distance{$idx} = abs($idx - $target_codon);
+	$last = $idx;
+      }
+      my ($idx_nearest) = sort {$distance{$a} <=> $distance{$b}} keys %distance
+;
+      my $downstream_full = substr($geneB_protein, $idx_nearest);
+      $r{AA_gene_b} = $downstream_full;
+
+      $full_sequence = join "", $upstream_full, $interstitial, $downstream_full;
+#      die join "\n", $row->{frame_raw}, $upstream_full, $interstitial, $downstream_full;
+    } else {
+      dump_die($row, "geneB anchor fail for $geneB_downstream in $geneB_protein");
+    }
+
+    $r{full_length_sequence} = $full_sequence;
+    $r{full_length_sequence_length} = length $full_sequence;
+
+    #
+    # QC check:
+    #
+
+#    push @notes, "full_raw_frame_not_found" unless unique_in_string($full_sequence, $row->{frame_raw});
+    # this is a desirable sanity check to make sure the CICERO
+    # predicted contig actually appears in the final fusion sequence
+    # (correctly incorporates interstitial sequence, etc.)  HOWEVER
+    # I'm not sure if this is always reasonable: what if frame
+    # contains genomic sequence that isn't in the refFlat?  Or if
+    # there are SNVs affecting the protein sequence?
+
+    my $flank = 10;
+    my $qc_start = $idx_geneA_end - ($flank - 1);
+    my $qc_end = $idx_geneB_start + ($flank - 1);
+
+#    my $cnum = $row->{gene_b_codon_number};
+#    if ($cnum < 0) {
+#      $qc_end += abs($cnum) + 10;
+      # if contig includes 5' UTR, extended until we actually hit coding
+      # sequence of geneB
+#    }
+
+    my $qc_chunk = substr($row->{frame_raw}, $qc_start, ($qc_end - $qc_start) + 1);
+    $r{QC_span} = $qc_chunk;
+
+    my $qc_pass = 1;
+
+    unless (unique_in_string($full_sequence, $qc_chunk)) {
+      $qc_pass = 0;
+      push @notes, "QC_span_frame_not_found";
+    }
+    # while this contains less geneA/geneB flanking sequence than the full frame,
+    # no guarantee event might not happen e.g. near an exon edge and so still not work
+
+    if ($r{AA_interstitial} =~ /\*/) {
+      $qc_pass = 0;
+      push @notes, "QC_interstitial_termination";
+    }
+
+    foreach my $f (qw(AA_gene_a AA_gene_b)) {
+      dump_die(\%r, "stop found in gene sequence") if $r{$f} =~ /\*/;
+    }
+
+    if (my $is = $r{AA_interstitial}) {
+      if (length($is) >= 5) {
+	my $ok = 0;
+	my $frame = $row->{frame_raw};
+	my $il = length($is);
+	for (my $i = $il; $i > 0; $i--) {
+	  my $chunk = substr($is, 0, $i);
+	  my $idx = index($frame, $chunk);
+#	  printf STDERR "test %s: %d\n", $chunk, $idx;
+	  if ($idx != -1) {
+	    $ok = 1;
+	    last;
+	  }
+	}
+	dump_die(\%r, "fragment of final interstitial not found in raw frame") unless $ok;
+      }
+    }
+    $r{QC_pass} = $qc_pass;
+
+    $r{full_length_sequence_contains_entire_gene_b} = $r{AA_gene_b} eq $r{AA_gene_b_full} ? 1: 0;
+
+    $r{notes} = join ",", @notes;
+    $rpt->end_row(\%r);
+
+  }
+}
+
+sub unique_in_string {
+  my ($full, $substring) = @_;
+  $substring =~ s/\*/\\\*/g;
+  # prevent stop codon from being interpreted as regex character
+  my @hits = $full =~ /$substring/ig;
+  return @hits == 1;
+}
+
+sub digest_full_length {
+  #
+  # - reannotate input report recording reasons to keep/reject?
+  # - record "best" per sample? (just the longest??)
+  # - record "best" overall
+  # - record if same event observed in > 1 sample
+  #
+  my ($infile) = $FLAGS{"digest-full-length"};
+  my $df = new DelimitedFile("-file" => $infile,
+			     "-headers" => 1,
+			     );
+
+  my %all;
+  my %sample2protein;
+  my %protein2sample;
+  my %protein2geneA;
+  my %protein2geneB;
+  my %fusions;
+  while (my $row = $df->get_hash()) {
+
+    next if $FULL_LENGTH_DIGEST_EXCLUDE_INTERSTITIAL_STOP and
+      $row->{AA_interstitial} =~ /\*/;
+
+    my $seq = $row->{full_length_sequence} || next;
+    # some intra-fusion events can't (yet) produce these
+    $all{$seq} = 1;
+    my $sample = $row->{sample} || die;
+    my $geneA = $row->{geneA} || die;
+    my $geneB = $row->{geneB} || die;
+    my $fusion = join "_", $geneA, $geneB;
+    $fusions{$fusion} = 1;
+
+    my $geneA_nm = $row->{gene_a_nm} || die;
+    my $geneB_nm = $row->{gene_b_nm} || die;
+
+    $sample2protein{$sample}{$seq} = join "_", $geneA_nm, $geneB_nm;
+    # might be > 1 NM pairing, just save one
+
+    $protein2sample{$seq}{$sample} = 1;
+    $protein2geneA{$seq}{$geneA} = 1;
+    $protein2geneB{$seq}{$geneB} = 1;
+  }
+  die "multiple fusions in input file" if scalar keys %fusions > 1;
+  my ($fusion) = keys %fusions;
+
+  printf STDERR "merge samples...\n";
+  my %best_in_sample;
+  foreach my $sample (sort keys %sample2protein) {
+    my ($best, $worst_frac) = find_best_protein($sample2protein{$sample});
+#    $best_in_sample{$sample} = $best;
+    $best_in_sample{$best} = $worst_frac;
+  }
+
+  printf STDERR "merge global...\n";
+  my ($best_overall, $best_overall_worst_frac) = find_best_protein(\%all);
+
+  my %starts = map {substr($_, 0, $FULL_LENGTH_START_COMPARE_LENGTH), 1} keys %all;
+  my $unique_start_sequences = scalar keys %starts;
+
+  my $rpt = new Reporter(
+			 "-file" => $infile . ".digest.tab",
+			 "-delimiter" => "\t",
+			 "-labels" => [
+				       qw(
+					   fusion
+					   sample
+					   sample_count
+					   geneA
+					   geneB
+					   full_length
+					   length
+					   unique_start_sequences
+					   best_in_sample
+					   best_in_sample_blat_identity
+					   best_overall
+					   best_overall_blat_identity
+					)
+				      ],
+			 "-auto_qc" => 1,
+			);
+
+  foreach my $full (sort keys %all) {
+    my %r;
+    $r{fusion} = $fusion;
+    $r{full_length} = $full;
+    $r{length} = length $full;
+    $r{sample} = join ",", sort keys %{$protein2sample{$full}};
+    $r{sample_count} = scalar keys %{$protein2sample{$full}};
+    $r{geneA} = join ",", sort keys %{$protein2geneA{$full}};
+    $r{geneB} = join ",", sort keys %{$protein2geneB{$full}};
+    $r{unique_start_sequences} = $unique_start_sequences;
+
+    my $best_in_sample = 0;
+    my $best_in_sample_blat_identity = "";
+    if (my $worst_frac = $best_in_sample{$full}) {
+      $best_in_sample = 1;
+      $best_in_sample_blat_identity = $worst_frac;
+    }
+    $r{best_in_sample} = $best_in_sample;
+    $r{best_in_sample_blat_identity} = $best_in_sample_blat_identity;
+
+    my $is_best_overall = 0;
+    my $best_overall_blat_identity = "";
+
+    if ($full eq $best_overall) {
+      $is_best_overall = 1;
+      $best_overall_blat_identity = $best_overall_worst_frac;
+    }
+    $r{best_overall} = $is_best_overall;
+    $r{best_overall_blat_identity} = $best_overall_blat_identity;
+
+    $rpt->end_row(\%r);
+  }
+
+  $rpt->finish();
+
+
+}
+
+sub find_best_protein {
+  #
+  #  eliminate sequences that can be (near-)perfectly aligned to longer
+  #  sequences:
+  #
+  my ($proteins_hash) = @_;
+
+  my %full = %{$proteins_hash};
+  # copy as we'll be modifying
+
+  my $raw_count = scalar keys %full;
+
+  my $worst_identity = 100;
+  # in case there is only 1 sequence
+  my $done = 0;
+  while (!$done) {
+    printf STDERR "checking %d sequences\n", scalar keys %full;
+    $done = 1;
+    my @full_by_len = sort {length($a) <=> length($b)} keys %full;
+  IDX:
+    for (my $idx = 0; $idx < @full_by_len - 1; $idx++) {
+      my @idx_rest = ($idx + 1 .. @full_by_len - 1);
+      my @rest = @full_by_len[@idx_rest];
+#      my %rest = map {"idx" . $_, $full_by_len[$_]} @idx_rest;
+      my %rest = map {$full{$_}, $_} @rest;
+
+      my $query_seq = $full_by_len[$idx];
+      my $qlen = length($query_seq);
+
+      printf STDERR "compare %s/%s with %d: %s\n", $full{$query_seq}, $query_seq, scalar(@rest), join ", ", @rest;
+#      dump_die(\%rest);
+      my $blat = get_blat();
+      $blat->verbose(1) if $VERBOSE;
+
+      my $parser = $blat->blat(
+			       "-query" => {
+					    "query" => $query_seq,
+					   },
+			       #				   "-database" => $frames,
+			       "-database" => \%rest,
+			       "-protein" => 1,
+			       "-dump-fasta" => 1,
+			      );
+      my $result = $parser->next_result;
+      # one object per query sequence (only one query seq)
+      if ($result) {
+	my %hit2identity;
+	# bucket results by target: the best result is not
+	# necessarily the first one!
+
+	while (my $hit = $result->next_hit()) {
+	  # hits from this query to a database sequence
+	  # (Bio::Search::Hit::HitI)
+
+	  my $target_id = $hit->name();
+
+	  printf STDERR "hits to %s, qlen=%d\n", $target_id, $qlen;
+	  my @hsp;
+	  while (my $hsp = $hit->next_hsp) {
+	    printf STDERR "    score:%s strand:%s q:%d-%d subj:%d-%d num_identical:%d frac_identical_query:%s query_span:%d ref_span:%d total_span=%d query_string=%s hit_string=%s\n",
+	      $hsp->score,
+		$hsp->strand,
+		  $hsp->range("query"),
+		    $hsp->range("hit"),
+		      $hsp->num_identical(),
+			$hsp->frac_identical("query"),
+			  $hsp->length("query"),
+			    $hsp->length("hit"),
+			      $hsp->length("total"),
+				$hsp->query_string(),
+				  $hsp->hit_string();
+	    push @hsp, $hsp;
+	  }
+
+	  my $num_identical;
+	  if (@hsp > 1) {
+
+	    my $iter = combinations(\@hsp, 2);
+	    printf STDERR "raw: %s\n", join " ", @hsp;
+
+	    # eliminate any hsp whose query range is a subset of another hsp:
+	    my %bad;
+	    my $hsp_seq = 0;
+	    my $track_key = "__forever_unclean";
+	    foreach my $hsp (@hsp) {
+	      $hsp->{$track_key} = $hsp_seq++;
+	    }
+
+	    while (my $c = $iter->next()) {
+	      my ($hsp1, $hsp2) = @{$c};
+	      my $set1 = new Set::IntSpan join "-", $hsp1->range("query");
+	      my $set2 = new Set::IntSpan join "-", $hsp2->range("query");
+	      $bad{$hsp1->{$track_key}} = 1 if subset $set1 $set2;
+	      $bad{$hsp2->{$track_key}} = 1 if superset $set1 $set2;
+	    }
+	    @hsp = grep {!$bad{$_->{$track_key}}} @hsp;
+
+	    $num_identical = sum map {$_->num_identical()} @hsp;
+	    # imperfect: what about partial overlaps???
+
+	  } else {
+	    $num_identical = $hsp[0]->num_identical();
+	  }
+
+	  my $frac_identical = $num_identical / $qlen;
+	  # consider the full length of the query rather than just the
+	  # aligned portion in the hsp(s)
+	  die if $hit2identity{$target_id};
+	  $hit2identity{$target_id} = $frac_identical;
+
+	}  # next_hit()
+
+	dump_die(\%hit2identity, "debug", 1);
+
+	my @best = sort {$hit2identity{$b} <=> $hit2identity{$a}} keys %hit2identity;
+	my $best_id = $best[0];
+	my $frac_identical = $hit2identity{$best_id};
+	if ($frac_identical >= $FULL_LENGTH_MIN_BLAT_IDENTITY_TO_MERGE) {
+	  if (not(defined $worst_identity) or $frac_identical < $worst_identity) {
+	    $worst_identity = $frac_identical;
+	  }
+	  $done = 0;
+	  printf STDERR "deleting %s/%s, blat %.3f%% match to %s/%s\n", $full{$query_seq}, $query_seq, $frac_identical * 100, $full{$rest{$best_id}}, $rest{$best_id};
+	  delete $full{$query_seq};
+	  last IDX;
+	} else {
+	  printf STDERR "reject merge with %f identity\n", $frac_identical;
+	}
+
+      } else {
+	die "no blat result for query";
+      }
+    }
+  }
+
+  die "returns array" unless wantarray();
+
+  if (keys %full == 1) {
+    # success
+    return ((keys %full)[0], $worst_identity);
+  } else {
+    # couldn't collapse to one sequence with required strictness,
+    # just use longest
+    cluck sprintf "not exactly 1 left: orig=%d final=%d worst=%f", $raw_count, scalar keys %full, $worst_identity;
+    $worst_identity = "merge_fail";
+
+    my @sorted = sort {length($b) <=> length($a)} keys %full;
+
+    return($sorted[0], "merge_fail");
+  }
+
+}
+
+sub prep_excerpt_files {
+  # extract input data for target fusions from a cicero output file
+  my $f_all = $FLAGS{"prep-excerpt"} || die;
+
+  # get target fusions first and limit all-rows loading to just those
+  # with matching genes?
+
+  #
+  #  load list of fusions we're searching for and build list of all
+  #  geneA's of interest:
+  #
+  my $f_fusions = $FLAGS{fusions} || die "-fusions";
+  my $df_fusions = new DelimitedFile(
+				     "-file" => $f_fusions,
+				     "-headers" => 1,
+				    );
+  my %all_wanted_gene_a;
+  my @search_fusions;
+  while (my $row = $df_fusions->get_hash()) {
+    push @search_fusions, $row;
+    my $fusion = $row->{fusion} || dump_die($row, "fusion");
+    my @f = split /_/, $fusion;
+    die unless @f == 2;
+    my ($gene_a_list, $gene_b_list) = @f;
+
+    foreach my $g (split /,/, $gene_a_list) {
+      $all_wanted_gene_a{$g} = 1;
+    }
+  }
+
+  #
+  #  load fusions to search against, saving only those of potential interest.
+  #  much more efficient esp. if we eventually scan a large set of result
+  #  files, etc.:
+  #
+  my @raw_rows;
+  my $df_all = new DelimitedFile(
+				 "-file" => $f_all,
+				 "-headers" => 1,
+				);
+  while (my $row = $df_all->get_hash()) {
+    my $geneA = $row->{geneA} || die;
+    my @gene_a = split /,/, $row->{geneA};
+    my ($usable) = grep {$all_wanted_gene_a{$_}} @gene_a;
+    # not necessarily a match for both, but this dramatically reduces
+    # the search space
+    push @raw_rows, $row if $usable;
+  }
+
+  my @h_out;
+  foreach (@{$df_all->headers_raw()}) {
+    last if $_ eq "frame";
+    push @h_out, $_;
+  }
+
+  my $rpt_summary = new Reporter(
+			 "-file" => basename($f_fusions) . ".summary.tab",
+			 "-delimiter" => "\t",
+			 "-labels" => [
+				       qw(
+					   fusion
+					   wanted
+					   wanted_count
+
+					   missing
+					   missing_count
+					   all_missing
+
+					   additional
+					   additional_count
+
+					   missing_adjusted
+					   missing_count_adjusted
+					   additional_adjusted
+					   additional_count_adjusted
+					)
+				      ],
+			 "-auto_qc" => 1,
+			);
+
+
+  foreach my $row (@search_fusions) {
+    #
+    # search for each query fusion:
+    #
+    my $fusion = $row->{fusion} || dump_die($row, "fusion");
+    printf STDERR "%s\n", $fusion;
+    my @f = split /_/, $fusion;
+    die unless @f == 2;
+    my ($gene_from, $gene_to) = @f;
+
+    my %wanted_samples;
+    # all samples user is looking for
+    my %needed_samples;
+    # tracker: how many still left
+    my %other_samples;
+    # tracker: additional samples found
+    if (my $sl = $row->{sample_list}) {
+      %wanted_samples = map {$_, 1} split /,/, $sl;
+      %needed_samples = %wanted_samples;
+    }
+
+    my $outfile = $fusion . ".input.tab";
+    my $rpt = $df_all->get_reporter(
+				"-file" => $outfile,
+				"-auto_qc" => 1,
+				"-extra" => [ "fusion_name" ],
+				"-extra-prepend" => 1,
+			       );
+    $rpt->labels(\@h_out);
+
+  # while (my $row = $df->next("-ref" => 1)) {  # headerless
+    my $found = 0;
+    foreach my $row (@raw_rows) {
+      my %gene_a = map {$_, 1} split /,/, $row->{geneA};
+      my %gene_b = map {$_, 1} split /,/, $row->{geneB};
+      my @frame_calls = split /,/, $row->{frame};
+      my $frame_usable = grep {$_ and $_ > 0} @frame_calls;
+
+      if ($gene_a{$gene_from} and $gene_b{$gene_to}) {
+
+	if ($frame_usable) {
+	  $row->{fusion_name} = $fusion;
+	  $rpt->end_row($row);
+	  $found++;
+	}
+
+	# always perform these checks so we don't consider a record
+	# missing if it's just not usable because it's not called in-frame
+	my $sample = $row->{sample} || die "-sample";
+	if (%wanted_samples) {
+	  # sample tracking active
+	  if ($wanted_samples{$sample}) {
+	    delete $needed_samples{$sample};
+	  } else {
+	    $other_samples{$sample} = 1;
+	  }
+	}
+
+      }
+    }
+
+    my %r;
+    $r{fusion} = $fusion;
+    $r{wanted} = join ",", sort keys %wanted_samples;
+    $r{wanted_count} = scalar keys %wanted_samples;
+    $r{missing} = join ",", sort keys %needed_samples;
+    $r{missing_count} = scalar keys %needed_samples;
+
+    $r{additional} = join ",", sort keys %other_samples;
+    $r{additional_count} = scalar keys %other_samples;
+
+    my %other_samples_adjusted = %other_samples;
+    my %missing_adjusted;
+    if ($r{missing_count}) {
+      if ($r{additional_count}) {
+	my %other_trimmed;
+	foreach my $s_other (keys %other_samples) {
+	  my $s = $s_other;
+	  $s =~ s/_.*//;
+	  $other_trimmed{$s} = $s_other;
+	}
+
+	foreach my $s_needed (keys %needed_samples) {
+	  my $s = $s_needed;
+	  $s =~ s/_.*//;
+	  if (my $other = $other_trimmed{$s}) {
+	    # some data from this sample observed, so don't consider missing
+	    delete $other_samples_adjusted{$other};
+	  } else {
+	    # still can't find
+	    $missing_adjusted{$s_needed} = 1;
+	  }
+	}
+      } else {
+	%missing_adjusted = %needed_samples;
+      }
+    }
+
+    $r{missing_adjusted} = join ",", sort keys %missing_adjusted;
+    $r{missing_count_adjusted} = scalar keys %missing_adjusted;
+    $r{additional_adjusted} = join ",", sort keys %other_samples_adjusted;
+    $r{additional_count_adjusted} = scalar keys %other_samples_adjusted;
+
+    my $all_missing = 0;
+    if ($found) {
+      $rpt->finish();
+    } else {
+      printf STDERR "ERROR: no matches for $gene_from $gene_to\n";
+      $all_missing = 1;
+      # no matching samples found at all
+    }
+    $r{all_missing} = $all_missing;
+
+    $rpt_summary->end_row(\%r);
+  }
+
+  $rpt_summary->finish();
+
+}
+
+
+sub unique_in_substring {
+  my ($full_sequence, $downstream) = @_;
+
+  my $dl = length($downstream);
+  my $unique;
+  for (my $i = 1; $i < $dl; $i++) {
+    # start at 1 rather than 0 because full-length has been tried already
+    my $chunk = substr($downstream, $i);
+    printf STDERR "idx:%d chunk:%s full:%s\n", $i, $chunk, $full_sequence;
+
+    if (unique_in_string($full_sequence, $chunk)) {
+      $unique = $chunk;
+      last;
+    }
+  }
+  return $unique;
+}
+
+sub frame_debug {
+  my $sequence = $FLAGS{"frame-debug"} || die "-frame-debug";
+  get_frames($sequence);
+}
+
