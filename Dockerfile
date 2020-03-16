@@ -62,6 +62,12 @@ RUN conda update -n base -c defaults conda -y && \
 RUN which perl
 RUN perl -v
 
+RUN cpanm --force -i \
+    Algorithm::Combinatorics@0.26
+
+RUN cpanm --force -i \
+    Set::IntSpan@1.19
+
 RUN cpanm --force -i \ 
     enum \
     Data::Compare@1.22 \
