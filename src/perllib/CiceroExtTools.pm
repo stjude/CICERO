@@ -536,6 +536,7 @@ sub remove_artificial_contigs {
 #     sv_from_SC_mapping
 #
 ##############################################
+# SC_mapped_contigs is the list of contigs aligned to sc sites after removing bad results.
 sub sv_from_SC_mapping { 
 	my $self = shift;
 	my %param = @_;
@@ -565,13 +566,16 @@ sub sv_from_SC_mapping {
 		while( my $hit = $result->next_hit) { #foreach chrom
 			my $tname = $hit->name;	next if($tname ne $sc_chr); # Only look at mappings to the SC chromosome
 			while( my $hsp = $hit->next_hsp) { # for each "high scoring pair"
+				# Number of identical positions
 				my ($n_matches) = $hsp->matches;
 				my ($tstart, $tend, $qstart, $qend, $qstrand) = ($hsp->start('hit'), $hsp->end('hit'), $hsp->start('query'), $hsp->end('query'), $hsp->strand('query'));
 				print STDERR "next if($tstart > $sc_site + 1000 || $tend < $sc_site - 1000)\n" if($debug);
 				# Ensure the mapping hit is within 1000bp of the sc_site
 				next if($tstart > $sc_site + 1000 || $tend < $sc_site - 1000);
+				# Store the array of gap blocks for query and reference.
 				my @tblocks = @{$hsp->gap_blocks('hit')};
 				my @qblocks = @{$hsp->gap_blocks('query')};
+
 				my ($bp1, $bp2, $qbp1, $qbp2);
 				my ($qstart1, $qend1, $tstart1, $tend1);
 				my ($qstart2, $qend2, $tstart2, $tend2);
@@ -589,6 +593,7 @@ sub sv_from_SC_mapping {
 				}
 				my $dup_len = 0;
 				# The contig was mapped to multiple positions in the reference with gaps, so inspect each region
+				# Skips the final block because the comparisons are between the current and next block
 				for(my $i = 0; $i < scalar @tblocks - 1; $i++) {
 					# Get the block start for matches in the reference and the query contig
 					my ($bl, $qbl) = ($tblocks[$i], $qblocks[$i]);
@@ -600,7 +605,8 @@ sub sv_from_SC_mapping {
 					# If the start position of the alignment in the query is < min hit len and the 
 					# length of sequence after the alignment is < min hit len
 					# e.g. if the alignment length is > ($contig_len - 2 * MIN_HIT_LEN)
-					# Then dup len is the strand * length of match - the position of the next block?
+					# Then dup len is the (strand * (start of next block - start of current block) - the length of the block
+					# Basically it is the distance between the two alignment blocks.
 					$dup_len = $qstrand*($qbr->[0] - $qbl->[0]) - $qbl->[1] if($qstart < $self->{MIN_HIT_LEN} && $contig_len - $qend < $self->{MIN_HIT_LEN});
 					print STDERR "ITD ? $dup_len\tqstrand:$qstrand\tclip:$clip\n" if($debug);
 					# If the alignment in the reference is more than 5 bp from the sc_site
@@ -643,7 +649,8 @@ sub sv_from_SC_mapping {
 					repeat	=> 0
 				};
 
-				my $ort2 = -1*$ort; my $clip2 = $ort2*$qstrand;
+				my $ort2 = -1*$ort; 
+				my $clip2 = $ort2*$qstrand;
 				($tstart2, $tend2) = ($clip2 > 0) ? ($tstart, $bp2) : ($bp2, $tend);
 				my $m = {
 					ort	=> $ort2,
@@ -1304,14 +1311,20 @@ sub select_sc_contig {
 			
 			print STDERR "\n$qname\tsc_chr:$sc_chr\ttchr:$tchr\tsc_site: $scSite\tclip: $clip\n" if($debug);
 			while(my $hsp = $hit->next_hsp) {
+				# Number of identical bases
 				my ($n_matches) = $hsp->matches;
+				# Number of mismatched bases
 				my ($n_mis_matches) = $hsp->mismatches;
 				my ($tstart, $tend, $qstart, $qend, $qstrand) = ($hsp->start('hit'), $hsp->end('hit'), $hsp->start('query'), $hsp->end('query'));
+				# If the length of the match is less than MIN_HIT_LEN, skip it.
 				next if($qend - $qstart < $self->{MIN_HIT_LEN});
+				# Number of matches - number of mismatches / alignment length
 				my $identity =  ($n_matches - $n_mis_matches)/($qend - $qstart + 1);
 				#print STDERR "scSite, clip, tchr, tstart, tend, qstart, qend, qstrand, n_matches\n", join("\t", $scSite, $clip, $tchr, $tstart, $tend, $qstart, $qend, $qstrand, $n_matches), "\n" if($debug);
 				next if($qstart < $self->{MIN_HIT_LEN} && $contig_len - $qend < $self->{MIN_HIT_LEN} && $identity > 0.9); # to remove fully mapped contigs
+				# Sum the number of matches over all pairs and all chromosomes
 				$total_length += $n_matches;
+				# Trim 'chr' prefixes before comparison
 				my $l_sc_chr = $sc_chr;
 				$l_sc_chr =~ s/^chr//;
 				my $l_tchr = $tchr; 
@@ -1323,69 +1336,97 @@ sub select_sc_contig {
 				my @qblocks = @{$hsp->gap_blocks('query')};
 				my $trim_len = 0;
 				if($clip > 0 && $tend > $scSite){
+					# Loop over each block in the alignment, starting at the end.
 					for(my $i=$#tblocks; $i>=0; $i--) {
+						# Get the block in the reference 
 						my $bl = $tblocks[$i];
 						print STDERR join("\t", "right clipped", $n_matches, $qstart, $qend, $bl->[0], $bl->[1], $scSite), "\n" if($debug);
+						# If the block start position is past the sc site
+						# Subtract the block length from the number of matches
+						# And add it to the trimmed length
 						if($bl->[0] > $scSite){
 							$n_matches -= $bl->[1];
 							$trim_len += $bl->[1];
 							next;
 						}
+						# End position of block minus the sc site location
+						# Number of bases between the end and the sc site
 						my $over_hang = ($bl->[0] + $bl->[1] - $scSite);
+						# The block in the query
 						my $qbl = $qblocks[$i];
+						# If on the + strand, trim from the end
 						if($hsp->strand('query') == 1){
+							# Adjust the end of the query match to the end of this block, minus the number of bases past the sc site
 							$qend = $qbl->[0] + $qbl->[1] - $over_hang;
 						}
-						else{
+						else{ # If on the - strand, trim from the beginning
+							# Adjust the start of the query match to the beginning of the block, minus the length of the block, plus the number of bases past the sc site
 							$qstart = $qbl->[0] - $qbl->[1] + $over_hang;
 						}
 						print STDERR "n_matches: $n_matches\tblk: ", $qbl->[1], "\n" if($debug);
+						# Remove the overhang length from the number of matches
 						$n_matches -= $over_hang;
+						# Add the overhang to the number of bases trimmed
 						$trim_len += $over_hang;
 						print STDERR "right clipped n_matches: $n_matches\n" if($debug);
 						last;
 					}
+					# Set the end position in the reference to the sc site
 					$tend = $scSite; 
 				}
 
 				if($clip < 0 && $tstart < $scSite){ # left clipped; to trim the micro homolog
+					# Loop over each block in the alignment.
 					for(my $i=0; $i<=$#tblocks; $i++) {
+						# Get the block in the reference and query
 						my ($bl, $qbl) = ($tblocks[$i], $qblocks[$i]);
 						print STDERR join("\t", "left-clipped", "nmatches: $n_matches", "qstart: $qstart", "qend: $qend", "qbl->[0]:", $qbl->[0],
 						"qbl->[1]: ", $qbl->[1], "bl->[0]: ", $bl->[0], "bl->[1]: ", $bl->[1], "scSite: ", $scSite, $qseq), "\n" if($debug);
+						# If the block end position is before the sc site
+						# Subtract the block length from the number of matches
+						# And add it to the trimmed length						
 						if($bl->[0] +  $bl->[1] < $scSite){
 							$n_matches -= $bl->[1];
 							$trim_len += $bl->[1];
 							next;
 						}
+						# Number of bases between the start position and the sc site
 						my $over_hang = $scSite - $bl->[0];
 						print STDERR "over_hang: $over_hang\n" if($debug);
+						# Remove the overhang length from the number of matches
 						$n_matches -= $over_hang;
+						# Add the overhang to the number of bases trimmed
 						$trim_len += $over_hang;
 						print STDERR "n_matches: $n_matches\tblk: ", $qbl->[1], "\t", $bl->[1], , $trim_len, "\n" if($debug);
 						print STDERR "left clipped n_matches: $n_matches\n" if($debug);
 						last;
 					}
+					# Set the start position in the reference to the sc site
 					$tstart = $scSite; 
 				}
 
 				print STDERR "........ start:",$tstart,"\tend:", $tend, "\tqstart:", $qstart,"\t", "\tqend:", $qend, "\n" if($debug); 
+				# If the alignment length is less than MIN_HIT_LEN
+				# Or the remaining number of matched bases after trimming is less than MIN_HIT_LEN
 				next if($qend - $qstart < $self->{MIN_HIT_LEN} || $n_matches < $self->{MIN_HIT_LEN});
 
-				# if gap is larger than 50bp, then not sc contig
+				# if distance in the reference alignment is more than 50bp from the soft clip site, then not sc contig
+				# Or if the start in the reference is less than MIN_HIT_LEN from the soft clip site, then not sc contig
 				next if ($clip > 0 && ($scSite - $tend > 50 || $tstart > $scSite - $self->{MIN_HIT_LEN})); 
 				#print STDERR "next if ($clip < 0 && ($tstart - $scSite > 50 || $tend < $scSite + ", $self->{MIN_HIT_LEN}, "))\n";
 				next if ($clip < 0 && ($tstart - $scSite > 50 || $tend < $scSite + $self->{MIN_HIT_LEN}));
 				my $qseq = $contig_seqs->{$qname};
 
-					if($clip * $hsp->strand('query') > 0){
-						$qend = $hsp->start('query') + $n_matches;
-					}
-					else{
-						$qstart = $hsp->end('query') - $n_matches;
-					}
+				if($clip * $hsp->strand('query') > 0){
+					$qend = $hsp->start('query') + $n_matches;
+				}
+				else{
+					$qstart = $hsp->end('query') - $n_matches;
+				}
+				# The percentage of the alignment that is a match
 				my $percent = $n_matches / ($qend - $qstart + 1);
 				print STDERR "start:",$tstart,"\tend:", $tend, "\tqstart:", $qstart,"\t", "\tqend:", $qend, "\tpercent: ", $percent,"\n" if($debug); 
+				# If the match is more than 80%
 				if($percent >= 0.8){
 				   my $qstrand = $hsp->strand('query');
 				   my $ort = ($qstart + $qend > $hit->query_length)? -1 : 1; # right part is in the sc region
@@ -1395,15 +1436,19 @@ sub select_sc_contig {
 				# to test low complexity
 				my ($over_hang_seq, $junction_seq);
 				
+				# Get the sequence for the overhang portion of the alignment
 				$over_hang_seq = substr $qseq, 0, $qstart + 1 if($ort < 0);
 				$over_hang_seq = substr $qseq, $qend - 1 if($ort > 0);
 				my $over_hang_len = length($over_hang_seq);
 		
+				# If the overhang sequence is longer than 25bp
+				# Take 25bp before the start or after the end depending on orientation
 				if(length($over_hang_seq) > 25){
 					$junction_seq = substr $qseq, $qstart - 24, 25 if($ort < 0);
 					$junction_seq = substr $qseq, $qend - 1, 25 if($ort > 0);
 				}
 				else{
+					# If less than 25bp, use the overhang sequence as the junciton sequence
 					$junction_seq = $over_hang_seq;
 				}
 				print STDERR "over_hang_seq: $over_hang_seq\njunction_seq: $junction_seq\nlow complexity? ", low_complexity($junction_seq), "\n" if($debug);
@@ -1411,7 +1456,9 @@ sub select_sc_contig {
 				$qpos = ($ort > 0)? $qend : $qstart;
 				$tpos = ($clip > 0) ? $tend: $tstart;
 
-				 $pm = {
+				# Store the partial mapping
+				# Check low complexity: Is > 80% of the sequence a single nucleotide character? Is > 60% of the sequence a run of a single character?
+				$pm = {
 					    ort => $ort,
 					    tpos => $tpos,
 					    qpos => $qpos,
@@ -1437,6 +1484,7 @@ sub select_sc_contig {
 			$hit->rewind;
 		}
 		next unless(exists($sc_pms{$qname}));
+		# compute repetitive fraction as 1 - fraction of sequence that is a match
 		$sc_pms{$qname}->{repeat} = 1 - $sc_pms{$qname}->{matches}/$total_length;
 	}
 	return \%sc_pms;
