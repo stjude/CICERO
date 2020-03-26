@@ -215,6 +215,7 @@ parallel $PARALLEL_ARG < cmds-01.sh
 shopt -s nullglob
 cover_files=($CICERO_DATADIR/$SAMPLE/*.cover)
 cover_file_count=${#cover_files[@]}
+softclip_count=$(wc -l  $CICERO_DATADIR/$SAMPLE/*.cover | tail -n 1 | awk '{print $1}')
 geneinfo=($CICERO_DATADIR/$SAMPLE/*.gene_info.txt)
 geneinfo_count=${#geneinfo[@]}
 
@@ -232,12 +233,18 @@ do
    fi
 done
 
+sc_cutoff_arg=
+if [ $softclip_count -gt 200000 ]
+then
+   sc_cutoff_arg="-m 5"
+fi
+
 ########################
 ### STEP 02 - Cicero ###
 ########################
 echo "Step 02 - $(date +'%Y.%m.%d %H:%M:%S') - Cicero"
 {
-prepareCiceroInput.pl -o $CICERO_DATADIR/$SAMPLE -genome $GENOME -p $SAMPLE -l $LEN -s 250 -f $CICERO_DATADIR/$SAMPLE/${SAMPLE}.gene_info.txt
+prepareCiceroInput.pl -o $CICERO_DATADIR/$SAMPLE -genome $GENOME -p $SAMPLE -l $LEN -s 250 -f $CICERO_DATADIR/$SAMPLE/${SAMPLE}.gene_info.txt $sc_cutoff_arg
 for SCFILE in $CICERO_DATADIR/$SAMPLE/$SAMPLE.*.SC; do
     echo "Cicero.pl -i $BAMFILE -o $(echo $SCFILE | sed 's/\.SC//g') -l $LEN -genome $GENOME -f $SCFILE"
 done > cmds-02.sh

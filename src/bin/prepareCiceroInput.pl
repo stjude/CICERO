@@ -25,6 +25,7 @@ my $optionOK = GetOptions(
 	'l=i'			=> \$read_len,
 	's|split_every=i'	=> \$split_every_n,
 	'ratio=f'		=> \$expression_ratio_cutoff,
+	'm|min_sclip_reads=i'		=> \$min_sclip_reads,
 	'f|gene_info_file=s' => \$gene_info_file,
 	'h|help|?'		=> \$help,
 	'man'			=> \$man,
