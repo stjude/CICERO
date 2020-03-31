@@ -22,9 +22,11 @@ SAMPLE=""
 TARGET="TRANSCRIPTOME"
 NCORES=
 OUTDIR=$(pwd)
+THRESHOLD=200000
+SC_CUTOFF=3
 
 usage() {
-    echo "Cicero [-h] [-n ncores] -b bamfile -g genome -r refdir [-j junctions] [-o outdir]"
+    echo "Cicero [-h] [-n ncores] -b bamfile -g genome -r refdir [-j junctions] [-o outdir] [-t threshold] [-s sc_cutoff]"
 }
 
 
@@ -40,6 +42,8 @@ while [ ! -z "$1" ]; do
         -r) REFDIR=$2; shift;;
         -g) GENOME=$2; shift;;
         -o) OUTDIR=$2; shift;;
+        -t) THRESHOLD=$2; shift;;
+        -s) SC_CUTOFF=$2; shift;;
     esac
     shift
 done
@@ -234,9 +238,12 @@ do
 done
 
 sc_cutoff_arg=
-if [ $softclip_count -gt 200000 ]
+if [ $THRESHOLD -gt 0 ]
 then
-   sc_cutoff_arg="-m 5"
+  if [ $softclip_count -gt $THRESHOLD ]
+  then
+     sc_cutoff_arg="-m $SC_CUTOFF"
+  fi
 fi
 
 ########################
