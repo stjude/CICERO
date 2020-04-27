@@ -114,10 +114,12 @@ fi
 cluster_arg=
 if [ $SC_SHIFT ] 
 then
+    echo "Setting SC_SHIFT=$SC_SHIFT"
     cluster_arg="-c $SC_SHIFT"
 fi
 if [ $OPTIMIZE -eq 1 ]
 then
+    echo "Optimize: setting SC_SHIFT=10, SC_CUTOFF=3, THRESHOLD=200000"
     SC_SHIFT=10
     SC_CUTOFF=3
     THRESHOLD=200000
