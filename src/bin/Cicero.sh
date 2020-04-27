@@ -24,9 +24,17 @@ NCORES=
 OUTDIR=$(pwd)
 THRESHOLD=200000
 SC_CUTOFF=3
+SC_SHIFT=
+OPTIMIZE=
 
 usage() {
-    echo "Cicero [-h] [-n ncores] -b bamfile -g genome -r refdir [-j junctions] [-o outdir] [-t threshold] [-s sc_cutoff]"
+    echo "Cicero.sh [-h] [-n ncores] -b bamfile -g genome -r refdir [-j junctions] [-o outdir] [-t threshold] [-s sc_cutoff] [-c sc_shift] [-p]"
+    echo "-p - optimize CICERO, sets sc_cutoff=3 and sc_shift=10"
+    echo "-s <num> - minimum number of soft clip support required [default=2]"
+    echo "-t <num> - threshold for enabling increased soft clip cutoff [default=200000]"
+    echo "-c <num> - clustering distance for grouping similar sites [default=3]"
+    echo "-j <file> - junctions file from RNApeg"
+    echo "-n <num> - number of cores to utilize with GNU parallel"
 }
 
 
@@ -44,6 +52,8 @@ while [ ! -z "$1" ]; do
         -o) OUTDIR=$2; shift;;
         -t) THRESHOLD=$2; shift;;
         -s) SC_CUTOFF=$2; shift;;
+        -c) SC_SHIFT=$2; shift;;
+        -p) OPTIMIZE=1;
     esac
     shift
 done
@@ -100,6 +110,21 @@ then
     >&2 echo "ERROR: BLAT required (gfServer)"
     exit 1
 fi
+
+cluster_arg=
+if [ $SC_SHIFT ] 
+then
+    cluster_arg="-c $SC_SHIFT"
+fi
+if [ $OPTIMIZE -eq 1 ]
+then
+    SC_SHIFT=10
+    SC_CUTOFF=3
+    THRESHOLD=200000
+    cluster_arg="-c $SC_SHIFT"
+fi
+
+
 # Set inputs
 mkdir -p $OUTDIR
 cd $OUTDIR
@@ -210,7 +235,7 @@ mkdir -p $CICERO_RUNDIR
 echo "Step 01 - $(date +'%Y.%m.%d %H:%M:%S') - ExtractSClips"
 {
 LEN=$(getReadLength.sh $BAMFILE)
-get_sc_cmds.pl -i $BAMFILE -genome $GENOME -o $CICERO_DATADIR/$SAMPLE -l $LEN > cmds-01.sh
+get_sc_cmds.pl -i $BAMFILE -genome $GENOME -o $CICERO_DATADIR/$SAMPLE -l $LEN $cluster_arg > cmds-01.sh
 echo "get_geneInfo.pl -i $BAMFILE -o $CICERO_DATADIR/$SAMPLE -l $LEN -genome $GENOME -s $SAMPLE" >> cmds-01.sh
 parallel $PARALLEL_ARG < cmds-01.sh
 } 1> 01_ExtractSClips.out 2> 01_ExtractSClips.err
@@ -253,7 +278,7 @@ echo "Step 02 - $(date +'%Y.%m.%d %H:%M:%S') - Cicero"
 {
 prepareCiceroInput.pl -o $CICERO_DATADIR/$SAMPLE -genome $GENOME -p $SAMPLE -l $LEN -s 250 -f $CICERO_DATADIR/$SAMPLE/${SAMPLE}.gene_info.txt $sc_cutoff_arg
 for SCFILE in $CICERO_DATADIR/$SAMPLE/$SAMPLE.*.SC; do
-    echo "Cicero.pl -i $BAMFILE -o $(echo $SCFILE | sed 's/\.SC//g') -l $LEN -genome $GENOME -f $SCFILE"
+    echo "Cicero.pl -i $BAMFILE -o $(echo $SCFILE | sed 's/\.SC//g') -l $LEN -genome $GENOME -f $SCFILE $cluster_arg"
 done > cmds-02.sh
 parallel $PARALLEL_ARG < cmds-02.sh
 } 1> 02_Cicero.out 2> 02_Cicero.err
@@ -282,8 +307,9 @@ fi
 ##########################
 echo "Step 04 - $(date +'%Y.%m.%d %H:%M:%S') - Annotate"
 {
-annotate.pl -i $BAMFILE -o $CICERO_DATADIR/$SAMPLE -genome $GENOME -l $LEN -s $SAMPLE -f $CICERO_DATADIR/$SAMPLE/${SAMPLE}.gene_info.txt -j $JUNCTIONS
-annotate.pl -i $BAMFILE -o $CICERO_DATADIR/$SAMPLE -genome $GENOME -l $LEN -s $SAMPLE -f $CICERO_DATADIR/$SAMPLE/${SAMPLE}.gene_info.txt -internal # -j $JUNCTIONS
+annotate.pl -i $BAMFILE -o $CICERO_DATADIR/$SAMPLE -genome $GENOME -l $LEN -s $SAMPLE -f $CICERO_DATADIR/$SAMPLE/${SAMPLE}.gene_info.txt -j $JUNCTIONS $cluster_arg
+mv $CICERO_DATADIR/$SAMPLE/blacklist.new.txt $CICERO_DATADIR/$SAMPLE/blacklist.new.fusions.txt
+annotate.pl -i $BAMFILE -o $CICERO_DATADIR/$SAMPLE -genome $GENOME -l $LEN -s $SAMPLE -f $CICERO_DATADIR/$SAMPLE/${SAMPLE}.gene_info.txt -internal $cluster_arg # -j $JUNCTIONS
 cat $CICERO_DATADIR/$SAMPLE/annotated.fusion.txt $CICERO_DATADIR/$SAMPLE/annotated.internal.txt > $CICERO_DATADIR/$SAMPLE/annotated.all.txt
 } 1> 04_Annotate.out 2> 04_Annotate.err
 

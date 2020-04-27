@@ -525,7 +525,7 @@ sub get_sclip_reads {
 	my $mt_end0=0;
 	my $max_sclip_len = 0;
 	$min_len_cutoff = 1 unless $min_len_cutoff;
-	$sc_shift = 3 unless $sc_shift;
+	$sc_shift = 10 unless $sc_shift;
 	my $range = $chr;
 	my ($start, $end) = ($sc_site - $sc_shift, $sc_site + $sc_shift);
 	$range = $chr . ":" . $start . "-" . $end if($start && $end);
@@ -673,7 +673,7 @@ sub prepare_reads_file{
 		print STDERR "\n=== prepare_reads_file ===\n$out_file\n" if($debug);
 		$min_sclip_len = 20 unless(defined $min_sclip_len);
 		$output_mate = 1 unless(defined $output_mate);
-		$sc_shift = 3 unless $sc_shift;
+		$sc_shift = 10 unless $sc_shift;
 		print STDERR "to get soft-clip reads $chr:$sc_site, $clip, $min_sclip_len ...\n" if($debug);
 		my $sc = get_sclip_reads(-SAM => $sam,
 					   -CHR =>$chr, 

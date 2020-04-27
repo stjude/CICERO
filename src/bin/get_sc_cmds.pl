@@ -24,6 +24,7 @@ my $prefix = '';
 my $bam_file;
 my $genome; 
 my $read_length = 100;
+my $sc_shift = 3;
 my $output_dir;
 my $excludes_file;
 my $optionOK = GetOptions(
@@ -33,6 +34,7 @@ my $optionOK = GetOptions(
 	'i|bam_d=s'	=> \$bam_file,
 	'genome=s'	=> \$genome,
 	'l|read_len=i'	=> \$read_length,
+	'c|cluster=i'   => \$sc_shift,
 	'man'			=> \$man,
 	'usage'			=> \$usage,
 	'v|version'		=> \$version,
@@ -93,7 +95,7 @@ while (my $chr = <$chrFile>){
 				# beginning of this region.
 				my $region_end = $start - 1;
 				if ($s < $region_end){
-					my $cmd = "extract_range.pl --ref_genome $genome_file -i $bam_file -o $output_dir -r $chr:$s-$region_end -l $read_length -m 2 -min_sc_len 3";
+					my $cmd = "extract_range.pl --ref_genome $genome_file -i $bam_file -o $output_dir -r $chr:$s-$region_end -l $read_length -m 2 -min_sc_len 3 -c $sc_shift";
 					print $cmd."\n";
 				}
 				# The new current start is the start of this region.
@@ -103,12 +105,12 @@ while (my $chr = <$chrFile>){
 		# If our last excluded region didn't extend to the end
 		# of the chromosome, add a region. 
 		if ($s < $len){
- 			my $cmd = "extract_range.pl --ref_genome $genome_file -i $bam_file -o $output_dir -r $chr:$s-$len -l $read_length -m 2 -min_sc_len 3";
+ 			my $cmd = "extract_range.pl --ref_genome $genome_file -i $bam_file -o $output_dir -r $chr:$s-$len -l $read_length -m 2 -min_sc_len 3 -c $sc_shift";
 			print $cmd."\n";
 		} 
 	}
 	else{
-		my $cmd = "extract_range.pl --ref_genome $genome_file -i $bam_file -o $output_dir -r $chr -l $read_length -m 2 -min_sc_len 3";
+		my $cmd = "extract_range.pl --ref_genome $genome_file -i $bam_file -o $output_dir -r $chr -l $read_length -m 2 -min_sc_len 3 -c $sc_shift";
 		print $cmd."\n";
 	}
 }

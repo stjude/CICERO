@@ -48,6 +48,7 @@ my ($input_bam, $read_len, $sample);
 my ($all_output, $internal, $DNA) = (0, 0, 0);
 my ($min_hit_len, $max_num_hits, $min_fusion_distance);
 $min_hit_len = 25;
+my $sc_shift = 10; 
 my ($blacklist_gene_file, $blacklist_fusion_file, $complex_region_file, $excluded_chroms, $gold_gene_file);
 my ( $help, $man, $version, $usage );
 
@@ -69,6 +70,7 @@ my $optionOK = GetOptions(
 	'blatport=s'		=> \$blat_port,
 	'min_hit_len=i'		=> \$min_hit_len,
 	'max_num_hits=i'	=> \$max_num_hits,
+	'c|cluster=i'   => \$sc_shift,
 	'paired!'		=> \$paired,
 	'rmdup!'		=> \$rmdup,
 	'l|read_len=i'	=> \$read_len,
@@ -1133,7 +1135,7 @@ sub quantification {
 		   	-PAIRED => $paired,
 		   	-RMDUP => $rmdup,
 		   	-MIN_SC => 1,
-		   	-SC_SHIFT => 10,
+		   	-SC_SHIFT => $sc_shift,
 			-MIN_SC_LEN => 3,
 			-GAP_SIZE => $gap_size,
 			-FIXSC => $fixSC1,
@@ -1152,7 +1154,7 @@ sub quantification {
 		   	-PAIRED => $paired,
 		   	-RMDUP => $rmdup,
 		   	-MIN_SC => 1,
-		   	-SC_SHIFT => 10,
+		   	-SC_SHIFT => $sc_shift,
 			-MIN_SC_LEN => 3,
 			-GAP_SIZE => $gap_size,
 			-FIXSC => $fixSC2,
