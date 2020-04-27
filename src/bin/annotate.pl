@@ -295,6 +295,7 @@ my %contig_recurrance = ();
 my %genepairs = (); 
 my %breakpoint_sites = (); 
 open(my $UNF, "$unfiltered_file");
+print STDERR "Reading unfiltered file\n"; 
 while(my $line = <$UNF>){
 	chomp($line);
 	my @fields = split("\t", $line);
@@ -387,6 +388,7 @@ while(my $line = <$UNF>){
 
 	# Deteremine the variant type: CTX, Internal_inv, Interal_splicing, Internal_dup, ITX, read_through, DEL, INS
 	my $type = get_type($first_bp, $second_bp, $same_gene);
+	print STDERR "type: $type\n" if ($debug); 
 	# If we're not processing combined results (-all) and this is an Internal event
 	if(!$all_output && $type =~ m/Internal/){
 		if(%gold_genes){
@@ -424,6 +426,7 @@ while(my $line = <$UNF>){
 close($UNF);
 
 if($junction_file){
+  print STDERR "Reading junction file\n"; 
   open(my $JUNC, "$junction_file");
   while(my $line = <$JUNC>){
 	chomp($line);
@@ -525,6 +528,7 @@ foreach my $g (sort { $gene_recurrance{$b} <=> $gene_recurrance{$a} } keys %gene
 	last if($gene_recurrance{$g} < $max_num_hits*10);
 	next if($g eq "NA");
 	$blacklist{$g} = 1;
+	print STDERR "Adding $g to blacklist with recurrance: ".$gene_recurrance{$g}."\n"; 
 	print $NBLK join("\t",$g, $gene_recurrance{$g}),"\n";
 }
 close($NBLK);
@@ -535,6 +539,7 @@ my $annotation_dir = tempdir(DIR => "$out_dir/tmp_anno");
 `mkdir -p $annotation_dir`;
 print STDERR "Annotation Dir: $annotation_dir\n" if($debug); 
 
+print STDERR "Reading cover files\n"; 
 # Loop over the soft clip files again
 my @cover_files = <$out_dir/*.cover>;
 foreach my $fn (@cover_files) {
@@ -569,6 +574,7 @@ foreach my $fn (@cover_files) {
 	close($IN);
 }
 
+print STDERR "Processing raw SVs\n"; 
 my @annotated_SVs;
 foreach my $sv (@raw_SVs){
 	next if($sv->{type} eq "Internal_splicing");
@@ -606,9 +612,11 @@ foreach my $sv (@raw_SVs){
 		   );
  	my $end_run = time();
 	my $run_time = $end_run - $start_run;
+	print STDERR "Quantification run time: $run_time\n" if($debug); 
 
 	foreach my $quantified_SV (@quantified_SVs){
 		my $annotated_SV = annotate($gm, $quantified_SV) if($quantified_SV);
+		print STDERR "annotated_SV: $annotated_SV\n" if($debug); 
 		next unless($annotated_SV);
 		my ($first_bp, $second_bp, $type) = ($annotated_SV->{first_bp}, $annotated_SV->{second_bp}, $annotated_SV->{type});
 		if(!$all_output && $type =~ m/Internal/){
@@ -630,9 +638,19 @@ my @uniq_SVs;
 foreach my $sv (@annotated_SVs){
 	print STDERR "xxx\n" if(abs($sv->{second_bp}->{tpos} - 170818803)<10 || abs($sv->{first_bp}->{tpos} - 170818803)<10);
 	my ($bp1, $bp2, $qseq) = ($sv->{first_bp}, $sv->{second_bp}, $sv->{junc_seq});
-	next if(exists($blacklist{$bp1->{gene}}) || exists($blacklist{$bp2->{gene}}));
-	push @uniq_SVs, $sv if($sv && ! is_dup_SV(\@uniq_SVs, $sv));
+	if(exists($blacklist{$bp1->{gene}}) || exists($blacklist{$bp2->{gene}})){
+		print STDERR "Removing duplicate: gene1: ".$bp1->{gene}." gene2: ".$bp2->{gene}."\n";
+		next;
+	}
+	if($sv && ! is_dup_SV(\@uniq_SVs, $sv)){
+		push @uniq_SVs, $sv;
+	}
+	else{
+		print STDERR "Duplicate SV: gene1: ".$bp1->{gene}." gene2: ".$bp2->{gene}."\n";
+	}
 }
+
+print "unique_SVs ", scalar @uniq_SVs, "\n"; 
 
 open(hFo, ">$out_file");
 print hFo $out_header, "\n";
