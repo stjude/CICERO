@@ -309,9 +309,11 @@ fi
 ##########################
 echo "Step 04 - $(date +'%Y.%m.%d %H:%M:%S') - Annotate"
 {
-annotate.pl -i $BAMFILE -o $CICERO_DATADIR/$SAMPLE -genome $GENOME -l $LEN -s $SAMPLE -f $CICERO_DATADIR/$SAMPLE/${SAMPLE}.gene_info.txt -j $JUNCTIONS $cluster_arg
+echo "annotate.pl -i $BAMFILE -o $CICERO_DATADIR/$SAMPLE -genome $GENOME -l $LEN -s $SAMPLE -f $CICERO_DATADIR/$SAMPLE/${SAMPLE}.gene_info.txt -j $JUNCTIONS $cluster_arg" > cmds-04.sh
+echo "annotate.pl -i $BAMFILE -o $CICERO_DATADIR/$SAMPLE -genome $GENOME -l $LEN -s $SAMPLE -f $CICERO_DATADIR/$SAMPLE/${SAMPLE}.gene_info.txt -internal $cluster_arg" >> cmds-04.sh
+parallel $PARALLEL_ARG < cmds-04.sh
+
 mv $CICERO_DATADIR/$SAMPLE/blacklist.new.txt $CICERO_DATADIR/$SAMPLE/blacklist.new.fusions.txt
-annotate.pl -i $BAMFILE -o $CICERO_DATADIR/$SAMPLE -genome $GENOME -l $LEN -s $SAMPLE -f $CICERO_DATADIR/$SAMPLE/${SAMPLE}.gene_info.txt -internal $cluster_arg # -j $JUNCTIONS
 cat $CICERO_DATADIR/$SAMPLE/annotated.fusion.txt $CICERO_DATADIR/$SAMPLE/annotated.internal.txt > $CICERO_DATADIR/$SAMPLE/annotated.all.txt
 } 1> 04_Annotate.out 2> 04_Annotate.err
 
@@ -347,5 +349,5 @@ fi
 #############################
 ### Blow away tmp configs ###
 #############################
-rm -rf $SJ_CONFIGS
+#rm -rf $SJ_CONFIGS
 
