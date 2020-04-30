@@ -731,17 +731,17 @@ sub prepare_reads_file{
 		}
 
 		if($output_mate){
-		print STDERR "to get mate reads $chr:$mt_start-$mt_end ...\n" if($debug);
-		my @mate_reads;
-		@mate_reads = get_mate_reads(-SAM => $sam,
-					   -CHR =>$chr, 
-					   -START => $mt_start, 
-					   -END => $mt_end, 
- 					   -READS => \@reads,
-				) if($paired && scalar @reads < 2000);
-		
-		print STDERR "number of mate reads: ",  scalar @mate_reads, "\n" if($debug);
-		push @reads, @mate_reads;
+			print STDERR "to get mate reads $chr:$mt_start-$mt_end ...\n" if($debug);
+			my @mate_reads;
+			@mate_reads = get_mate_reads(-SAM => $sam,
+						-CHR =>$chr, 
+						-START => $mt_start, 
+						-END => $mt_end, 
+						-READS => \@reads,
+					) if($paired && scalar @reads < 2000);
+			
+			print STDERR "number of mate reads: ",  scalar @mate_reads, "\n" if($debug);
+			push @reads, @mate_reads;
 		}
 		print STDERR "print_out(-READS=>\@reads, -OUT_FILE=>$out_file, -FORMAT=>'fa')\n" if($debug);
 		print_out(-READS=>\@reads, -OUT_FILE=>$out_file, -FORMAT=>'fa', -RMDUP => $rmdup);
@@ -759,8 +759,6 @@ sub print_out{
 	$rand_cutoff = 2000/$nr if($nr > 2000);
 
 	open(my $fa_fh, ">$out_file");
-	#my $out_file_Q = $out_file.".qual";
-	#open(my $qual_fh, ">$out_file_Q");
 	my (%end1_reads, %end2_reads);
     srand(100001);
 	foreach my $r (@reads){
@@ -797,10 +795,8 @@ sub print_out{
 		}
 		$r_ort = ($r->{sam_flag} & 0x0040)? 'f': 'r'; # read orientation
 		print $fa_fh ">", $r->{name}, ".", $r_ort,"\n", $seq, "\n" if($format eq 'fa');
-		#print $qual_fh ">", $r->{name}, ".", $r_ort,"\n", join(" ", @qual), "\n";
 	}
 	close($fa_fh); 
-	#close($qual_fh);
 }
 
 my $start_dir;
