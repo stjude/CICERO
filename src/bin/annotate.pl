@@ -523,6 +523,9 @@ if($junction_file){
 }
 
 my $New_blacklist_file = "$out_dir/blacklist.new.txt";
+if ($internal){
+	$New_blacklist_file = "$out_dir/blacklist.new.internal.txt";
+}
 open(my $NBLK, ">$New_blacklist_file");
 foreach my $g (sort { $gene_recurrance{$b} <=> $gene_recurrance{$a} } keys %gene_recurrance) {
 	last if($gene_recurrance{$g} < $max_num_hits*10);
