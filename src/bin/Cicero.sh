@@ -290,8 +290,8 @@ parallel $PARALLEL_ARG < cmds-02.sh
 #########################
 echo "Step 03 - $(date +'%Y.%m.%d %H:%M:%S') - Combine"
 {
-cat $CICERO_DATADIR/$SAMPLE/*/unfiltered.fusion.txt > $CICERO_DATADIR/$SAMPLE/unfiltered.fusion.txt
-cat $CICERO_DATADIR/$SAMPLE/*/unfiltered.internal.txt > $CICERO_DATADIR/$SAMPLE/unfiltered.internal.txt
+cat $CICERO_DATADIR/$SAMPLE/*/unfiltered.fusion.txt | sort -V -k 9,9 -k 10,10n -k 11,11n > $CICERO_DATADIR/$SAMPLE/unfiltered.fusion.txt
+cat $CICERO_DATADIR/$SAMPLE/*/unfiltered.internal.txt | sort -V -k 9,9 -k 10,10n -k 11,11n > $CICERO_DATADIR/$SAMPLE/unfiltered.internal.txt
 } 1> 03_Combine.out 2> 03_Combine.err
 
 ## QC
