@@ -1207,16 +1207,23 @@ sub quantification {
 
 	my $fa_file = "$anno_dir/reads.$chr1.$pos1.$chr2.$pos2.fa";
 	if($fa_file1 eq $fa_file2){
-		`cat $fa_file1 > $fa_file`; 
-		`cat $fa_file1.qual > $fa_file.qual` if(-s "$fa_file1.qual");
+		#`cat $fa_file1 > $fa_file`; 
+		$fa_file = $fa_file1; 
+		#`cat $fa_file1.qual > $fa_file.qual` if(-s "$fa_file1.qual");
 	}
 	else {
 		unlink $fa_file if(-s $fa_file);
-		unlink "$fa_file.qual" if(-s "$fa_file.qual");
-		`cat $fa_file1 >> $fa_file` if(-f $fa_file1 && -s $fa_file1);
-		`cat $fa_file2 >> $fa_file` if(-f $fa_file2 && -s $fa_file2);
-		`cat $fa_file1.qual >> $fa_file.qual` if(-f "$fa_file1.qual" && -s "$fa_file1.qual");
-		`cat $fa_file2.qual >> $fa_file.qual` if(-f "$fa_file2.qual" && -s "$fa_file2.qual");
+		#unlink "$fa_file.qual" if(-s "$fa_file.qual");
+		my $arg = ""; 
+		$arg .= " $fa_file1 " if (-f $fa_file1 && -s $fa_file1);
+		$arg .= " $fa_file2 " if (-f $fa_file2 && -s $fa_file2);
+		if ($arg ne ""){
+			`cat $arg >> $fa_file`; 
+		}
+		#`cat $fa_file1 >> $fa_file` if(-f $fa_file1 && -s $fa_file1);
+		#`cat $fa_file2 >> $fa_file` if(-f $fa_file2 && -s $fa_file2);
+		#`cat $fa_file1.qual >> $fa_file.qual` if(-f "$fa_file1.qual" && -s "$fa_file1.qual");
+		#`cat $fa_file2.qual >> $fa_file.qual` if(-f "$fa_file2.qual" && -s "$fa_file2.qual");
 	}
 	print STDERR "to do assembly ...\n" if($debug); 
 	my($contig_file, $sclip_count, $contig_reads) = $assembler->run($fa_file); 
