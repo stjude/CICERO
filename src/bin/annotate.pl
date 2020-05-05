@@ -302,8 +302,26 @@ while(my $line = <$UNF>){
 	my ($gene1, $gene2) = ($fields[1], $fields[2]); 
 	my $cutoff = $fields[4];
 	my $qseq = $fields[17];
-	$gene1 = join(":", $fields[8], $fields[5]) if($gene1 eq "NA");	
-	$gene2 = join(":", $fields[19], $fields[6]) if($gene2 eq "NA");	
+
+	if($gene1 eq "NA"){
+			my $crA = in_complex_region($fields[8], $fields[5]);
+			if($crA){
+					$gene1 = $crA;
+			}
+			else{
+					$gene1 = join(":", $fields[8], $fields[5]);
+			}
+	}
+	if($gene2 eq "NA"){
+			my $crB = in_complex_region($fields[19], $fields[6]);
+			if($crB){
+					$gene2 = $crB;
+			}
+			else{
+					$gene2 = join(":", $fields[19], $fields[6]);
+			}
+	}
+
 	my @genes1 = split(/,|\|/, $gene1);
 	my @genes2 = split(/,|\|/, $gene2);
 	my $bad_gene = 0;
@@ -386,7 +404,7 @@ while(my $line = <$UNF>){
 	unless($seq_ids[0] =~ m/chr/) {$first_bp->{tname} =~ s/chr//; $second_bp->{tname} =~ s/chr//;}
 	next if(!$internal && is_bad_fusion($first_bp->{tname}, $first_bp->{tpos}, $second_bp->{tname}, $second_bp->{tpos}));
 
-	# Deteremine the variant type: CTX, Internal_inv, Interal_splicing, Internal_dup, ITX, read_through, DEL, INS
+	# Determine the variant type: CTX, Internal_inv, Interal_splicing, Internal_dup, ITX, read_through, DEL, INS
 	my $type = get_type($first_bp, $second_bp, $same_gene);
 	print STDERR "type: $type\n" if ($debug); 
 	# If we're not processing combined results (-all) and this is an Internal event
@@ -517,7 +535,9 @@ if($junction_file){
 		second_bp => $second_bp,
 		type => "Junction",
 		};
-	push @raw_SVs, $tmp_SV if($tmp_SV && ! is_dup_raw_SV(\@raw_SVs, $tmp_SV));
+	if($tmp_SV && ! is_dup_raw_SV(\@raw_SVs, $tmp_SV)){
+		push @raw_SVs, $tmp_SV;
+	}
   }
   close($JUNC);
 }
