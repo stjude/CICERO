@@ -69,6 +69,7 @@ limit_chrom_cache
 limit_transcript_cache
 cm
 cache_whole_chrom
+unique_refflat_accessions
 		  );
 
 sub new {
@@ -102,6 +103,7 @@ sub parse {
 
   my $rf = new RefFlatFile();
   $rf->canonical_references_only(1);
+  $rf->unique_refflat_accessions(1) if $self->unique_refflat_accessions();
 
   my @opts;
   push @opts, ("-skip-nr" => 1) unless $self->infer_aa();
@@ -211,7 +213,9 @@ sub genome_map {
 #  my $set = $self->by_accession->{$acc} || die "can't find $acc";
   my $set = $options{"-set"} || die "-set";
   # temporary copies for user results
-  my $aa = $self->r2p->{$acc};
+#  my $aa = $self->r2p->{$acc};
+  my $aa = $self->get_aa("-accession" => $acc);
+
   my $infer_aa = $self->infer_aa;
 
   if (not($infer_aa) and not($aa)) {
@@ -576,7 +580,14 @@ sub chrom_compare {
 sub get_aa {
   my ($self, %options) = @_;
   my $acc = $options{"-accession"} || die;
-  return $self->r2p->{$acc};
+  my $aa = $self->r2p->{$acc};
+  if (not($aa) and $acc =~ /\-/) {
+    # accession might be refFlat "sharp", e.g.
+    #   NM_001098407-locA-1
+    $acc =~ s/\-.*//;
+    $aa = $self->r2p->{$acc};
+  }
+  return $aa;
 }
 
 sub is_intronic {

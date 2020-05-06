@@ -1,12 +1,14 @@
 package RefFlatFile;
 
 use strict;
-use Carp qw(confess);
+use Exporter;
+use Carp qw(confess cluck);
 
 use Digest::MD5 qw(md5_hex);
 use Configurable;
 
 @RefFlatFile::ISA = qw(Configurable Exporter);
+@RefFlatFile::EXPORT_OK = qw(uniquify_accessions);
 
 use List::Util qw(min max);
 
@@ -33,6 +35,7 @@ cache_stats
 cache_limit
 strip_sharp_annotations
 cm
+unique_refflat_accessions
 		  );
 
 use constant REFGENE_FIELDS => qw(
@@ -289,6 +292,8 @@ sub parse_file {
     push @{$rows}, \%r;
   }
   close RF;
+
+  uniquify_accessions($rows) if $self->unique_refflat_accessions();
 
   debug_ram("refflat parse", "end") if $ENV{DEBUG_RAM};
 }
@@ -877,6 +882,31 @@ sub get_strand_for_accession {
   return $result;
 }
 
+sub uniquify_accessions {
+  # STATIC / exported
+  my ($rows) = @_;
+
+  my %counts;
+  foreach my $r (@{$rows}) {
+    $counts{$r->{name}}++;
+  }
+
+  my $idx = 0;
+  my %idx2letter = map {$idx++, $_} "A" .. "Z";
+  # could done something with ord() but don't think that's PC these days
+
+  my %counter;
+  foreach my $r (@{$rows}) {
+    my $nm = $r->{name};
+    if ($counts{$nm} > 1) {
+      my $count = $counter{$nm}++;
+      my $new = sprintf '%s-loc%s', $nm, $idx2letter{$count} || die;
+      printf STDERR "%s => %s\n", $nm, $new;
+      $r->{name} = $new;
+    }
+    $counts{$r->{name}}++;
+  }
+}
 
 1;
 

@@ -63,6 +63,14 @@ my $BLAT_AA_MIN_IDENTICAL = 10;
 my $BLAT_AA_MAX_MISMATCHES = 1;
 my $BLAT_AA_MAX_GAPS = 0;
 
+my $BLAT_USE_FRACTIONAL_QC = 1;
+# rather than fixed limits of mismatches and gaps, consider a fractional level
+my $BLAT_AA_MAX_MISMATCH_FRACTION = 0.04;
+my $BLAT_AA_MAX_GAP_FRACTION = 0.04;
+# JZ 4/3/2020: I would suggest that you also consider making a "loose"
+# prediction as an NA means that people will have to do the prediction
+# manually.
+
 my $CODON_SEEK_MAX_TRIES = 10;
 my $CODON_SEEK_MAX_TRIES_BEYOND_TRANSCRIPT = 1000;
 
@@ -84,6 +92,8 @@ my $REANNOTATE_INFRAME_GENES = 1;
 #my $ENABLE_SYNTHETIC_AA_INTRON = 1;
 my $ENABLE_SYNTHETIC_AA_INTRON = 0;
 # unfinished, disable
+
+my $UNIQUEIFY_REFFLAT_ACCESSIONS = 1;
 
 use constant SV_MATCH_CODE_FRAMESHIFT => 0;
 use constant SV_MATCH_CODE_INFRAME => 1;
@@ -218,6 +228,11 @@ my @params = (
 
 	      "-presort=i" => \$PRESORT,
 	      "-ping=i" => \$PROGRESS_PING,
+	      "-blat-fractional-qc=i" => \$BLAT_USE_FRACTIONAL_QC,
+	      "-blat-aa-max-mismatch-fraction=f" => \$BLAT_AA_MAX_MISMATCH_FRACTION,
+	      "-blat-aa-max-gap-fraction=f" => \$BLAT_AA_MAX_GAP_FRACTION,
+
+	      "-unique-refflat-accessions=i" => \$UNIQUEIFY_REFFLAT_ACCESSIONS
 	     );
 
 my %FLAGS;
@@ -326,15 +341,16 @@ sub process_svs {
   my $r2g = get_r2g();
 
   my $refgene_fn = get_refflat_file();
-  my $infer_aa = $FLAGS{"infer-aa"};
-
   my $ga = new GeneAnnotation(
                                 "-style" => "refgene_flatfile",
                                 "-refgene_flatfile" => $refgene_fn,
 #                              "-verbose" => 1
                                );
+  $ga->unique_refflat_accessions(1) if $UNIQUEIFY_REFFLAT_ACCESSIONS;
+
   # quickly find transcript IDs from regions
 
+  my $infer_aa = $FLAGS{"infer-aa"};
   if ($infer_aa) {
     $ga->ignore_non_coding(0);
     # required for e.g. Ensembl transcripts, where we don't
@@ -684,7 +700,7 @@ sub process_svs {
 
           my $parser = $blat->blat(
                                    "-query" => {
-                                                $b_nm => ($r2g->get_aa("-accession" => $b_nm) || die),
+                                                $b_nm => ($r2g->get_aa("-accession" => $b_nm) || die "can't retrieve AA sequence for $b_nm"),
 
                                                },
 #                                   "-database" => $frames,
@@ -2238,15 +2254,38 @@ sub hsp_filter {
   die "hit not on + strand" unless $hsp->strand() == 1;
   my $usable = 1;
 
-  if ($hsp->gaps() > $BLAT_AA_MAX_GAPS) {
-    $usable = 0;
-    $hsp_problems->{too_many_gaps} = 1;
-  }
 
-  my $mismatches = $hsp->length("query") - $hsp->num_identical();
-  if ($mismatches > $BLAT_AA_MAX_MISMATCHES) {
-    $usable = 0;
-    $hsp_problems->{too_many_mismatches} = 1;
+  if ($BLAT_USE_FRACTIONAL_QC) {
+    my $qlen = $hsp->length("query");
+
+    my $gap_frac = $hsp->gaps() / $qlen;
+    if ($gap_frac > $BLAT_AA_MAX_GAP_FRACTION) {
+      printf STDERR "BLAT: gap fraction too high (%f, max %f)\n", $gap_frac, $BLAT_AA_MAX_GAP_FRACTION if $VERBOSE;
+      $usable = 0;
+      $hsp_problems->{too_many_gaps} = 1;
+    }
+
+    my $mismatches = $qlen- $hsp->num_identical();
+    my $mismatch_frac = $mismatches / $qlen;
+    if ($mismatch_frac > $BLAT_AA_MAX_MISMATCH_FRACTION) {
+      printf STDERR "BLAT: mismatch fraction too high (%f, max %f)\n", $mismatch_frac, $BLAT_AA_MAX_MISMATCH_FRACTION if $VERBOSE;
+      $usable = 0;
+      $hsp_problems->{too_many_mismatches} = 1;
+    }
+  } else {
+    # original style: can be too strict
+    if ($hsp->gaps() > $BLAT_AA_MAX_GAPS) {
+      printf STDERR "BLAT: too many gaps (%d, max %d)\n", $hsp->gaps(), $BLAT_AA_MAX_GAPS if $VERBOSE;
+      $usable = 0;
+      $hsp_problems->{too_many_gaps} = 1;
+    }
+
+    my $mismatches = $hsp->length("query") - $hsp->num_identical();
+    if ($mismatches > $BLAT_AA_MAX_MISMATCHES) {
+      printf STDERR "BLAT: too many mismatches (%d, max %d)\n", $mismatches, $BLAT_AA_MAX_MISMATCHES if $VERBOSE;
+      $usable = 0;
+      $hsp_problems->{too_many_mismatches} = 1;
+    }
   }
 
   unless ($hsp->num_identical() >= $BLAT_AA_MIN_IDENTICAL) {
@@ -2748,7 +2787,7 @@ sub get_transcript_mappings {
   }
 
   if (@set_passed > 1) {
-    printf STDERR "ERROR: site touched more than once in same NM_!\n";
+    printf STDERR "ERROR: site touched more than once in %s!\n", $nm;
     foreach my $r (@set_passed) {
       printf STDERR "index:%d codon_number:%d search_pos:%d\n", @{$r}[1,2,3];
       dump_die($r->[0], "debug", 1);
@@ -2982,6 +3021,7 @@ sub get_r2g {
 			       "-cache_whole_chrom" => $cwc,
 			       "-limit_chrom_cache" => $lcc,
 			       "-limit_transcript_cache" => $ltc,
+			       "-unique_refflat_accessions" => $UNIQUEIFY_REFFLAT_ACCESSIONS
                               );
   $r2g->cache_genome_mappings(1) if $CACHE_TRANSCRIPT_MAPPINGS;
 
@@ -4448,3 +4488,17 @@ sub frame_debug {
   get_frames($sequence);
 }
 
+=head1 LICENCE AND COPYRIGHT
+Copyright 2019 St. Jude Children's Research Hospital 
+
+Licensed under a modified version of the Apache License, Version 2.0
+(the "License") for academic research use only; you may not use this
+file except in compliance with the License. To inquire about commercial
+use, please contact the St. Jude Office of Technology Licensing at
+scott.elmer@stjude.org.
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
