@@ -239,7 +239,7 @@ echo "Step 01 - $(date +'%Y.%m.%d %H:%M:%S') - ExtractSClips"
 LEN=$(getReadLength.sh $BAMFILE)
 get_sc_cmds.pl -i $BAMFILE -genome $GENOME -o $CICERO_DATADIR/$SAMPLE -l $LEN $cluster_arg > cmds-01.sh
 echo "get_geneInfo.pl -i $BAMFILE -o $CICERO_DATADIR/$SAMPLE -l $LEN -genome $GENOME -s $SAMPLE" >> cmds-01.sh
-parallel $PARALLEL_ARG < cmds-01.sh
+parallel --joblog 01_ExtractSClips.log $PARALLEL_ARG < cmds-01.sh
 } 1> 01_ExtractSClips.out 2> 01_ExtractSClips.err
 
 ## QC
@@ -282,7 +282,7 @@ prepareCiceroInput.pl -o $CICERO_DATADIR/$SAMPLE -genome $GENOME -p $SAMPLE -l $
 for SCFILE in $CICERO_DATADIR/$SAMPLE/$SAMPLE.*.SC; do
     echo "Cicero.pl -i $BAMFILE -o $(echo $SCFILE | sed 's/\.SC//g') -l $LEN -genome $GENOME -f $SCFILE $cluster_arg"
 done > cmds-02.sh
-parallel $PARALLEL_ARG < cmds-02.sh
+parallel --joblog 02_Cicero.log $PARALLEL_ARG < cmds-02.sh
 } 1> 02_Cicero.out 2> 02_Cicero.err
 
 #########################
@@ -311,7 +311,7 @@ echo "Step 04 - $(date +'%Y.%m.%d %H:%M:%S') - Annotate"
 {
 echo "annotate.pl -i $BAMFILE -o $CICERO_DATADIR/$SAMPLE -genome $GENOME -l $LEN -s $SAMPLE -f $CICERO_DATADIR/$SAMPLE/${SAMPLE}.gene_info.txt -j $JUNCTIONS $cluster_arg" > cmds-04.sh
 echo "annotate.pl -i $BAMFILE -o $CICERO_DATADIR/$SAMPLE -genome $GENOME -l $LEN -s $SAMPLE -f $CICERO_DATADIR/$SAMPLE/${SAMPLE}.gene_info.txt -internal $cluster_arg" >> cmds-04.sh
-parallel $PARALLEL_ARG < cmds-04.sh
+parallel --joblog 04_Annotate.log $PARALLEL_ARG < cmds-04.sh
 
 mv $CICERO_DATADIR/$SAMPLE/blacklist.new.txt $CICERO_DATADIR/$SAMPLE/blacklist.new.fusions.txt
 cat $CICERO_DATADIR/$SAMPLE/annotated.fusion.txt $CICERO_DATADIR/$SAMPLE/annotated.internal.txt > $CICERO_DATADIR/$SAMPLE/annotated.all.txt
