@@ -50,6 +50,7 @@ use AnnotationField;
 use RefFlatFile;
 use TdtConfig;
 use Counter;
+use TemporaryFileWrangler;
 
 #my $MIN_AA_FOR_GENE_A = 10;
 #my $MIN_AA_FOR_GENE_B = 10;
@@ -235,6 +236,8 @@ my @params = (
 	      "-unique-refflat-accessions=i" => \$UNIQUEIFY_REFFLAT_ACCESSIONS
 	     );
 
+my $TFW = new TemporaryFileWrangler();
+
 my %FLAGS;
 GetOptions(\%FLAGS, @params);
 
@@ -346,7 +349,7 @@ sub process_svs {
                                 "-refgene_flatfile" => $refgene_fn,
 #                              "-verbose" => 1
                                );
-  $ga->unique_refflat_accessions(1) if $UNIQUEIFY_REFFLAT_ACCESSIONS;
+#  $ga->unique_refflat_accessions(1) if $UNIQUEIFY_REFFLAT_ACCESSIONS;
 
   # quickly find transcript IDs from regions
 
@@ -2917,7 +2920,66 @@ sub get_config_entry {
 }
 
 sub get_refflat_file {
-  return get_config_entry("refflat", "REFSEQ_REFFLAT");
+  my $fn = $main::FINAL_REFFLAT;
+  unless ($fn) {
+    $fn = get_config_entry("refflat", "REFSEQ_REFFLAT");
+    if ($UNIQUEIFY_REFFLAT_ACCESSIONS) {
+      print STDERR "parse $fn\n";
+      my $has_dups;
+      open(RFTMP, $fn) || die;
+      my %counts;
+      while (<RFTMP>) {
+	my @f = split();
+	my $nm = $f[1];
+	if (++$counts{$nm} > 1) {
+	  $has_dups = 1;
+	  last;
+	}
+      }
+      close RFTMP;
+
+      if ($has_dups) {
+	open(RFTMP, $fn) || die;
+	my %counts;
+	my @in_lines;
+	while (my $line = <RFTMP>) {
+	  push @in_lines, $line;
+	  my $nm = (split /\t/, $line)[1];
+	  $counts{$nm}++;
+	}
+	close RFTMP;
+
+	my $idx = 0;
+	my %idx2letter = map {$idx++, $_} "A" .. "Z";
+	# could done something with ord() but don't think that's PC these days
+
+	my $fn_tmp = $TFW->get_tempfile("-append" => ".refflat");
+	my $wf = new WorkingFile($fn_tmp);
+	my $fh_out = $wf->output_filehandle();
+
+	my %counter;
+	foreach my $line (@in_lines) {
+	  my @f = split /\t/, $line;
+	  my $nm = $f[1];
+	  if ($counts{$nm} > 1) {
+	    my $count = $counter{$nm}++;
+	    my $new = sprintf '%s-loc%s', $nm, $idx2letter{$count} || die;
+	    printf STDERR "%s => %s\n", $nm, $new;
+	    $f[1] = $new;
+	  }
+	  printf $fh_out "%s", join "\t", @f;
+	}
+	$wf->finish();
+
+	printf STDERR "NOTE: non-unique accessions in refFlat, uniquified to temporary file\n";
+	$fn = $fn_tmp;
+      }
+    }
+
+    $main::FINAL_REFFLAT = $fn;
+  }
+  printf STDERR "refflat is %s\n", $fn;
+  return $fn;
 }
 
 sub get_fasta_file {
@@ -3021,7 +3083,7 @@ sub get_r2g {
 			       "-cache_whole_chrom" => $cwc,
 			       "-limit_chrom_cache" => $lcc,
 			       "-limit_transcript_cache" => $ltc,
-			       "-unique_refflat_accessions" => $UNIQUEIFY_REFFLAT_ACCESSIONS
+#			       "-unique_refflat_accessions" => $UNIQUEIFY_REFFLAT_ACCESSIONS
                               );
   $r2g->cache_genome_mappings(1) if $CACHE_TRANSCRIPT_MAPPINGS;
 
