@@ -1,4 +1,4 @@
-### CICERO 0.1.7
+### CICERO 0.1.8
 
 CICERO (Clipped-reads Extended for RNA Optimization) is an assembly-based algorithm to detect diverse classes
 of driver gene fusions from RNA-seq.

@@ -378,7 +378,7 @@ sub second_sc_chk {
 }
 
 =head1 VERSION
-This documentation refers to Cicero.pl version 0.1.7.
+This documentation refers to Cicero.pl version 0.1.8.
 
 =head1 USAGE
 	
