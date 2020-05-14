@@ -164,9 +164,18 @@ mkdir $tmp_dir if(!-e $tmp_dir || ! -d $tmp_dir);
 
 my $sam_d = Bio::DB::Sam->new( -bam => $input_bam, -fasta => $ref_genome);
 
-system("touch $out_dir/unfiltered.fusion.txt"); 
-system("touch $out_dir/unfiltered.internal.txt"); 
-
+my $ret = system("touch $out_dir/unfiltered.fusion.txt"); 
+if ($ret){
+	my $err = $!;
+	print STDERR "Error sorting blat output: $err\n"; 
+	exit $err;
+}
+$ret = system("touch $out_dir/unfiltered.internal.txt"); 
+if ($ret){
+	my $err = $!;
+	print STDERR "Error sorting blat output: $err\n"; 
+	exit $err;
+}
 # the softclip file is sorted, so no need to re-sort it
 open my $SCLIP, "<$sclip_file" or croak "can't open $sclip_file:$OS_ERROR";
 while( my $line = <$SCLIP> ) {

@@ -142,10 +142,24 @@ my @complex_regions;
 my $unfiltered_file = "$out_dir/unfiltered.fusion.txt";
 if($internal) { 
 	$unfiltered_file = "$out_dir/unfiltered.internal.txt";
-	`cat $out_dir/*/unfiltered.internal.txt > $unfiltered_file` unless(-s $unfiltered_file);
+	unless (-s $unfiltered_file){
+		`cat $out_dir/*/unfiltered.internal.txt > $unfiltered_file`;
+		if ($?){
+			my $err = $!;
+			print STDERR "Error combining internal events: $err\n"; 
+			exit $err;
+		}		
+	}
 }
 else{
-	`cat $out_dir/*/unfiltered.fusion.txt > $unfiltered_file` unless(-s $unfiltered_file);
+	unless (-s $unfiltered_file){
+		`cat $out_dir/*/unfiltered.fusion.txt > $unfiltered_file`;
+		if ($?){
+			my $err = $!;
+			print STDERR "Error combining fusion events: $err\n"; 
+			exit $err;
+		}
+	}
 }
 print "Unfiltered fusions file: $unfiltered_file\n"; 
 
@@ -505,8 +519,18 @@ close($NBLK);
 
 print STDERR "out file is: $out_file\nnumber of SVs: ", scalar @raw_SVs, "\n" if($debug);
 `mkdir  -p $out_dir/tmp_anno`;
+if ($?){
+	my $err = $!;
+	print STDERR "Error creating annotation directory: $err\n"; 
+	exit $err;
+}
 my $annotation_dir = tempdir(DIR => "$out_dir/tmp_anno");
 `mkdir -p $annotation_dir`;
+if ($?){
+	my $err = $!;
+	print STDERR "Error creating temp directory for annotation: $err\n"; 
+	exit $err;
+}
 print STDERR "Annotation Dir: $annotation_dir\n" if($debug); 
 
 my @cover_files = <$out_dir/*.cover>;
@@ -1137,14 +1161,29 @@ sub quantification {
 
 	my $fa_file = "$anno_dir/reads.$chr1.$pos1.$chr2.$pos2.fa";
 	if($fa_file1 eq $fa_file2){
-		`cat $fa_file1 > $fa_file`; 
+		`cat $fa_file1 > $fa_file`;
+		if ($?){
+			my $err = $!;
+			print STDERR "Error creating fasta file: $err\n"; 
+			exit $err;
+		} 
 		`cat $fa_file1.qual > $fa_file.qual` if(-s "$fa_file1.qual");
 	}
 	else {
 		unlink $fa_file if(-s $fa_file);
 		unlink "$fa_file.qual" if(-s "$fa_file.qual");
 		`cat $fa_file1 >> $fa_file` if(-f $fa_file1 && -s $fa_file1);
+		if ($?){
+			my $err = $!;
+			print STDERR "Error creating fasta file: $err\n"; 
+			exit $err;
+		}
 		`cat $fa_file2 >> $fa_file` if(-f $fa_file2 && -s $fa_file2);
+		if ($?){
+			my $err = $!;
+			print STDERR "Error creating fasta file: $err\n"; 
+			exit $err;
+		}		
 		`cat $fa_file1.qual >> $fa_file.qual` if(-f "$fa_file1.qual" && -s "$fa_file1.qual");
 		`cat $fa_file2.qual >> $fa_file.qual` if(-f "$fa_file2.qual" && -s "$fa_file2.qual");
 	}
@@ -1197,8 +1236,22 @@ sub quantification {
 		my ($psl_file1, $psl_file2) = ("$anno_dir/bp1.psl", "$anno_dir/bp2.psl",);
 		
 		unlink $psl_file1 if(-f $psl_file1); unlink $psl_file2 if(-f $psl_file2);
-		`blat -noHead -maxIntron=5 $tmp_ctg_file $fa_file1 $psl_file1` if(-s $fa_file1);
-		`blat -noHead -maxIntron=5 $tmp_ctg_file $fa_file2 $psl_file2` if(-s $fa_file2);
+		if (-s $fa_file1){
+			`blat -noHead -maxIntron=5 $tmp_ctg_file $fa_file1 $psl_file1`;
+			if ($?){
+				my $err = $!;
+				print STDERR "Error running blat: $err\n"; 
+				exit $err;
+			}
+		}
+		if (-s $fa_file2){
+			`blat -noHead -maxIntron=5 $tmp_ctg_file $fa_file2 $psl_file2`;
+			if ($?){
+				my $err = $!;
+				print STDERR "Error running blat: $err\n"; 
+				exit $err;
+			}
+		}
 		my ($readsA, $areaA, $readsB, $areaB) = (0,1,0,1);
 		my $shift_bases = 5;
 		if($chrA eq $bp1->{tname} && abs($bp1->{tpos} - $tposA)<50 &&
