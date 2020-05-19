@@ -551,8 +551,8 @@ if ($internal){
 open(my $NBLK, ">$New_blacklist_file");
 foreach my $g (sort { $gene_recurrance{$b} <=> $gene_recurrance{$a} } keys %gene_recurrance) {
 	last if($gene_recurrance{$g} < $max_num_hits*10);
-	next if($g eq "NA");
-	next if($cr_hash{$g});
+	next if($g eq "NA" || $g eq "IGH" || $g eq "TCRA" || $g eq "TCRB" || $g eq "TARP");
+	#next if($cr_hash{$g});
 	$blacklist{$g} = 1;
 	print STDERR "Adding $g to blacklist with recurrance: ".$gene_recurrance{$g}."\n"; 
 	print $NBLK join("\t",$g, $gene_recurrance{$g}),"\n";
