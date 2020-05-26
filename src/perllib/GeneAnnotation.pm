@@ -21,6 +21,10 @@ use TdtConfig;
 use BucketMap;
 use GenomeUtils qw(cook_chromosome_name);
 use GeneListCollapser;
+#use RefFlatFile qw(uniquify_accessions);
+# ?? not sure why this isn't working
+use RefFlatFile;
+
 
 use MethodMaker qw(
 all_genes
@@ -53,7 +57,16 @@ strand
 
 nm2rows
 clean_sharp
+unique_refflat_accessions
 		  );
+
+
+use DBTools qw(
+		get_dbi_hg18
+		get_dbi_hg19
+		get_dbi_mm9
+		selectall_hashref
+);
 
 use constant CHUNK_SIZE => 100000;
 
@@ -84,7 +97,21 @@ sub setup {
 
   my $is_interbase;
 
-  if ($style eq "gene_exon_region") {
+  if ($style eq "refgene") {
+    $is_interbase = 1;
+    my $genome = $self->genome() || die "specify -genome";
+    my $dbi;
+    if ($genome eq "hg19" or $genome eq "GRCh37-lite") {
+      $dbi = get_dbi_hg19();
+    } elsif ($genome eq "hg18") {
+      $dbi = get_dbi_hg18();
+    } elsif ($genome eq "mm9" or $genome eq "MGSCv37") {
+      $dbi = get_dbi_mm9();
+    } else {
+      die "unknown database for genome $genome";
+    }
+    $rows = selectall_hashref($dbi, "select chrom,txStart,txEnd,name2,name from refGene");
+  } elsif ($style eq "gene_exon_region") {
     $is_interbase = 0;
     my $dir = $self->gene_exon_region_dir() || confess "-gene_exon_region_dir";
     my @files = glob($dir . "/*region.txt");
@@ -251,6 +278,8 @@ source
     die "unimplemented style $style";
   }
 
+  RefFlatFile::uniquify_accessions($rows) if $self->unique_refflat_accessions();
+
   die "interbase not defined" unless defined $is_interbase;
   $self->is_interbase($is_interbase);
 
@@ -272,6 +301,13 @@ source
   my $clean_sharp = $self->clean_sharp();
 
   foreach my $row (@{$rows}) {
+    unless ($row->{name2}) {
+      $row->{name2} = $row->{name} || "unknown";
+      # normally this should never happen, however some sources e.g.
+      # COMBINED_REFFLAT mix data from different formats, some of which
+      # are missing this field.
+    }
+
     if ($clean_sharp and $row->{name2}) {
       # remove refFlat "sharp" uniqueness suffixes
       $row->{name2} =~ s/_loc\w+$//;
@@ -416,7 +452,7 @@ sub find {
   my @genes_genomic;
   # unique genes in interval, sorted genomically
   foreach my $r (@sorted) {
-    my $g = $r->{name2} || die;
+    my $g = $r->{name2} || dump_die($r, "no name2 data");
     next if $saw{$g};
 #    printf STDERR "%d\n", $r->{txStart};
     push @genes_genomic, $g;

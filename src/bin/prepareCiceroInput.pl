@@ -3,6 +3,8 @@
 use strict;
 use warnings; 
 
+use locale; 
+
 use Carp;
 use Getopt::Long;
 use English;
@@ -23,6 +25,7 @@ my $optionOK = GetOptions(
 	'l=i'			=> \$read_len,
 	's|split_every=i'	=> \$split_every_n,
 	'ratio=f'		=> \$expression_ratio_cutoff,
+	'm|min_sclip_reads=i'		=> \$min_sclip_reads,
 	'f|gene_info_file=s' => \$gene_info_file,
 	'h|help|?'		=> \$help,
 	'man'			=> \$man,
@@ -54,6 +57,18 @@ while(<$BLK>){
 }
 close($BLK);
 
+my $breakpoints_file = $conf->{'KNOWN_BREAKPOINTS'};
+open(my $BRK, "<", "$breakpoints_file");
+my %breakpoints = (); 
+print STDERR "Parsing known break points $breakpoints_file\n"; 
+while(<$BRK>){
+	my $line = $_;
+	chomp($line);
+	my ($chr, $pos) = split(/\t/, $line); 
+	$breakpoints{$chr}{$pos} = 1;
+}
+close($BRK);
+
 my %gene_info;
 print STDERR "Parsing gene info file\n"; 
 print "\ngene_info_file: $gene_info_file\n";
@@ -67,7 +82,7 @@ while(<$GI>){
 close $GI;
 
 my $SC_file = "$out_dir/$out_prefix.SC.txt";
-`cat $out_dir/$out_prefix*.cover > $SC_file`;
+`ls $out_dir/$out_prefix*.cover | xargs cat > $SC_file`;
 print STDERR $SC_file, "\n";
 open my $SCI, "$SC_file";
 
@@ -78,7 +93,7 @@ while(<$SCI>){
 	chomp;
 	my ($chr, $site, $strand, $sc_cnt, $cover, $psc, $nsc, $pn, $nn) = split(/\t/);
 	my $SC_MAF = $psc/($pn+0.01) > $nsc/($nn+0.01) ? $psc/($pn+0.01) : $nsc/($nn+0.01);
-	next if($sc_cnt < $min_sclip_reads);
+	next if($sc_cnt < $min_sclip_reads && (! exists $breakpoints{$chr}{$site} && ! exists $breakpoints{'chr'.$chr}{$site}));
 	next unless (exists($gene_info{$chr}));
 	my @gInfo = @{$gene_info{$chr}};
 	my $intra = 0;
