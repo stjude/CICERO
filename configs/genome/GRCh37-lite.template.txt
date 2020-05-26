@@ -13,6 +13,7 @@ CHR_LENGTHS	/Homo_sapiens/GRCh37-lite/SUPPORT/chromosome_lengths.txt
 COMPLEX_REGIONS	/Homo_sapiens/GRCh37-lite/CICERO/complex_regions.txt
 KNOWN_FUSIONS	/Homo_sapiens/GRCh37-lite/CICERO/known_fusions.txt
 KNOWN_ITD_FILE	/Homo_sapiens/GRCh37-lite/CICERO/known_ITDs.txt
+KNOWN_BREAKPOINTS       /Homo_sapiens/GRCh37-lite/CICERO/known_breakpoints.txt
 CLINCLS_GOLD_GENE_LIST_FILE	/Homo_sapiens/GRCh37-lite/CLINICAL/MEDAL_CONFIG/GoldGene.lst
 
 BLAT_HOST	localhost	

@@ -57,6 +57,18 @@ while(<$BLK>){
 }
 close($BLK);
 
+my $breakpoints_file = $conf->{'KNOWN_BREAKPOINTS'};
+open(my $BRK, "<", "$breakpoints_file");
+my %breakpoints = (); 
+print STDERR "Parsing known break points $breakpoints_file\n"; 
+while(<$BRK>){
+	my $line = $_;
+	chomp($line);
+	my ($chr, $pos) = split(/\t/, $line); 
+	$breakpoints{$chr}{$pos} = 1;
+}
+close($BRK);
+
 my %gene_info;
 print STDERR "Parsing gene info file\n"; 
 print "\ngene_info_file: $gene_info_file\n";
@@ -81,7 +93,7 @@ while(<$SCI>){
 	chomp;
 	my ($chr, $site, $strand, $sc_cnt, $cover, $psc, $nsc, $pn, $nn) = split(/\t/);
 	my $SC_MAF = $psc/($pn+0.01) > $nsc/($nn+0.01) ? $psc/($pn+0.01) : $nsc/($nn+0.01);
-	next if($sc_cnt < $min_sclip_reads);
+	next if($sc_cnt < $min_sclip_reads && (! exists $breakpoints{$chr}{$site} && ! exists $breakpoints{'chr'.$chr}{$site}));
 	next unless (exists($gene_info{$chr}));
 	my @gInfo = @{$gene_info{$chr}};
 	my $intra = 0;

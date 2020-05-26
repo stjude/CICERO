@@ -25,11 +25,11 @@ OUTDIR=$(pwd)
 THRESHOLD=200000
 SC_CUTOFF=3
 SC_SHIFT=
-OPTIMIZE=
+OPTIMIZE=1
 
 usage() {
     echo "Cicero.sh [-h] [-n ncores] -b bamfile -g genome -r refdir [-j junctions] [-o outdir] [-t threshold] [-s sc_cutoff] [-c sc_shift] [-p]"
-    echo "-p - optimize CICERO, sets sc_cutoff=3 and sc_shift=10"
+    echo "-p - optimize CICERO, sets sc_cutoff=3 and sc_shift=10 [default true]" 
     echo "-s <num> - minimum number of soft clip support required [default=2]"
     echo "-t <num> - threshold for enabling increased soft clip cutoff [default=200000]"
     echo "-c <num> - clustering distance for grouping similar sites [default=3]"
@@ -53,7 +53,8 @@ while [ ! -z "$1" ]; do
         -t) THRESHOLD=$2; shift;;
         -s) SC_CUTOFF=$2; shift;;
         -c) SC_SHIFT=$2; shift;;
-        -p) OPTIMIZE=1;
+        -p) OPTIMIZE=1;;
+        -no-optimize) OPTIMIZE=0;;
     esac
     shift
 done
@@ -290,8 +291,8 @@ parallel --joblog 02_Cicero.log $PARALLEL_ARG < cmds-02.sh
 #########################
 echo "Step 03 - $(date +'%Y.%m.%d %H:%M:%S') - Combine"
 {
-cat $CICERO_DATADIR/$SAMPLE/*/unfiltered.fusion.txt > $CICERO_DATADIR/$SAMPLE/unfiltered.fusion.txt
-cat $CICERO_DATADIR/$SAMPLE/*/unfiltered.internal.txt > $CICERO_DATADIR/$SAMPLE/unfiltered.internal.txt
+cat $CICERO_DATADIR/$SAMPLE/*/unfiltered.fusion.txt | sort -V -k 9,9 -k 10,10n -k 11,11n > $CICERO_DATADIR/$SAMPLE/unfiltered.fusion.txt
+cat $CICERO_DATADIR/$SAMPLE/*/unfiltered.internal.txt | sort -V -k 9,9 -k 10,10n -k 11,11n > $CICERO_DATADIR/$SAMPLE/unfiltered.internal.txt
 } 1> 03_Combine.out 2> 03_Combine.err
 
 ## QC

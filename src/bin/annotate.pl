@@ -148,7 +148,9 @@ my @complex_regions;
 		push @complex_regions, $cr;
 	}
 	close($CRF);
+	my %cr_hash = map { $_->{name} => 1 } @complex_regions;
 #}
+
 
 # Combine all of the individual results from Cicero.pl
 my $unfiltered_file = "$out_dir/unfiltered.fusion.txt";
@@ -549,7 +551,8 @@ if ($internal){
 open(my $NBLK, ">$New_blacklist_file");
 foreach my $g (sort { $gene_recurrance{$b} <=> $gene_recurrance{$a} } keys %gene_recurrance) {
 	last if($gene_recurrance{$g} < $max_num_hits*10);
-	next if($g eq "NA");
+	next if($g eq "NA" || $g eq "IGH" || $g eq "TCRA" || $g eq "TCRB" || $g eq "TARP");
+	#next if($cr_hash{$g});
 	$blacklist{$g} = 1;
 	print STDERR "Adding $g to blacklist with recurrance: ".$gene_recurrance{$g}."\n"; 
 	print $NBLK join("\t",$g, $gene_recurrance{$g}),"\n";
@@ -1207,16 +1210,23 @@ sub quantification {
 
 	my $fa_file = "$anno_dir/reads.$chr1.$pos1.$chr2.$pos2.fa";
 	if($fa_file1 eq $fa_file2){
-		`cat $fa_file1 > $fa_file`; 
-		`cat $fa_file1.qual > $fa_file.qual` if(-s "$fa_file1.qual");
+		#`cat $fa_file1 > $fa_file`; 
+		$fa_file = $fa_file1; 
+		#`cat $fa_file1.qual > $fa_file.qual` if(-s "$fa_file1.qual");
 	}
 	else {
 		unlink $fa_file if(-s $fa_file);
-		unlink "$fa_file.qual" if(-s "$fa_file.qual");
-		`cat $fa_file1 >> $fa_file` if(-f $fa_file1 && -s $fa_file1);
-		`cat $fa_file2 >> $fa_file` if(-f $fa_file2 && -s $fa_file2);
-		`cat $fa_file1.qual >> $fa_file.qual` if(-f "$fa_file1.qual" && -s "$fa_file1.qual");
-		`cat $fa_file2.qual >> $fa_file.qual` if(-f "$fa_file2.qual" && -s "$fa_file2.qual");
+		#unlink "$fa_file.qual" if(-s "$fa_file.qual");
+		my $arg = ""; 
+		$arg .= " $fa_file1 " if (-f $fa_file1 && -s $fa_file1);
+		$arg .= " $fa_file2 " if (-f $fa_file2 && -s $fa_file2);
+		if ($arg ne ""){
+			`cat $arg >> $fa_file`; 
+		}
+		#`cat $fa_file1 >> $fa_file` if(-f $fa_file1 && -s $fa_file1);
+		#`cat $fa_file2 >> $fa_file` if(-f $fa_file2 && -s $fa_file2);
+		#`cat $fa_file1.qual >> $fa_file.qual` if(-f "$fa_file1.qual" && -s "$fa_file1.qual");
+		#`cat $fa_file2.qual >> $fa_file.qual` if(-f "$fa_file2.qual" && -s "$fa_file2.qual");
 	}
 	print STDERR "to do assembly ...\n" if($debug); 
 	my($contig_file, $sclip_count, $contig_reads) = $assembler->run($fa_file); 
@@ -1229,8 +1239,7 @@ sub quantification {
 	print STDERR "number of mapping: ", scalar @mappings, "\n" if($debug);
 	my $ref_chr2 = $chr2; $ref_chr2 =~ s/chr//;
 	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr2, -scSite=>$pos2, -CLIP=>$clip2, -READ_LEN => $read_len) if(-s $contig_file);
-	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr2, -scSite=>$pos2, -CLIP=>$clip2, -READ_LEN => $read_len)
-		 if(($SV->{type} eq 'Internal_dup' || !@mappings) && -s $contig_file);
+	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr2, -scSite=>$pos2, -CLIP=>$clip2, -READ_LEN => $read_len) if(($SV->{type} eq 'Internal_dup' || !@mappings) && -s $contig_file);
 
 	my @qSVs;
 	foreach my $sv (@mappings){
