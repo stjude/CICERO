@@ -62,7 +62,12 @@ sub run {
 		print STDERR "$file is of size 0";
 		return;
 	}
-	system(join(" ", ($self->{PRG}, $file, $self->{OPTIONS})));
+	my $ret = system(join(" ", ($self->{PRG}, $file, $self->{OPTIONS})));
+	if ($ret){
+		my $err = $!;
+		print STDERR "Error running assembler: $err\n"; 
+		exit $err;
+	}
 	my( $r_count, $r_reads ) = _count_reads("$file.cap.ace");
 	return ("$file.cap.contigs", $r_count, $r_reads, "$file.cap.singlets");
 }
@@ -152,6 +157,11 @@ sub run {
 	print STDERR "\ntest=$test\t", join(" ", ($self->{PRG}, $self->{BIT2_DIR}, $param{-QUERY}, $unsorted_psl, $options)), "\n" if($debug);
 	# Sort the output PSL file from BLAT.
 	`sort -k 11,11nr -k 10,10d -k 14,14d -k 1,1nr $unsorted_psl -o $psl_file`;
+	if ($?){
+		my $err = $!;
+		print STDERR "Error sorting blat output: $err\n"; 
+		exit $err;
+	}
 
 	# Instantiate a parser and load the results into an array to pass to subroutines for checks.
 	# A "result" is everything for a given query
@@ -952,6 +962,11 @@ sub overhang_remapping {
 
 	return unless(-s $unsorted_psl);
 	`sort -k 10,10d -k 14,14d -k 1,1nr $unsorted_psl -o $psl_file`;
+	if ($?){
+		my $err = $!;
+		print STDERR "Error sorting blat output: $err\n"; 
+		exit $err;
+	}
 
 	#print "sc site is $scSite\n";
 	my ($max_length, $max_percent, $total_matches) = (0, 0);
@@ -1640,17 +1655,26 @@ sub run {
 	croak "Missing QUERY parameter for $self->{PRG}" if(!$param{-QUERY});
 	my $output = $param{-OUTPUT} || $param{-QUERY} . ".psl";
 	my $opt = $self->{OPTIONS} . " -maxIntron=1 ";
-	system( join(" ", ($self->{PRG}, $param{-TARGET}, $param{-QUERY}, $output, $opt)));
+	my $ret = system( join(" ", ($self->{PRG}, $param{-TARGET}, $param{-QUERY}, $output, $opt)));
+	if ($ret){
+		my $err = $!;
+		print STDERR "Error running aligner: $err\n"; 
+		exit $err;
+	}
 	my $rtn = _find_best_hit($output);
 	if( scalar(keys(%{$rtn})) > 0) {
 		return $output if($param{-FILE});
 		return $rtn;
 	}
 	$opt = $self->{OPTIONS} . " -fastMap ";
-	system( join(" ", ($self->{PRG}, $param{-TARGET}, $param{-QUERY}, $output, $opt)));
+	my $ret = system( join(" ", ($self->{PRG}, $param{-TARGET}, $param{-QUERY}, $output, $opt)));
+	if ($ret){
+		my $err = $!;
+		print STDERR "Error running aligner: $err\n"; 
+		exit $err;
+	}
 	return $output if($param{-FILE});
 	return _find_best_hit($output);
-
 }
 
 sub _find_best_hit {

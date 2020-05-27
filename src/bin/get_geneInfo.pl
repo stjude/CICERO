@@ -90,6 +90,11 @@ my @bam_file=split /-/, $bam_file;
 $sample=$bam_file[0] unless (defined $sample);
 
 `mkdir -p $out_dir`;
+if ($?){
+	my $err = $!;
+	print STDERR "Error creating output directory: $err\n"; 
+	exit $err;
+}
 
 my %blacklist = ();
 if($blacklist_file && -s $blacklist_file){

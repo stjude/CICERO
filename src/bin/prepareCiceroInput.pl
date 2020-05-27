@@ -82,7 +82,14 @@ while(<$GI>){
 close $GI;
 
 my $SC_file = "$out_dir/$out_prefix.SC.txt";
+
 `ls $out_dir/$out_prefix*.cover | xargs cat > $SC_file`;
+if ($?){
+	my $err = $!;
+	print STDERR "Error combining cover files: $err\n"; 
+	exit $err;
+}
+
 print STDERR $SC_file, "\n";
 open my $SCI, "$SC_file";
 
