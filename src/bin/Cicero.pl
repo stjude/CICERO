@@ -51,6 +51,7 @@ my ($paired, $rmtmp, $rmdup) = (1, 1, 1);
 my ($read_len, $min_fusion_distance);
 my ($min_sclip_len, $min_hit_len) = (5, 25);
 my ($min_sclip_reads, $expression_ratio_cutoff, $max_num_hits) = (2, 0.01, 3);
+my $sc_shift = 3; 
 
 if(@ARGV == 0){
 	#TODO: get the correct usage string
@@ -85,6 +86,7 @@ my $optionOK = GetOptions(
 	'min_sclip_len=i'	=> \$min_sclip_len,
 	'min_hit_len=i'		=> \$min_hit_len,
 	'max_num_hits=i'	=> \$max_num_hits,
+	'c|cluster=i'   => \$sc_shift,
 	'paired!'		=> \$paired,
 	'rmtmp=i'		=> \$rmtmp,
 	'rmdup=i'		=> \$rmdup,
@@ -240,6 +242,7 @@ sub detect_SV{
 			-MIN_SC_LEN => $min_sclip_len,
 			-UNMAPPED_CUTOFF => $unmapped_cutoff,
 			-FIXSC => $fixSC,
+			-SC_SHIFT => $sc_shift,
 	        	);
 
 	return unless(-f $fa_file && -s $fa_file);
@@ -381,7 +384,7 @@ sub second_sc_chk {
 	my ($chr, $pos) = ($bp->{tname},$bp->{tpos});
 	my $clip = $bp->{qstrand}*$bp->{ort};
 	print STDERR "bp_chk = get_sclip_reads(-SAM => $sam, -VALIDATOR => $validator, -CHR =>$chr, -POS => $pos, -CLIP => $clip, -MIN_SC_LEN => 3)\n" if($debug);
-	my $bp_chk = get_sclip_reads(-SAM => $sam, -VALIDATOR => $validator, -CHR =>$chr, -POS => $pos, -CLIP => $clip, -MIN_SC_LEN => 3);
+	my $bp_chk = get_sclip_reads(-SAM => $sam, -VALIDATOR => $validator, -CHR =>$chr, -POS => $pos, -CLIP => $clip, -MIN_SC_LEN => 3, -SC_SHIFT => $sc_shift);
 	push @reads, @{$bp_chk->{reads}} if(defined $bp_chk);
 	return scalar @reads;
 }

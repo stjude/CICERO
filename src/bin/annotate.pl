@@ -48,6 +48,7 @@ my ($input_bam, $read_len, $sample);
 my ($all_output, $internal, $DNA) = (0, 0, 0);
 my ($min_hit_len, $max_num_hits, $min_fusion_distance);
 $min_hit_len = 25;
+my $sc_shift = 10; 
 my ($blacklist_gene_file, $blacklist_fusion_file, $complex_region_file, $excluded_chroms, $gold_gene_file);
 my ( $help, $man, $version, $usage );
 
@@ -69,6 +70,7 @@ my $optionOK = GetOptions(
 	'blatport=s'		=> \$blat_port,
 	'min_hit_len=i'		=> \$min_hit_len,
 	'max_num_hits=i'	=> \$max_num_hits,
+	'c|cluster=i'   => \$sc_shift,
 	'paired!'		=> \$paired,
 	'rmdup!'		=> \$rmdup,
 	'l|read_len=i'	=> \$read_len,
@@ -92,6 +94,7 @@ if ($header){
 }
 
 my $conf; 
+# Load configuration values for the genome build
 if (&TdtConfig::findConfig("genome", $genome)){
 	$conf = &TdtConfig::readConfig("genome", $genome); 
 }
@@ -115,12 +118,20 @@ $gold_gene_file = $conf->{CLINCLS_GOLD_GENE_LIST_FILE};
 print STDERR "CLINCLS_GOLD_GENE_LIST_FILE:", $gold_gene_file, "\n";
 $excluded_chroms = $conf->{EXCLD_CHR} unless($excluded_chroms);
 $complex_region_file = $conf->{COMPLEX_REGIONS} unless($complex_region_file);
+
+# Load Cicero-specific configuration settings
 $conf = &TdtConfig::readConfig('app', 'cicero'); 
 $min_hit_len = $conf->{MIN_HIT_LEN} unless($min_hit_len);
 $max_num_hits = $conf->{MAX_NUM_HITS} unless($max_num_hits);
 $min_fusion_distance = $conf->{MIN_FUSION_DIST} unless($min_fusion_distance);
+
+# Assume sample name is the bam prefix
 $sample = basename($input_bam, ".bam") unless($sample);
+
 my @excluded_chroms = split(/,/,$excluded_chroms);
+
+# Load list of complex regions to be used later to determine if
+# breakpoints are located within a "complex" region
 my @complex_regions;
 #if ($complex_region_file && -s $complex_region_file){
 	open (my $CRF, $complex_region_file);
@@ -137,8 +148,11 @@ my @complex_regions;
 		push @complex_regions, $cr;
 	}
 	close($CRF);
+	my %cr_hash = map { $_->{name} => 1 } @complex_regions;
 #}
 
+
+# Combine all of the individual results from Cicero.pl
 my $unfiltered_file = "$out_dir/unfiltered.fusion.txt";
 if($internal) { 
 	$unfiltered_file = "$out_dir/unfiltered.internal.txt";
@@ -182,7 +196,8 @@ while(<$GI>){
 }
 close $GI;
 
-# Those variable will be global
+# Intialize CAP3 and BLAT utilities
+# These variables will be global
 my $assembler = Assembler->new( 
 	-PRG => "cap3",
 	-OPTIONS => $cap3_options
@@ -197,11 +212,14 @@ my $mapper = Mapper->new(
 	-MIN_FS_DIST => $min_fusion_distance
 );
 
+# Read the gene model from a refflat file
 my $gm_format = "REFFLAT";
 my $gm = GeneModel->new if($gene_model_file);
 $gm->from_file($gene_model_file, $gm_format);
 
 croak "Specify a genome: $ref_genome" unless (-f $ref_genome); 
+
+# Load the BAM file
 my $sam_d = Bio::DB::Sam->new( -bam => $input_bam, -fasta => $ref_genome);
 my @seq_ids = $sam_d->seq_ids;
 my $validator = CiceroSCValidator->new();
@@ -271,6 +289,8 @@ while(<$ITD_F>){
 	$known_ITDs{$gene} = [$start, $end];
 }
 
+# Load gene pairs that are enhancer activated
+# involving T-cell receptors and immunoglobulin loci
 my %enhancer_activated_genes = ();
 if($known_fusion_file && -e $known_fusion_file){
    open(my $KFF, $known_fusion_file);
@@ -291,14 +311,33 @@ my %contig_recurrance = ();
 my %genepairs = (); 
 my %breakpoint_sites = (); 
 open(my $UNF, "$unfiltered_file");
+print STDERR "Reading unfiltered file\n"; 
 while(my $line = <$UNF>){
 	chomp($line);
 	my @fields = split("\t", $line);
 	my ($gene1, $gene2) = ($fields[1], $fields[2]); 
 	my $cutoff = $fields[4];
 	my $qseq = $fields[17];
-	$gene1 = join(":", $fields[8], $fields[5]) if($gene1 eq "NA");	
-	$gene2 = join(":", $fields[19], $fields[6]) if($gene2 eq "NA");	
+
+	if($gene1 eq "NA"){
+			my $crA = in_complex_region($fields[8], $fields[5]);
+			if($crA){
+					$gene1 = $crA;
+			}
+			else{
+					$gene1 = join(":", $fields[8], $fields[5]);
+			}
+	}
+	if($gene2 eq "NA"){
+			my $crB = in_complex_region($fields[19], $fields[6]);
+			if($crB){
+					$gene2 = $crB;
+			}
+			else{
+					$gene2 = join(":", $fields[19], $fields[6]);
+			}
+	}
+
 	my @genes1 = split(/,|\|/, $gene1);
 	my @genes2 = split(/,|\|/, $gene2);
 	my $bad_gene = 0;
@@ -369,6 +408,8 @@ while(my $line = <$UNF>){
 
         # If either breakpoint is in an excluded chromosome, skip it
 	next if(is_bad_chrom($first_bp->{tname}) || is_bad_chrom($second_bp->{tname}));
+
+	# Check if both breakpoints are in complex regions, if so skip
 	my($crA, $crB) = (in_complex_region($first_bp->{tname}, $first_bp->{tpos}), in_complex_region($second_bp->{tname}, $second_bp->{tpos}));
 	next if($crA && $crB);
 	$first_bp->{gene} = $crA if($crA);
@@ -378,7 +419,11 @@ while(my $line = <$UNF>){
 	# Ensure that the breakpoint chromosome names match
 	unless($seq_ids[0] =~ m/chr/) {$first_bp->{tname} =~ s/chr//; $second_bp->{tname} =~ s/chr//;}
 	next if(!$internal && is_bad_fusion($first_bp->{tname}, $first_bp->{tpos}, $second_bp->{tname}, $second_bp->{tpos}));
+
+	# Determine the variant type: CTX, Internal_inv, Interal_splicing, Internal_dup, ITX, read_through, DEL, INS
 	my $type = get_type($first_bp, $second_bp, $same_gene);
+	print STDERR "type: $type\n" if ($debug); 
+	# If we're not processing combined results (-all) and this is an Internal event
 	if(!$all_output && $type =~ m/Internal/){
 		if(%gold_genes){
 			 next unless ($type eq 'Internal_dup' && exists($gold_genes{$first_bp->{gene}}));
@@ -395,11 +440,14 @@ while(my $line = <$UNF>){
 		first_bp => $first_bp,
 		second_bp => $second_bp,
 		};
+	# If our SV is not a duplicate (same chromosome and within 10bp of the breakpoints)
 	if($tmp_SV && ! is_dup_raw_SV(\@raw_SVs, $tmp_SV)){
 		push @raw_SVs, $tmp_SV;
+		# If we've seen this sequence string, increment
+		# recurrance count
 		if(exists($contig_recurrance{$qseq})){
 			$contig_recurrance{$qseq}++;
-		}else{
+		}else{ # Check the reverse complement as well.
 			$qseq = rev_comp($qseq);
 			if(exists($contig_recurrance{$qseq})){
 				$contig_recurrance{$qseq}++;
@@ -412,6 +460,7 @@ while(my $line = <$UNF>){
 close($UNF);
 
 if($junction_file){
+  print STDERR "Reading junction file\n"; 
   open(my $JUNC, "$junction_file");
   while(my $line = <$JUNC>){
 	chomp($line);
@@ -502,17 +551,24 @@ if($junction_file){
 		second_bp => $second_bp,
 		type => "Junction",
 		};
-	push @raw_SVs, $tmp_SV if($tmp_SV && ! is_dup_raw_SV(\@raw_SVs, $tmp_SV));
+	if($tmp_SV && ! is_dup_raw_SV(\@raw_SVs, $tmp_SV)){
+		push @raw_SVs, $tmp_SV;
+	}
   }
   close($JUNC);
 }
 
 my $New_blacklist_file = "$out_dir/blacklist.new.txt";
+if ($internal){
+	$New_blacklist_file = "$out_dir/blacklist.new.internal.txt";
+}
 open(my $NBLK, ">$New_blacklist_file");
 foreach my $g (sort { $gene_recurrance{$b} <=> $gene_recurrance{$a} } keys %gene_recurrance) {
 	last if($gene_recurrance{$g} < $max_num_hits*10);
-	next if($g eq "NA");
+	next if($g eq "NA" || $g eq "IGH" || $g eq "TCRA" || $g eq "TCRB" || $g eq "TARP");
+	#next if($cr_hash{$g});
 	$blacklist{$g} = 1;
+	print STDERR "Adding $g to blacklist with recurrance: ".$gene_recurrance{$g}."\n"; 
 	print $NBLK join("\t",$g, $gene_recurrance{$g}),"\n";
 }
 close($NBLK);
@@ -533,6 +589,8 @@ if ($?){
 }
 print STDERR "Annotation Dir: $annotation_dir\n" if($debug); 
 
+print STDERR "Reading cover files\n"; 
+# Loop over the soft clip files again
 my @cover_files = <$out_dir/*.cover>;
 foreach my $fn (@cover_files) {
     my @path = split(/\//, $fn);
@@ -545,15 +603,17 @@ foreach my $fn (@cover_files) {
 		my ($chr, $pos, $clip, $sc_cover, $cover, $psc, $nsc, $pn, $nn) = split(/\t/,$line);
 		$clip = RIGHT_CLIP if($clip eq "+");
 		$clip = LEFT_CLIP if($clip eq "-");
+		# If this is a new site, add it to the list of breakpoints
 		my $site= $chr."_".$pos."_".$clip;
 		if(not exists($breakpoint_sites{$site})){
 			$breakpoint_sites{$site} = $line;
 		}
-		else{
+		else{ # Look for breakpoints already added that are within +/- 5bp
 			my $sc_cover0 = 0;
 			for(my $s=-5; $s<=5; $s++){
 				my $tmp_pos = $pos + $s;
 				my $tmp_site= $chr."_".$tmp_pos."_".$clip;
+				# If the new site is within +/- 5bp and its coverage is greater than the prior site
 				if(exists($breakpoint_sites{$tmp_site}) && $sc_cover > $sc_cover0){
 					$sc_cover0 = $sc_cover;
 					$breakpoint_sites{$site} = $line;
@@ -564,6 +624,7 @@ foreach my $fn (@cover_files) {
 	close($IN);
 }
 
+print STDERR "Processing raw SVs\n"; 
 my @annotated_SVs;
 foreach my $sv (@raw_SVs){
 	next if($sv->{type} eq "Internal_splicing");
@@ -601,9 +662,11 @@ foreach my $sv (@raw_SVs){
 		   );
  	my $end_run = time();
 	my $run_time = $end_run - $start_run;
+	print STDERR "Quantification run time: $run_time\n" if($debug); 
 
 	foreach my $quantified_SV (@quantified_SVs){
 		my $annotated_SV = annotate($gm, $quantified_SV) if($quantified_SV);
+		print STDERR "annotated_SV: $annotated_SV\n" if($debug); 
 		next unless($annotated_SV);
 		my ($first_bp, $second_bp, $type) = ($annotated_SV->{first_bp}, $annotated_SV->{second_bp}, $annotated_SV->{type});
 		if(!$all_output && $type =~ m/Internal/){
@@ -625,9 +688,19 @@ my @uniq_SVs;
 foreach my $sv (@annotated_SVs){
 	print STDERR "xxx\n" if(abs($sv->{second_bp}->{tpos} - 170818803)<10 || abs($sv->{first_bp}->{tpos} - 170818803)<10);
 	my ($bp1, $bp2, $qseq) = ($sv->{first_bp}, $sv->{second_bp}, $sv->{junc_seq});
-	next if(exists($blacklist{$bp1->{gene}}) || exists($blacklist{$bp2->{gene}}));
-	push @uniq_SVs, $sv if($sv && ! is_dup_SV(\@uniq_SVs, $sv));
+	if(exists($blacklist{$bp1->{gene}}) || exists($blacklist{$bp2->{gene}})){
+		print STDERR "Removing duplicate: gene1: ".$bp1->{gene}." gene2: ".$bp2->{gene}."\n";
+		next;
+	}
+	if($sv && ! is_dup_SV(\@uniq_SVs, $sv)){
+		push @uniq_SVs, $sv;
+	}
+	else{
+		print STDERR "Duplicate SV: gene1: ".$bp1->{gene}." gene2: ".$bp2->{gene}."\n";
+	}
 }
+
+print "unique_SVs ", scalar @uniq_SVs, "\n"; 
 
 open(hFo, ">$out_file");
 print hFo $out_header, "\n";
@@ -1130,7 +1203,7 @@ sub quantification {
 		   	-PAIRED => $paired,
 		   	-RMDUP => $rmdup,
 		   	-MIN_SC => 1,
-		   	-SC_SHIFT => 10,
+		   	-SC_SHIFT => $sc_shift,
 			-MIN_SC_LEN => 3,
 			-GAP_SIZE => $gap_size,
 			-FIXSC => $fixSC1,
@@ -1149,7 +1222,7 @@ sub quantification {
 		   	-PAIRED => $paired,
 		   	-RMDUP => $rmdup,
 		   	-MIN_SC => 1,
-		   	-SC_SHIFT => 10,
+		   	-SC_SHIFT => $sc_shift,
 			-MIN_SC_LEN => 3,
 			-GAP_SIZE => $gap_size,
 			-FIXSC => $fixSC2,
@@ -1161,31 +1234,28 @@ sub quantification {
 
 	my $fa_file = "$anno_dir/reads.$chr1.$pos1.$chr2.$pos2.fa";
 	if($fa_file1 eq $fa_file2){
-		`cat $fa_file1 > $fa_file`;
-		if ($?){
-			my $err = $!;
-			print STDERR "Error creating fasta file: $err\n"; 
-			exit $err;
-		} 
-		`cat $fa_file1.qual > $fa_file.qual` if(-s "$fa_file1.qual");
+		#`cat $fa_file1 > $fa_file`; 
+		$fa_file = $fa_file1; 
+		#`cat $fa_file1.qual > $fa_file.qual` if(-s "$fa_file1.qual");
 	}
 	else {
 		unlink $fa_file if(-s $fa_file);
-		unlink "$fa_file.qual" if(-s "$fa_file.qual");
-		`cat $fa_file1 >> $fa_file` if(-f $fa_file1 && -s $fa_file1);
-		if ($?){
-			my $err = $!;
-			print STDERR "Error creating fasta file: $err\n"; 
-			exit $err;
+		#unlink "$fa_file.qual" if(-s "$fa_file.qual");
+		my $arg = ""; 
+		$arg .= " $fa_file1 " if (-f $fa_file1 && -s $fa_file1);
+		$arg .= " $fa_file2 " if (-f $fa_file2 && -s $fa_file2);
+		if ($arg ne ""){
+			`cat $arg >> $fa_file`; 
+      if ($?){
+			  my $err = $!;
+			  print STDERR "Error creating fasta file: $err\n"; 
+			  exit $err;
+		  } 
 		}
-		`cat $fa_file2 >> $fa_file` if(-f $fa_file2 && -s $fa_file2);
-		if ($?){
-			my $err = $!;
-			print STDERR "Error creating fasta file: $err\n"; 
-			exit $err;
-		}		
-		`cat $fa_file1.qual >> $fa_file.qual` if(-f "$fa_file1.qual" && -s "$fa_file1.qual");
-		`cat $fa_file2.qual >> $fa_file.qual` if(-f "$fa_file2.qual" && -s "$fa_file2.qual");
+		#`cat $fa_file1 >> $fa_file` if(-f $fa_file1 && -s $fa_file1);
+		#`cat $fa_file2 >> $fa_file` if(-f $fa_file2 && -s $fa_file2);
+		#`cat $fa_file1.qual >> $fa_file.qual` if(-f "$fa_file1.qual" && -s "$fa_file1.qual");
+		#`cat $fa_file2.qual >> $fa_file.qual` if(-f "$fa_file2.qual" && -s "$fa_file2.qual");
 	}
 	print STDERR "to do assembly ...\n" if($debug); 
 	my($contig_file, $sclip_count, $contig_reads) = $assembler->run($fa_file); 
@@ -1198,8 +1268,7 @@ sub quantification {
 	print STDERR "number of mapping: ", scalar @mappings, "\n" if($debug);
 	my $ref_chr2 = $chr2; $ref_chr2 =~ s/chr//;
 	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr2, -scSite=>$pos2, -CLIP=>$clip2, -READ_LEN => $read_len) if(-s $contig_file);
-	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr2, -scSite=>$pos2, -CLIP=>$clip2, -READ_LEN => $read_len)
-		 if(($SV->{type} eq 'Internal_dup' || !@mappings) && -s $contig_file);
+	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr2, -scSite=>$pos2, -CLIP=>$clip2, -READ_LEN => $read_len) if(($SV->{type} eq 'Internal_dup' || !@mappings) && -s $contig_file);
 
 	my @qSVs;
 	foreach my $sv (@mappings){
@@ -1210,7 +1279,14 @@ sub quantification {
 		   ($first_bp->{ort}, $first_bp->{tname}, $first_bp->{tstart}, $first_bp->{tend}, $first_bp->{qstart}, $first_bp->{qend}, $first_bp->{qstrand}, $first_bp->{matches}, $first_bp->{percent}, $first_bp->{repeat});
 		my ($ortB ,$chrB, $tstartB, $tendB, $qstartB, $qendB, $qstrandB, $matchesB, $percentB, $repeatB) = 
 		   ($second_bp->{ort}, $second_bp->{tname}, $second_bp->{tstart}, $second_bp->{tend}, $second_bp->{qstart}, $second_bp->{qend}, $second_bp->{qstrand}, $second_bp->{matches}, $second_bp->{percent}, $second_bp->{repeat});
-		if($bp1->{tname} =~ m/chr/) {$chrA = "chr".$chrA; $chrB = "chr".$chrB}
+		if($bp1->{tname} =~ m/chr/) {
+			if ($chrA !~ m/^chr/){
+			  $chrA = "chr".$chrA; 
+			}
+			if ($chrB !~ m/^chr/){
+			  $chrB = "chr".$chrB;
+			}
+		}	
 		print STDERR "first_bp: ",  join("\t", $ortA, $chrA, $tstartA, $tendA, $qstartA, $qendA, $qstrandA, $matchesA, $repeatA), "\n" if($debug);
 		print STDERR "second_bp: ", join("\t", $ortB, $chrB, $tstartB, $tendB, $qstartB, $qendB, $qstrandB, $matchesB, $repeatB), "\n" if($debug);
 		my ($qposA, $qposB) = ($ortA > 0) ? ($qendA, $qstartB) : ($qstartA, $qendB);

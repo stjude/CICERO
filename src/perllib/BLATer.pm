@@ -16,6 +16,8 @@ use WorkingFile;
 
 use MethodMaker qw(
 tfw
+tempfile_base
+
 null_mode
 verbose
 
@@ -30,7 +32,10 @@ sub new {
   my ($type, %options) = @_;
   my $self = {};
   bless $self, $type;
-  $self->tfw(new TemporaryFileWrangler());
+  my $tfw = new TemporaryFileWrangler();
+#  $tfw->verbose(1);
+  $self->tempfile_base($tfw->get_tempfile("-glob" => 1));
+  $self->tfw($tfw);
   $self->configure(%options);
   return $self;
 }
@@ -44,11 +49,23 @@ sub blat {
     $parser = Bio::SearchIO->new();
     # not sure this will fly
   } else {
-    my $db_fa = $self->fa_setup($options{"-database"} || die "-database");
-    my $query_fa = $self->fa_setup($options{"-query"} || die "-query");
-    my $outfile = $self->tfw->get_tempfile("-append" => ".blat");
+    my $db_fa = $self->fa_setup(($options{"-database"} || die "-database"), "database");
+    my $query_fa = $self->fa_setup(($options{"-query"} || die "-query"), "query");
+    my $outfile = $self->get_tempfile("-append" => ".blat");
 
     printf STDERR "db=%s query=%s out=%s\n", $db_fa, $query_fa, $outfile if $VERBOSE;
+    if ($ENV{DEBUG_BLAT_DB_FASTA}) {
+      foreach my $ref (["query", $query_fa],
+		       ["db", $db_fa]) {
+	my ($label, $file) = @{$ref};
+	printf STDERR "%s FASTA:\n", $label;
+	open(DEBUGTMP, $file) || die;
+	while(<DEBUGTMP>) {
+	  print STDERR $_;
+	}
+      }
+
+    }
 
     my @cmd = "blat";
     push @cmd, sprintf "-minScore=%d", $self->minScore if $self->minScore();
@@ -89,11 +106,12 @@ sub blat {
 }
 
 sub fa_setup {
-  my ($self, $thing) = @_;
+  my ($self, $thing, $tag) = @_;
   my $fa_file;
+  die unless $tag;
   if (ref $thing) {
     # hash of sequences
-    $fa_file = $self->tfw->get_tempfile("-append" => ".fa");
+    $fa_file = $self->get_tempfile("-append" => sprintf ".%s.fa", $tag);
     write_fasta_set("-file" => $fa_file, "-reads" => $thing);
   } else {
     if (-f $thing) {
@@ -101,7 +119,7 @@ sub fa_setup {
       $fa_file = $thing;
     } else {
       # single sequence string
-      $fa_file = $self->tfw->get_tempfile("-append" => ".fa");
+      $fa_file = $self->get_tempfile("-append" => sprintf ".%s.fa", $tag);
       my %reads;
       $reads{query} = $thing;
       write_fasta_set("-file" => $fa_file, "-reads" => \%reads);
@@ -125,6 +143,14 @@ sub write_fasta_set {
     printf $fh ">%s\n%s\n", $id, $sequence;
   }
   $wf->finish();
+}
+
+sub get_tempfile {
+  my ($self, %options) = @_;
+  my $append = $options{"-append"} || die "-append";
+  my $base = $self->tempfile_base() || die;
+  return $base . $append;
+  # glob mode will clean up these varieties
 }
 
 

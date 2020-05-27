@@ -17,6 +17,7 @@ use RefFlatFile;
 use GenomeUtils qw(complement);
 use MiscUtils qw(dump_die);
 use FAI;
+use CacheManager;
 
 use constant STATUS_OK_PERFECT => 1;
 # perfect match between genome-translated AA and canonical AA
@@ -63,16 +64,34 @@ verbose
 cache_genome_mappings
 infer_aa
 rff
+limit_chrom_cache
+
+limit_transcript_cache
+cm
+cache_whole_chrom
+unique_refflat_accessions
 		  );
 
 sub new {
   my ($type, %options) = @_;
   my $self = {};
   bless $self, $type;
+  $self->cache_whole_chrom(0);
   $self->configure(%options);
 
   my $fasta = $self->fasta() || die "-fasta";
-  $self->fai(new FAI("-fasta" => $fasta));
+  my $lcc = $self->limit_chrom_cache() || 0;
+  my $fai = new FAI("-fasta" => $fasta,
+		    "-limit_chrom_cache" => $lcc,
+      );
+  $self->fai($fai);
+
+  my $ltc = $self->limit_transcript_cache() || 100000;
+  # some limits should really be put on this, can lead to high memory usage
+  # and significant process slowdown.
+  my $cm = new CacheManager("-cache_limit" => $ltc);
+#  $cm->verbose(1);
+  $self->cm($cm);
 
   return $self;
 }
@@ -84,9 +103,22 @@ sub parse {
 
   my $rf = new RefFlatFile();
   $rf->canonical_references_only(1);
+  $rf->unique_refflat_accessions(1) if $self->unique_refflat_accessions();
+
+  my @opts;
+  push @opts, ("-skip-nr" => 1) unless $self->infer_aa();
+  # don't load non-coding transcripts unless explicitly needed
+
   $rf->parse_file(
 		  "-refflat" => $fn_rf,
-		  "-type" => "refgene"
+		  "-type" => "refgene",
+
+		  "-no-junctions" => 1,
+		  "-no-md5" => 1,
+		  "-lite" => 1,
+		  # tweaks to save RAM
+
+		  @opts,
 		 );
   $self->rff($rf);
   my %index;
@@ -127,6 +159,21 @@ sub find {
   my $acc = $options{"-accession"} || confess "-accession";
   my $set_raw = $self->by_accession->{$acc} || die "can't find accession $acc";
 
+  my $cm = $self->cm();
+  $cm->put($acc, {});
+  if (my $acc = $cm->pruned()) {
+    # cache manager identified a key we should drop
+#      printf STDERR "r2g clear cache for %s\n", $acc;
+    my $cache_set = $self->by_accession->{$acc} || die;
+    foreach my $r (@{$cache_set}) {
+      if ($r->{is_genome_mapped}) {
+	delete $r->{is_genome_mapped};
+	delete $r->{codon_map};
+	delete $r->{aa_trans_status};
+      }
+    }
+  }
+
   my @set;
   if ($self->cache_genome_mappings) {
     # save genome mappings in refFlat hashes.
@@ -166,22 +213,45 @@ sub genome_map {
 #  my $set = $self->by_accession->{$acc} || die "can't find $acc";
   my $set = $options{"-set"} || die "-set";
   # temporary copies for user results
-  my $aa = $self->r2p->{$acc};
+#  my $aa = $self->r2p->{$acc};
+  my $aa = $self->get_aa("-accession" => $acc);
+
   my $infer_aa = $self->infer_aa;
 
   if (not($infer_aa) and not($aa)) {
     printf STDERR "WARNING: no AA available for %s, can't verify translation!\n", $acc;
-    # e.g. 
+    # e.g.
     # NM_000658.2: This RefSeq was permanently suppressed because currently there is insufficient support for the transcript and the protein.
   }
 
   my $verbose = $self->verbose;
   my $map_count = scalar @{$set};
 
+  my $use_whole = $self->cache_whole_chrom();
+
   foreach my $row (@{$set}) {
     next if $row->{is_genome_mapped};
 
-    my $seq_ref = $self->fai->get_sequence("-id" => $row->{chrom});
+    my $seq_ref;
+    my $fai_sub;
+    if ($use_whole) {
+      $seq_ref = $self->fai->get_sequence("-id" => $row->{chrom});
+    } else {
+      my @pos = map {@{$_}{qw(start end)}} @{$row->{exons}};
+#      foreach my $e (@{$row->{exons}}) {
+#	dump_die($e, "exon debug", 1);
+#      }
+      my $min = min(@pos);
+      my $max = max(@pos);
+
+      printf STDERR "chrom chunk read: %s:%d-%d\n", $row->{chrom}, $min, $max;
+      $self->fai->chunk_setup(
+			      "-id" => $row->{chrom},
+			      "-start" => $min,
+			      "-end" => $max
+			      );
+      $fai_sub = $self->fai->generate_chunk_query();
+    }
 
     my $cds_start = $row->{cdsStart} + 1;
     # convert from interbase to in-base
@@ -361,7 +431,15 @@ sub genome_map {
 	my @coding_base_numbers;
 	foreach my $e (@codon) {
 	  my $bn = $e->{ref_base_num};
-	  my $ref_base = substr($$seq_ref, $bn - 1, 1);
+	  my $ref_base;
+	  if ($use_whole) {
+	    $ref_base = substr($$seq_ref, $bn - 1, 1);
+	  } else {
+#	    $ref_base = $self->fai->get_chunked_base("-start" => $bn,
+#						     "-length" => 1);
+	    $ref_base = &$fai_sub($bn, 1);
+	  }
+#	  printf STDERR "ref for %d is %s\n", $bn, $ref_base;
 	  $e->{ref_base_genome} = $ref_base;
 	  $ref_base = complement($ref_base) if $is_rc;
 	  # already reversed above, just needs complement
@@ -502,7 +580,14 @@ sub chrom_compare {
 sub get_aa {
   my ($self, %options) = @_;
   my $acc = $options{"-accession"} || die;
-  return $self->r2p->{$acc};
+  my $aa = $self->r2p->{$acc};
+  if (not($aa) and $acc =~ /\-/) {
+    # accession might be refFlat "sharp", e.g.
+    #   NM_001098407-locA-1
+    $acc =~ s/\-.*//;
+    $aa = $self->r2p->{$acc};
+  }
+  return $aa;
 }
 
 sub is_intronic {

@@ -6,7 +6,7 @@ use Exporter;
 
 use Carp qw(cluck confess carp);
 use FileUtils qw(read_simple_file);
-use List::Util qw(min max);
+use List::Util qw(min max sum);
 
 @MiscUtils::ISA = qw(Exporter);
 @MiscUtils::EXPORT_OK = qw(
@@ -31,6 +31,8 @@ shell_cmd
 interval_overlap
 float_trim
 get_java_version
+module_dependencies
+mean_variance_standard_deviation
                           );
 
 
@@ -547,8 +549,57 @@ sub get_java_version {
   return $result;
 }
 
-1;
+sub module_dependencies {
 
+  my ($module, $path);
+
+  my %src;
+
+  while (($module, $path) = each %INC) {
+    # HACKY: local system policies rather than a global policy
+    if ($module =~ /^\// or
+	$path =~ /^\/hpcf\/apps\/perl\/install\//) {
+      # ignore:
+      # - module name starts with a slash (?)
+      # - system/builtin module, ignore
+    } elsif ($path =~ /cluster_code\/trunk\/([^\/]+)\//) {
+      # local SJ compbio package
+      $src{$1}{$module} = 1;
+    } else {
+      $src{third_party}{$module} = 1;
+    }
+  }
+
+  printf STDERR "detected module dependencies:\n";
+  foreach my $class (sort keys %src) {
+    printf STDERR "  %s:\n", $class;
+    foreach my $m (sort keys %{$src{$class}}) {
+      printf STDERR "    %s\n", $m;
+    }
+  }
+}
+
+sub mean_variance_standard_deviation {
+  # given a [reference to a] list, return mean, variance and standard deviation
+  my $listref = shift;
+
+  my $mean = average($listref);
+#  my @squared_variances = map {abs($mean - $_) ** 2} @{$listref};
+  my @squared_variances = map {($mean - $_) ** 2} @{$listref};
+  # abs _required_: perl's exponentiation is weird w/negative nonvariables;
+  # ie "print -2 ** 2" returns -4 (!).
+  # Oops; this is an operator precedence problem:
+  # "print (-2) ** 2" works correctly.  "Never mind."
+
+  my $variance = sum(@squared_variances) / @{$listref};
+  # average of the sum of squared differences from the mean (whew)
+  my $standard_deviation = sqrt($variance);
+
+  return ($mean, $variance, $standard_deviation);
+}
+
+
+1;
 =head1 LICENCE AND COPYRIGHT
 Copyright 2019 St. Jude Children's Research Hospital 
 

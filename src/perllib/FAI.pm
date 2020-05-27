@@ -17,6 +17,7 @@ use Exporter;
 use MiscUtils qw(dump_die);
 use ReferenceNameMapper;
 use TdtConfig;
+use CacheManager;
 
 @FAI::ISA = qw(Configurable Exporter);
 @FAI::EXPORT_OK = qw(get_fai);
@@ -28,6 +29,7 @@ index
 sequence_cache
 
 chunk_ref
+last_chunk_setup
 start_base
 rnm
 
@@ -39,15 +41,16 @@ buffered_buffer_length
 
 chunk_cache_chromosomes
 genome
+limit_chrom_cache
 		  );
 
 sub new {
   my ($type, %options) = @_;
   my $self = {};
   bless $self, $type;
-  $self->sequence_cache({});
   $self->buffered_buffer_length(1000);
   $self->configure(%options);
+  $self->reset_cache();
   $self->setup();
   return $self;
 }
@@ -92,32 +95,20 @@ sub setup {
   $self->index(\%index);
 }
 
+sub reset_cache {
+  my ($self) = @_;
+  my $limit = $self->limit_chrom_cache() || 10000;
+  # by default, set very high value so effectively no limit
+  my $cm = new CacheManager("-cache_limit" => $limit);
+#  $cm->verbose(1);
+  $self->sequence_cache($cm);
+}
+
 sub get_irow {
   my ($self, %options) = @_;
   my $id_raw = $options{"-id"} || die "-id";
-
-  my @try = $id_raw;
-  # lookup as given
-  my $thing = $id_raw;
-  $thing =~ s/^chr//i;
-  # try without chr, if present
-  my @things;
-  push @things, $thing;
-  push @things, "M" if $thing eq "MT";
-  push @things, "MT" if $thing eq "M";
-
-  foreach my $t (@things) {
-    push @try, $t;
-    push @try, "chr" . $t;
-    # add chr, if needed
-  }
-
-  my $irow;
-  foreach my $id (@try) {
-    $irow = $self->index->{$id};
-    last if $irow;
-  }
-  confess "no hit for $id_raw" unless $irow;
+  my $id_idx = $self->find_name($id_raw) || confess "no hit for $id_raw";
+  my $irow = $self->index->{$id_idx} || die;
   return $irow;
 }
 
@@ -129,7 +120,8 @@ sub get_sequence {
 
   my $seq_ref;
   my $sid = $irow->{sequence_id} || die;
-  if ($seq_ref = $self->sequence_cache->{$sid}) {
+
+  if ($seq_ref = $self->sequence_cache->get($sid)) {
     # cached
   } else {
 #    dump_die(\%options, "fasta load", 1);
@@ -146,7 +138,7 @@ sub get_sequence {
     }
     close FASTA;
     $seq_ref = \$seq;
-    $self->sequence_cache->{$sid} = $seq_ref;
+    $self->sequence_cache->put($sid, $seq_ref);
     print STDERR "done\n";
   }
   die "length mismatch" unless length($$seq_ref) == $expected_len;
@@ -229,6 +221,24 @@ sub sanity_check {
 
 sub chunk_setup {
   my ($self, %options) = @_;
+  if (my $last = $self->last_chunk_setup()) {
+    # 
+    my $all_agree = 1;
+#    dump_die(\%options, "this", 1);
+    while (my ($k, $v) = each %options) {
+      if (!(exists $last->{$k} and $options{$k} eq $last->{$k})) {
+	$all_agree = 0;
+	last;
+      }
+    }
+    if ($all_agree) {
+      # cache hit
+#      printf STDERR "FAI chunk cache hit\n";
+      return;
+    }
+  }
+  $self->last_chunk_setup(\%options);
+
   my $chunk = $self->get_chunk(%options);
   my $start = $options{"-start"} || die "-start";
 
@@ -296,6 +306,20 @@ sub get_chunk_buffered {
 sub find_name {
   my ($self, $name) = @_;
   return $self->rnm->find_name($name);
+}
+
+sub generate_chunk_query {
+  my ($self) = @_;
+  my $chunk_ref = $self->chunk_ref() || die;
+  my $start_base = $self->start_base();
+
+  my $code = sub {
+    # args:
+    #  (1) query basse number (1-based)
+    #  (2) length
+    return substr($$chunk_ref, $_[0] - $start_base, $_[1]);
+  };
+  return $code;
 }
 
 1;

@@ -45,6 +45,7 @@ my $optionOK = GetOptions(
 	'rmdup!'		=> \$rmdup,
 	'min_sc_len=i'	=>	\$min_sc_len,
 	'm|min_sc_reads=i'	=>	\$min_sc_reads,
+	'c|cluster=i'   => \$sc_shift,
 	'lq_cutoff=i'	=> \$lowqual_cutoff,
 	'min_pct_hq=i'	=> \$min_percent_hq,
 	'r|range=s'		=> \$range,

@@ -61,6 +61,11 @@ singularity run docker://mnedmonson/public:rnapeg RNApeg.sh -b bamfile -f fasta 
 Reference files are required to run CICERO. They can be found at the following location:
 * https://www.stjuderesearch.org/site/lab/zhang/cicero
 
+### Demo
+
+A demo of CICERO can be found at the following location:
+* https://www.stjuderesearch.org/site/lab/zhang/cicero
+
 ### License
 Copyright 2019 St. Jude Children's Research Hospital
 

@@ -1,4 +1,4 @@
-FROM ubuntu:19.04 as builder
+FROM ubuntu:18.04 as builder
 
 ENV PATH /opt/conda/bin:$PATH
 
@@ -18,7 +18,12 @@ RUN apt-get update && \
     apt-get install libncursesw5-dev -y && \
     apt-get install libexpat1-dev -y && \
     apt-get install libdb-dev -y && \
+    apt-get install locales -y && \
     rm -r /var/lib/apt/lists/*
+
+RUN locale-gen en_US.UTF-8
+RUN update-locale
+ENV LC_ALL en_US.UTF-8
 
 RUN umask 002
 RUN mkdir -p /usr/local/perlbrew /root
@@ -31,8 +36,7 @@ ENV PATH /usr/local/perlbrew/bin:$PATH
 ENV PERLBREW_PATH /usr/local/perlbrew/bin
 ENV PERL_VERSION 5.10.1
 
-
-RUN perlbrew install 5.10.1
+RUN perlbrew --notest install 5.10.1
 ENV PATH ${PERLBREW_ROOT}/perls/perl-$PERL_VERSION/bin:$PATH
 RUN perlbrew switch perl-5.10.1
 RUN perlbrew install-cpanm
@@ -61,6 +65,12 @@ RUN conda update -n base -c defaults conda -y && \
 
 RUN which perl
 RUN perl -v
+
+RUN cpanm --force -i \
+    Algorithm::Combinatorics@0.26
+
+RUN cpanm --force -i \
+    Set::IntSpan@1.19
 
 RUN cpanm --force -i \ 
     enum \
