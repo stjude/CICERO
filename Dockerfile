@@ -90,6 +90,7 @@ RUN SAMTOOLS="/tmp/samtools-0.1.17" cpanm --force -i Bio::DB::Sam@1.35 && chown 
 
 COPY src/scripts /opt/cicero/src/bin
 COPY src/perllib /opt/cicero/src/perllib
+COPY dependencies/lib/perl/* /opt/cicero/src/perllib/
 COPY configs /opt/cicero/configs
 
 ENV PATH /opt/cicero/src/bin:${PATH}
