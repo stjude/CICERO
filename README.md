@@ -1,4 +1,4 @@
-### CICERO 0.1.8
+### CICERO 0.2.0
 
 CICERO (Clipped-reads Extended for RNA Optimization) is an assembly-based algorithm to detect diverse classes
 of driver gene fusions from RNA-seq.
@@ -65,6 +65,10 @@ Reference files are required to run CICERO. They can be found at the following l
 
 A demo of CICERO can be found at the following location:
 * https://www.stjuderesearch.org/site/lab/zhang/cicero
+
+### Citation
+
+Tian, L., Li, Y., Edmonson, M.N. et al. CICERO: a versatile method for detecting complex and diverse driver fusions using cancer RNA sequencing data. Genome Biol 21, 126 (2020). https://doi.org/10.1186/s13059-020-02043-x
 
 ### License
 Copyright 2019 St. Jude Children's Research Hospital
