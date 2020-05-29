@@ -88,8 +88,9 @@ RUN wget https://downloads.sourceforge.net/project/samtools/samtools/0.1.17/samt
 
 RUN SAMTOOLS="/tmp/samtools-0.1.17" cpanm --force -i Bio::DB::Sam@1.35 && chown -R root:root /usr/local/.cpanm
 
-COPY src/bin /opt/cicero/src/bin
+COPY src/scripts /opt/cicero/src/bin
 COPY src/perllib /opt/cicero/src/perllib
+COPY dependencies/lib/perl/* /opt/cicero/src/perllib/
 COPY configs /opt/cicero/configs
 
 ENV PATH /opt/cicero/src/bin:${PATH}

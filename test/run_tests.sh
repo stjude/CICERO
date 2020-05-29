@@ -3,8 +3,8 @@
 ##########################
 ### Verify environment ###
 ##########################
-export PATH=`readlink -f $(pwd)/../src/bin`:$PATH
-export PERL5LIB=`readlink -f $(pwd)/../src/perllib`:$PERL5LIB
+export PATH=`readlink -f $(pwd)/../src/scripts`:$PATH
+export PERL5LIB=`readlink -f $(pwd)/../src/perllib`:`readlink -f $(pwd)/../dependencies/lib/perl`:$PERL5LIB
 export CLASSPATH=`readlink -f $(pwd)/../src/javalib`/*
 export LC_ALL=C
 
