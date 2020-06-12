@@ -34,7 +34,7 @@ Where `ncores` is the number of cores to be run on (with [GNU parallel](https://
 `bamfile` is the input bamfile, `genome` is GRCh37-lite, `refdir` is the reference file directory specific to
 CICERO, and `junctions` is the (optional) junctions file output from RNApeg.
 
-Once you have the output from CICERO, use the following [guide](https://www.stjude.cloud/docs/guides/tools/rapid-rnaseq/) to interpret the results.
+Once you have the output from CICERO, use the following [guide](https://www.stjude.cloud/docs/guides/genomics-platform/analyzing-data/rapid-rnaseq/) to interpret the results.
 
 ## Dependencies <a name="dependencies"></a>
 
