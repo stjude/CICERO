@@ -98,7 +98,7 @@ RNApeg is required to generate a junctions file for use by CICERO. You can get R
 ```
 docker run mnedmonson/public:rnapeg RNApeg.sh -b bamfile -f fasta -r refflat [-rg refflat]
 ```
-###Running RNApeg via Singularity:
+### Running RNApeg via Singularity:
 ```
 singularity run docker://mnedmonson/public:rnapeg RNApeg.sh -b bamfile -f fasta -r refflat [-rg refflat]
 ```
