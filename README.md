@@ -94,11 +94,11 @@ for running and interpreting results is available in the [user guide](https://st
 
 RNApeg is required to generate a junctions file for use by CICERO. You can get RNApeg from both Docker and Singularity.
 
-Running RNApeg via Docker:
+### Running RNApeg via Docker:
 ```
 docker run mnedmonson/public:rnapeg RNApeg.sh -b bamfile -f fasta -r refflat [-rg refflat]
 ```
-Running RNApeg via Singularity:
+###Running RNApeg via Singularity:
 ```
 singularity run docker://mnedmonson/public:rnapeg RNApeg.sh -b bamfile -f fasta -r refflat [-rg refflat]
 ```
