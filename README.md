@@ -13,7 +13,7 @@ of driver gene fusions from RNA-seq.
 
 <br />
 <p align="center">
-  <img alt="CICERO design diagram" src="docs/CICERO.png"/>
+  <img alt="Overview of CICERO algorithm which consists of fusion detection through analysis of candidate SV breakpoints and splice junction, fusion annotation, and ranking." src="docs/CICERO.png"/>
 </p>
 <br />
 
