@@ -82,7 +82,7 @@ docker build -t stjude/cicero:0.2.0 .
 Then invoke the CICERO wrapper using Docker.
 
 ```
-docker run -v <path to reference directory>:/reference stjude/cicero:0.2.0 [-n cores] -b <bam file path> -g <genome, e.g. GRCh37-lite> -r /reference [-j junctions file] [-o output directory] [-p] [-s int] [-t int] [-c int]
+docker run -v <path to reference directory>:/reference stjude/cicero:0.2.0 Cicero.sh [-n cores] -b <bam file path> -g <genome, e.g. GRCh37-lite> -r /reference [-j junctions file] [-o output directory] [-p] [-s int] [-t int] [-c int]
 ```
 
 ## Running with St. Jude Cloud <a name="cloud"></a>
