@@ -69,7 +69,6 @@ if($excludes_file){
 open my $chrFile, "<", $conf->{'CHR_LENGTHS'};
 while (my $chr = <$chrFile>){
 	($chr, my $len) = split(/\s/, $chr);
-	$chr = handleChrPrefix($chr); 
 	my $skip = 0; 
 	foreach my $bad (@chrs){
 		$skip = 1 if ($chr =~ /.*$bad.*/i); 
@@ -121,7 +120,6 @@ sub readRegions{
 	while(my $line = <$fh>){
 		chomp $line; 
 		my ($chrom, $start, $end, $type) = split("\t", $line);
-		$chrom = handleChrPrefix($chrom); 
 		$regions{$chrom}{$start} = $end; 
 	}
 }
