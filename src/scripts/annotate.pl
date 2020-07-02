@@ -417,7 +417,6 @@ while(my $line = <$UNF>){
 
 	# Check if the reference uses 'chr' prefixes
 	# Ensure that the breakpoint chromosome names match
-	unless($seq_ids[0] =~ m/chr/) {$first_bp->{tname} =~ s/chr//; $second_bp->{tname} =~ s/chr//;}
 	next if(!$internal && is_bad_fusion($first_bp->{tname}, $first_bp->{tpos}, $second_bp->{tname}, $second_bp->{tpos}));
 
 	# Determine the variant type: CTX, Internal_inv, Interal_splicing, Internal_dup, ITX, read_through, DEL, INS
@@ -464,10 +463,10 @@ if($junction_file){
   open(my $JUNC, "$junction_file");
   while(my $line = <$JUNC>){
 	chomp($line);
-	next unless($line =~ m/novel/ || $line =~ m/chrX:1331/);
+	next unless($line =~ m/novel/ || $line =~ m/chrX:1212/);
 	my @fields = split("\t",$line);
 	my ($junction, $gene, $qc_flanking, $qc_perfect_reads, $qc_clean_reads) = @fields[0,3,5,8,9];
-	unless($line =~ m/chrX:1331/){
+	unless($line =~ m/chrX:1212/){
 		next if($qc_perfect_reads < 2 || $qc_flanking < 5);
 		next if($qc_perfect_reads + $qc_clean_reads < 5);
 	}
@@ -516,7 +515,6 @@ if($junction_file){
 	next if($bad_fusion);
 	next if($qc_perfect_reads < $cutoff);
 
-	unless($seq_ids[0] =~ m/chr/) {$chr1 =~ s/chr//; $chr2 =~ s/chr//;}
 	if($cutoff == -1){
 		my $bg_reads1 =  count_coverage($sam_d, $chr1, $pos1);
 		my $bg_reads2 =  count_coverage($sam_d, $chr1, $pos2);
@@ -599,7 +597,6 @@ foreach my $fn (@cover_files) {
 		chomp;
 		my $line = $_;
 		chomp($line);
-		$line =~ s/chr//;
 		my ($chr, $pos, $clip, $sc_cover, $cover, $psc, $nsc, $pn, $nn) = split(/\t/,$line);
 		$clip = RIGHT_CLIP if($clip eq "+");
 		$clip = LEFT_CLIP if($clip eq "-");
@@ -647,8 +644,6 @@ foreach my $sv (@raw_SVs){
 
 		my $bp1_site = join("_", $first_bp->{tname}, $first_bp->{tpos}, $first_bp->{clip});
 		my $bp2_site = join("_", $second_bp->{tname}, $second_bp->{tpos}, $second_bp->{clip});
-		$bp1_site =~ s/chr//;
-		$bp2_site =~ s/chr//;
 
 	my $start_run = time();
 	print STDERR "\nstart to quantify the fusion... ", join(" ", $sv->{first_bp}->{tname}, $sv->{first_bp}->{tpos}, $sv->{second_bp}->{tname}, $sv->{second_bp}->{tpos}), "\n" if(abs($sv->{second_bp}->{tpos} - 170818803)<10 || abs($sv->{first_bp}->{tpos} - 170818803)<10);
@@ -1263,10 +1258,10 @@ sub quantification {
 	my @mappings;
 	print STDERR "start mapping ... $contig_file\n" if($debug && -s $contig_file);
 	print STDERR join("\t", $chr1, $pos1, $clip1, $read_len), "\n" if($debug);
-	my $ref_chr1 = $chr1; $ref_chr1 =~ s/chr//;
+	my $ref_chr1 = $chr1; 
 	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr1, -scSite=>$pos1, -CLIP=>$clip1, -READ_LEN => $read_len) if(-s $contig_file);
 	print STDERR "number of mapping: ", scalar @mappings, "\n" if($debug);
-	my $ref_chr2 = $chr2; $ref_chr2 =~ s/chr//;
+	my $ref_chr2 = $chr2; 
 	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr2, -scSite=>$pos2, -CLIP=>$clip2, -READ_LEN => $read_len) if(-s $contig_file);
 	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr2, -scSite=>$pos2, -CLIP=>$clip2, -READ_LEN => $read_len) if(($SV->{type} eq 'Internal_dup' || !@mappings) && -s $contig_file);
 
