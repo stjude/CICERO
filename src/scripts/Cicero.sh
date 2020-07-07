@@ -327,7 +327,6 @@ fi
 ########################
 ### STEP 05 - Filter ###
 ########################
-module load perl/5.10.1
 echo "Step 05 - $(date +'%Y.%m.%d %H:%M:%S') - Filter"
 {
 cicero_filter.sh $CICERO_DATADIR $SAMPLE $GENOME
