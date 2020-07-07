@@ -256,7 +256,7 @@ sub detect_SV{
 	print STDERR "finished assembly and start to map contigs...", "\n" if($debug);
 	my @mappings;
 	print STDERR "start mapping ... $contig_file\nsc_site: $sc_site\tclip: $clip\tmin_hit_len: $min_hit_len\n" if($debug && -s $contig_file);
-	my $ref_chr = normalizeChromsomeName($seq_ids[0], $chr);
+	my $ref_chr = normalizeChromosomeName($seq_ids[0], $chr);
 	push @mappings, $mapper->run(-QUERY=>$contig_file, -scChr => $ref_chr, -scSite=>$sc_site, -CLIP=>$clip, -READ_LEN=>$read_len) if(-s $contig_file);
 
 	my %num_of_mappings = ();
