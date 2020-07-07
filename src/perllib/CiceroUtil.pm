@@ -808,6 +808,21 @@ END {
 #    remove_tree($work_dir) ;
 }
 
+# Normalize a chromosome name using a template. 
+# e.g. pass a record from the sequence dictionary and a query to compare
+# will return the query in the same format as the template 
+sub normalizeChromosomeName {
+	my ($template, $query) = @_;
+	# If the template string has the "chr" prefix and the query does not, add it
+	if ($template =~ m/^chr/ && $query !~ m/^chr/){
+		$query = "chr".$query;
+	} # If the template does not have the "chr" prefix and the query does, remove it
+	elsif ($template !~ m/^chr/ && $query =~ m/^chr/){
+		$query =~ s/^chr//;
+	}
+	return $query; 
+}
+
 1;
 
 =head1 LICENCE AND COPYRIGHT

@@ -17,7 +17,7 @@ use File::Temp qw/ tempdir /;
 
 use CiceroSCValidator qw($lowqual_cutoff LEFT_CLIP RIGHT_CLIP);
 use CiceroUtil qw(prepare_reads_file parse_range rev_comp
-	is_PCR_dup read_fa_file get_discordant_reads get_sclip_reads);
+	is_PCR_dup read_fa_file get_discordant_reads get_sclip_reads normalizeChromosomeName);
 
 require CiceroExtTools;
 
@@ -416,6 +416,9 @@ while(my $line = <$UNF>){
 	$second_bp->{gene} = $crB if($crB);
 
 	# Check if the reference uses 'chr' prefixes
+	$first_bp->{tname} = normalizeChromosomeName($seq_ids[0], $first_bp->{tname});
+	$second_bp->{tname} = normalizeChromosomeName($seq_ids[0], $second_bp->{tname});
+
 	# Ensure that the breakpoint chromosome names match
 	next if(!$internal && is_bad_fusion($first_bp->{tname}, $first_bp->{tpos}, $second_bp->{tname}, $second_bp->{tpos}));
 
@@ -517,6 +520,10 @@ if($junction_file){
 	next if($bad_fusion);
 	next if($qc_perfect_reads < $cutoff);
 
+	# Ensure that the breakpoint chromosome names match
+	$chr1 = normalizeChromosomeName($seq_ids[0], $chr1);
+	$chr2 = normalizeChromosomeName($seq_ids[0], $chr2);
+
 	if($cutoff == -1){
 		my $bg_reads1 =  count_coverage($sam_d, $chr1, $pos1);
 		my $bg_reads2 =  count_coverage($sam_d, $chr1, $pos2);
@@ -599,7 +606,10 @@ foreach my $fn (@cover_files) {
 		chomp;
 		my $line = $_;
 		chomp($line);
+
 		my ($chr, $pos, $clip, $sc_cover, $cover, $psc, $nsc, $pn, $nn) = split(/\t/,$line);
+		$chr = normalizeChromosomeName($seq_ids[0], $chr);
+
 		$clip = RIGHT_CLIP if($clip eq "+");
 		$clip = LEFT_CLIP if($clip eq "-");
 		# If this is a new site, add it to the list of breakpoints
@@ -644,8 +654,11 @@ foreach my $sv (@raw_SVs){
 	next if($bad_gene);
 	print STDERR "next if($contigSeq && ", $contig_recurrance{$contigSeq}," > $max_num_hits)\n" if(abs($sv->{second_bp}->{tpos} - 170818803)<10 || abs($sv->{first_bp}->{tpos} - 170818803)<10); 
 
-		my $bp1_site = join("_", $first_bp->{tname}, $first_bp->{tpos}, $first_bp->{clip});
-		my $bp2_site = join("_", $second_bp->{tname}, $second_bp->{tpos}, $second_bp->{clip});
+	my $bp1_site = join("_", $first_bp->{tname}, $first_bp->{tpos}, $first_bp->{clip});
+	my $bp2_site = join("_", $second_bp->{tname}, $second_bp->{tpos}, $second_bp->{clip});
+	$bp1_site = normalizeChromosomeName($seq_ids[0], $bp1_site);
+	$bp2_site = normalizeChromosomeName($seq_ids[0], $bp2_site);
+
 
 	my $start_run = time();
 	print STDERR "\nstart to quantify the fusion... ", join(" ", $sv->{first_bp}->{tname}, $sv->{first_bp}->{tpos}, $sv->{second_bp}->{tname}, $sv->{second_bp}->{tpos}), "\n" if(abs($sv->{second_bp}->{tpos} - 170818803)<10 || abs($sv->{first_bp}->{tpos} - 170818803)<10);
@@ -1260,10 +1273,10 @@ sub quantification {
 	my @mappings;
 	print STDERR "start mapping ... $contig_file\n" if($debug && -s $contig_file);
 	print STDERR join("\t", $chr1, $pos1, $clip1, $read_len), "\n" if($debug);
-	my $ref_chr1 = $chr1; 
+	my $ref_chr1 = normalizeChromosomeName($seq_ids[0], $chr1);
 	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr1, -scSite=>$pos1, -CLIP=>$clip1, -READ_LEN => $read_len) if(-s $contig_file);
 	print STDERR "number of mapping: ", scalar @mappings, "\n" if($debug);
-	my $ref_chr2 = $chr2; 
+	my $ref_chr2 = normalizeChromosomeName($seq_ids[0], $chr2);
 	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr2, -scSite=>$pos2, -CLIP=>$clip2, -READ_LEN => $read_len) if(-s $contig_file);
 	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr2, -scSite=>$pos2, -CLIP=>$clip2, -READ_LEN => $read_len) if(($SV->{type} eq 'Internal_dup' || !@mappings) && -s $contig_file);
 

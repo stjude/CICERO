@@ -10,6 +10,7 @@ use Pod::Usage;
 use Data::Dumper;
 use File::Basename;
 use TdtConfig; 
+use CiceroUtil qw(normalizeChromosomeName);
 
 if (@ARGV == 0){
 	pod2usage(1); 
@@ -59,6 +60,10 @@ else{
 	croak "Unknown genome name: $genome\n";
 }
 
+my $sam_d = Bio::DB::Sam->new( -bam => $input_bam, -fasta => $genome_file);
+my @seq_ids = $sam_d->seq_ids;
+
+
 my @chrs = split(/,/, $excluded_chr); 
 my %regions; 
 if($excludes_file){
@@ -69,6 +74,8 @@ if($excludes_file){
 open my $chrFile, "<", $conf->{'CHR_LENGTHS'};
 while (my $chr = <$chrFile>){
 	($chr, my $len) = split(/\s/, $chr);
+	$chr = normalizeChromosomeName($seq_ids[0], $chr); 
+	
 	my $skip = 0; 
 	foreach my $bad (@chrs){
 		$skip = 1 if ($chr =~ /.*$bad.*/i); 
@@ -120,14 +127,9 @@ sub readRegions{
 	while(my $line = <$fh>){
 		chomp $line; 
 		my ($chrom, $start, $end, $type) = split("\t", $line);
+		$chrom = normalizeChromosomeName($seq_ids[0], $chrom);
 		$regions{$chrom}{$start} = $end; 
 	}
-}
-
-sub handleChrPrefix{
-	my ($in) = @_; 
-	$in =~ s/^chr//;
-	return $in; 
 }
 
 =head1 LICENCE AND COPYRIGHT
