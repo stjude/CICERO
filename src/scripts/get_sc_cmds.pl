@@ -60,7 +60,7 @@ else{
 	croak "Unknown genome name: $genome\n";
 }
 
-my $sam_d = Bio::DB::Sam->new( -bam => $input_bam, -fasta => $genome_file);
+my $sam_d = Bio::DB::Sam->new( -bam => $bam_file, -fasta => $genome_file);
 my @seq_ids = $sam_d->seq_ids;
 
 
