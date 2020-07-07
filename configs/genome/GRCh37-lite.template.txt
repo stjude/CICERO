@@ -1,0 +1,26 @@
+GENE_EXON_REGION_DIR	/Homo_sapiens/GRCh37-lite/REGIONS/GENE_EXON_REGION
+TWOBIT	/Homo_sapiens/GRCh37-lite/2BIT/GRCh37-lite.2bit
+COMBINED_REFFLAT	/Homo_sapiens/GRCh37-lite/mRNA/Combined/all_refFlats.txt
+FASTA_CHR	/Homo_sapiens/GRCh37-lite/FASTA/chromosomes
+FASTA	/Homo_sapiens/GRCh37-lite/FASTA/GRCh37-lite.fa
+REFSEQ_REFFLAT	/Homo_sapiens/GRCh37-lite/mRNA/RefSeq/refFlat-sharp.txt
+BLACKLIST_GENES	/Homo_sapiens/GRCh37-lite/CICERO/blacklist.genes.txt
+BLACKLIST_FUSIONS	/Homo_sapiens/GRCh37-lite/CICERO/blacklist.fusions.txt
+EXCLD_CHR	M,Y,GL,HAP
+EXCLUDED_REGIONS	/Homo_sapiens/GRCh37-lite/CICERO/hg19.exclude
+REFGENE2PROTEIN	/Homo_sapiens/GRCh37-lite/CICERO/refgene2protein.tab
+CHR_LENGTHS	/Homo_sapiens/GRCh37-lite/SUPPORT/chromosome_lengths.txt
+COMPLEX_REGIONS	/Homo_sapiens/GRCh37-lite/CICERO/complex_regions.txt
+KNOWN_FUSIONS	/Homo_sapiens/GRCh37-lite/CICERO/known_fusions.txt
+KNOWN_ITD_FILE	/Homo_sapiens/GRCh37-lite/CICERO/known_ITDs.txt
+KNOWN_BREAKPOINTS       /Homo_sapiens/GRCh37-lite/CICERO/known_breakpoints.txt
+CLINCLS_GOLD_GENE_LIST_FILE	/Homo_sapiens/GRCh37-lite/CLINICAL/MEDAL_CONFIG/GoldGene.lst
+
+BLAT_HOST	localhost	
+BLAT_PORT	0
+
+MAX_NUM_HITS	
+MIN_FUSION_DIST	
+MIN_HIT_LEN	
+MIN_SC_LEN	
+MIN_SC_READS	
