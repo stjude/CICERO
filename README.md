@@ -92,7 +92,7 @@ for running and interpreting results is available in the [user guide](https://st
 
 ## Generate junctions file with RNApeg <a name="junctions"></a>
 
-RNApeg is required to generate a junctions file for use by CICERO. You can get RNApeg from both Docker and Singularity.
+RNApeg is required to generate a junctions file for use by CICERO. You can get RNApeg from both Docker and Singularity. Once RNApeg is complete, the `*.junctions.tab.shifted.tab` file can be provided to CICERO using the `-j` argument. 
 
 ### Running RNApeg via Docker:
 ```
