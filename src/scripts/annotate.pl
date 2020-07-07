@@ -463,10 +463,12 @@ if($junction_file){
   open(my $JUNC, "$junction_file");
   while(my $line = <$JUNC>){
 	chomp($line);
-	next unless($line =~ m/novel/ || $line =~ m/chrX:1212/);
+	# chrX:1212 is the hg38 coordinate prefix for CRLF2 (chrX:1,190,449-1,212,815(GRCh38/hg38))
+	# chrX:1331 is the hg19 coordinate prefix for CRLF2 (chrX:1,314,869-1,331,616(GRCh37/hg19))
+	next unless($line =~ m/novel/ || $line =~ m/chrX:1212/ || $line =~ m/chrX:1331/);
 	my @fields = split("\t",$line);
 	my ($junction, $gene, $qc_flanking, $qc_perfect_reads, $qc_clean_reads) = @fields[0,3,5,8,9];
-	unless($line =~ m/chrX:1212/){
+	unless($line =~ m/chrX:1212/ || $line =~ m/chrX:1331/){
 		next if($qc_perfect_reads < 2 || $qc_flanking < 5);
 		next if($qc_perfect_reads + $qc_clean_reads < 5);
 	}
