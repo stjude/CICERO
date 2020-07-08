@@ -30,17 +30,18 @@ of driver gene fusions from RNA-seq.
 - [License](#license)
 
 ## Running CICERO <a name="running"></a>
+Add the `src/scripts` directory to your system `PATH` variable. Add the `src/perllib` and `dependencies/lib/perl` directories to your system `PERL5LIB` variable. 
 
-Invoke the CICERO wrapper as
+Then invoke the CICERO wrapper as
 ```
-Cicero.sh [-n ncores] -b bamfile -g genome -r refdir -j junctions [-o outdir] [-t threshold] [-s sc_cutoff] [-c sc_shift] [-p]
+Cicero.sh [-n ncores] -b bamfile -g genome -r refdir -j junctions -o outdir [-t threshold] [-s sc_cutoff] [-c sc_shift] [-p]
 ```
 
 Where `ncores` is the number of cores to be run on (with [GNU parallel](https://www.gnu.org/software/parallel/)),
 `bamfile` is the input bamfile, `genome` is GRCh37-lite, `refdir` is the reference file directory specific to
-CICERO, and `junctions` is the (optional) junctions file output from RNApeg.
+CICERO, and `junctions` is the junctions file output from RNApeg.
 
-Once you have the output from CICERO, use the following [guide](https://www.stjude.cloud/docs/guides/genomics-platform/analyzing-data/rapid-rnaseq/) to interpret the results.
+The results will be located at `<outdir>/CICERO_DATADIR/<sample name>/final_fusions.txt`. Once you have the output from CICERO, use the following [guide](https://www.stjude.cloud/docs/guides/genomics-platform/analyzing-data/rapid-rnaseq/) to interpret the results.
 
 ## Dependencies <a name="dependencies"></a>
 
@@ -82,7 +83,7 @@ docker build -t stjude/cicero:0.2.0 .
 Then invoke the CICERO wrapper using Docker.
 
 ```
-docker run -v <path to reference directory>:/reference stjude/cicero:0.2.0 Cicero.sh [-n cores] -b <bam file path> -g <genome, e.g. GRCh37-lite> -r /reference -j <junctions file> [-o output directory] [-p] [-s int] [-t int] [-c int]
+docker run -v <path to reference directory>:/reference stjude/cicero:0.2.0 Cicero.sh [-n cores] -b <bam file path> -g <genome, e.g. GRCh37-lite> -r /reference -j <junctions file> -o <output directory> [-p] [-s int] [-t int] [-c int]
 ```
 
 ## Running with St. Jude Cloud <a name="cloud"></a>
