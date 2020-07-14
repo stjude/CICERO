@@ -292,6 +292,7 @@ while(<$ITD_F>){
 # Load gene pairs that are enhancer activated
 # involving T-cell receptors and immunoglobulin loci
 my %enhancer_activated_genes = ();
+my %known_fusion_partners = ();
 if($known_fusion_file && -e $known_fusion_file){
    open(my $KFF, $known_fusion_file);
    while(<$KFF>){
@@ -301,6 +302,8 @@ if($known_fusion_file && -e $known_fusion_file){
 	next if exists($enhancer_activated_genes{$gene2});
 	$enhancer_activated_genes{$gene2} = $gene1 if($gene1 =~ m/^IG.$/ || $gene1 =~ m/^TR.$/);
 	$enhancer_activated_genes{$gene1} = $gene2 if($gene2 =~ m/^IG.$/ || $gene2 =~ m/^TR.$/);
+	$known_fusion_partners{$gene1}{$gene2} = 1;
+	$known_fusion_partners{$gene2}{$gene1} = 1;
    }
    close($KFF);
 }
@@ -699,8 +702,11 @@ foreach my $sv (@annotated_SVs){
 	print STDERR "xxx\n" if(abs($sv->{second_bp}->{tpos} - 170818803)<10 || abs($sv->{first_bp}->{tpos} - 170818803)<10);
 	my ($bp1, $bp2, $qseq) = ($sv->{first_bp}, $sv->{second_bp}, $sv->{junc_seq});
 	if(exists($blacklist{$bp1->{gene}}) || exists($blacklist{$bp2->{gene}})){
-		print STDERR "Removing duplicate: gene1: ".$bp1->{gene}." gene2: ".$bp2->{gene}."\n";
-		next;
+		# If the highly recurrent fusion doesn't involve known partners, remove it.
+		if ( !(exists($known_fusion_partners{$bp1->{gene}}{$bp2->{gene}}) || exists($known_fusion_partners{$bp2->{gene}}{$bp1->{gene}}))){
+			print STDERR "Removing duplicate: gene1: ".$bp1->{gene}." gene2: ".$bp2->{gene}."\n";
+			next;
+		}
 	}
 	if($sv && ! is_dup_SV(\@uniq_SVs, $sv)){
 		push @uniq_SVs, $sv;
