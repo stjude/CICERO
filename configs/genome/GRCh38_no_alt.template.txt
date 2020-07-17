@@ -1,0 +1,24 @@
+TWOBIT	/Homo_sapiens/GRCh38_no_alt/2BIT/GRCh38_no_alt.2bit
+COMBINED_REFFLAT	/Homo_sapiens/GRCh38_no_alt/mRNA/RefSeq/refFlat.txt
+FASTA	/Homo_sapiens/GRCh38_no_alt/FASTA/GRCh38_no_alt.fa
+REFSEQ_REFFLAT	/Homo_sapiens/GRCh38_no_alt/mRNA/RefSeq/refFlat-sharp.txt
+BLACKLIST_GENES	/Homo_sapiens/GRCh38_no_alt/CICERO/blacklist.genes.txt
+BLACKLIST_FUSIONS	/Homo_sapiens/GRCh38_no_alt/CICERO/blacklist.fusions.txt
+EXCLD_CHR	chrM,chrY,_KI,_GL,chrEBV
+EXCLUDED_REGIONS	/Homo_sapiens/GRCh38_no_alt/CICERO/hg38.exclude
+REFGENE2PROTEIN	/Homo_sapiens/GRCh38_no_alt/CICERO/refgene2protein.tab
+CHR_LENGTHS	/Homo_sapiens/GRCh38_no_alt/SUPPORT/chromosome_lengths.txt
+COMPLEX_REGIONS	/Homo_sapiens/GRCh38_no_alt/CICERO/complex_regions.txt
+KNOWN_FUSIONS	/Homo_sapiens/GRCh38_no_alt/CICERO/known_fusions.txt
+KNOWN_ITD_FILE	/Homo_sapiens/GRCh38_no_alt/CICERO/known_ITDs.txt
+KNOWN_BREAKPOINTS       /Homo_sapiens/GRCh38_no_alt/CICERO/known_breakpoints.txt
+CLINCLS_GOLD_GENE_LIST_FILE	/Homo_sapiens/GRCh38_no_alt/CLINICAL/MEDAL_CONFIG/GoldGene.lst
+
+BLAT_HOST	localhost	
+BLAT_PORT	0
+
+MAX_NUM_HITS	
+MIN_FUSION_DIST	
+MIN_HIT_LEN	
+MIN_SC_LEN	
+MIN_SC_READS

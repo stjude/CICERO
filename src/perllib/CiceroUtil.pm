@@ -15,7 +15,7 @@ require Exporter;
 our @ISA = ('Exporter');
 our @EXPORT = qw(print_out is_new_pair prepare_reads_file parse_range
 	is_PCR_dup read_fa_file read_config_file
-	get_sclip_reads get_discordant_reads get_junction_reads rev_comp get_mate_reads);
+	get_sclip_reads get_discordant_reads get_junction_reads rev_comp get_mate_reads normalizeChromosomeName);
 
 sub rev_comp {
     my $str = shift;
@@ -806,6 +806,21 @@ BEGIN {
 END {
 	chdir($start_dir);
 #    remove_tree($work_dir) ;
+}
+
+# Normalize a chromosome name using a template. 
+# e.g. pass a record from the sequence dictionary and a query to compare
+# will return the query in the same format as the template 
+sub normalizeChromosomeName {
+	my ($template, $query) = @_;
+	# If the template string has the "chr" prefix and the query does not, add it
+	if ($template =~ m/^chr/ && $query !~ m/^chr/){
+		$query = "chr".$query;
+	} # If the template does not have the "chr" prefix and the query does, remove it
+	elsif ($template !~ m/^chr/ && $query =~ m/^chr/){
+		$query =~ s/^chr//;
+	}
+	return $query; 
 }
 
 1;
