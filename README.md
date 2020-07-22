@@ -1,4 +1,4 @@
-# CICERO 0.2.0
+# CICERO 0.3.0
 
 <div align="center">
 
@@ -81,13 +81,13 @@ To visualize CICERO fusion output you can load the final fusion output file at h
 CICERO can be run with Docker. To begin, build the Docker image using the Dockerfile in this repository. 
 
 ```
-docker build -t stjude/cicero:0.2.0 .
+docker build -t stjude/cicero:0.3.0 .
 ```
 
 Then invoke the CICERO wrapper using Docker.
 
 ```
-docker run -v <path to reference directory>:/reference stjude/cicero:0.2.0 Cicero.sh [-n cores] -b <bam file path> -g <genome, e.g. GRCh37-lite> -r /reference -o <output directory> [-j junctions file] [-p] [-s int] [-t int] [-c int]
+docker run -v <path to reference directory>:/reference stjude/cicero:0.3.0 Cicero.sh [-n cores] -b <bam file path> -g <genome, e.g. GRCh37-lite> -r /reference -o <output directory> [-j junctions file] [-p] [-s int] [-t int] [-c int]
 ```
 
 ## Running with St. Jude Cloud <a name="cloud"></a>
