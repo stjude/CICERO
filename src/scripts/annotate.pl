@@ -1141,7 +1141,7 @@ sub annotate_bp{
                                         $bp->{ts_strand} = $bp->{qstrand};
                                         $bp->{gene} = $g->name;
                                         $dist = $tmp_dist;
-                                        print STDERR "update1 ", $tmp_score, " ", $tmp_feature, " ", $bp->{ts_strand}, " ", $bp->{gene}, " ", $dist, "\n";
+                                        #print STDERR "update1 ", $tmp_score, " ", $tmp_feature, " ", $bp->{ts_strand}, " ", $bp->{gene}, " ", $dist, "\n";
                                 }
                         }
                         else{
@@ -1150,7 +1150,7 @@ sub annotate_bp{
                                         $bp->{feature} = $tmp_feature;
                                         $bp->{ts_strand} = $bp->{qstrand};
                                         $bp->{gene} = $g->name;
-                                        print STDERR "update1 ", $tmp_score, " ", $tmp_feature, " ", $bp->{ts_strand}, " ", $bp->{gene}, " ", $dist, "\n";
+                                        #print STDERR "update1 ", $tmp_score, " ", $tmp_feature, " ", $bp->{ts_strand}, " ", $bp->{gene}, " ", $dist, "\n";
                                 }
                         }
 		}
@@ -1182,7 +1182,7 @@ sub annotate_bp{
                                         $bp->{ts_strand} = -1*$bp->{qstrand};
                                         $bp->{gene} = $g->name;
                                         $dist = $tmp_dist;
-                                        print STDERR "update2 ", $tmp_score, " ", $tmp_feature, " ", $bp->{ts_strand}, " ", $bp->{gene}, " ", $dist, "\n";
+                                        #print STDERR "update2 ", $tmp_score, " ", $tmp_feature, " ", $bp->{ts_strand}, " ", $bp->{gene}, " ", $dist, "\n";
                                 }
                         }
                         else{
@@ -1191,14 +1191,14 @@ sub annotate_bp{
                                         $bp->{feature} = $tmp_feature;
                                         $bp->{ts_strand} = -1*$bp->{qstrand};
                                         $bp->{gene} = $g->name;
-                                        print STDERR "update2 ", $tmp_score, " ", $tmp_feature, " ", $bp->{ts_strand}, " ", $bp->{gene}, " ", $dist, "\n";
+                                        #print STDERR "update2 ", $tmp_score, " ", $tmp_feature, " ", $bp->{ts_strand}, " ", $bp->{gene}, " ", $dist, "\n";
                                 }
                                 elsif((($bp->{annotate_score} > -0.81) && ($bp->{annotate_score} < -0.49)) && (abs($tmp_score) > abs($bp->{annotate_score}))){
                                         $bp->{annotate_score} = $tmp_score;
                                         $bp->{feature} = $tmp_feature;
                                         $bp->{ts_strand} = -1*$bp->{qstrand};
                                         $bp->{gene} = $g->name;
-                                        print STDERR "update2 ", $tmp_score, " ", $tmp_feature, " ", $bp->{ts_strand}, " ", $bp->{gene}, " ", $dist, "\n";
+                                        #print STDERR "update2 ", $tmp_score, " ", $tmp_feature, " ", $bp->{ts_strand}, " ", $bp->{gene}, " ", $dist, "\n";
                                 }
                         }
 		}
