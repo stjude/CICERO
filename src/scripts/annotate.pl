@@ -1131,7 +1131,7 @@ sub annotate_bp{
 			$tmp_score = 0.1 if($tmp_feature eq 'intergenic');
 			my $tmp_dist = (abs($g->start - $tpos) < abs($g->end - $tpos)) ? abs($g->start - $tpos) : abs($g->end - $tpos);
 	
-			if($tmp_score > $bp->{annotate_score} || ($tmp_dist < $dist && $bp->{annotate_score} == 0.1)){
+			if(($tmp_score > $bp->{annotate_score} && abs($bp->{annotate_score}) > 0.1) || ($tmp_dist < $dist && abs($bp->{annotate_score}) == 0.1)){#Tian
 				$bp->{annotate_score} = $tmp_score;
 				$bp->{feature} = $tmp_feature;
 				$bp->{ts_strand} = $bp->{qstrand};
@@ -1157,7 +1157,7 @@ sub annotate_bp{
 			$tmp_score = -0.5 if($tmp_feature eq 'intron');
 			$tmp_score = -0.1 if($tmp_feature eq 'intergenic');
 			my $tmp_dist = (abs($g->start - $tpos) < abs($g->end - $tpos)) ? abs($g->start - $tpos) : abs($g->end - $tpos);
-			if(abs($tmp_score) > abs($bp->{annotate_score}) || ($tmp_dist < $dist && abs($bp->{annotate_score}) == 0.1)) {
+			if((abs($tmp_score) > abs($bp->{annotate_score}) && abs($bp->{annotate_score}) > 0.1) || ($tmp_dist < $dist && abs($bp->{annotate_score}) == 0.1)) {#Tian
 				$bp->{annotate_score} = $tmp_score;
 				$bp->{feature} = $tmp_feature;
 				$bp->{ts_strand} = -1*$bp->{qstrand};
