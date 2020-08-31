@@ -1131,14 +1131,28 @@ sub annotate_bp{
 			$tmp_score = 0.1 if($tmp_feature eq 'intergenic');
 			my $tmp_dist = (abs($g->start - $tpos) < abs($g->end - $tpos)) ? abs($g->start - $tpos) : abs($g->end - $tpos);
 	
-			if($tmp_score > $bp->{annotate_score} || ($tmp_dist < $dist && $bp->{annotate_score} == 0.1)){
-				$bp->{annotate_score} = $tmp_score;
-				$bp->{feature} = $tmp_feature;
-				$bp->{ts_strand} = $bp->{qstrand};
-				$bp->{gene} = $g->name;
-				$dist = $tmp_dist if($bp->{annotate_score} == 0.1);
-			}
-			return $bp if($bp->{annotate_score} == 1); 
+			return $bp if($bp->{annotate_score} == 1);
+
+                        if($tmp_feature eq 'intergenic')
+                        {
+                                if($tmp_dist < $dist && abs($bp->{annotate_score}) < 0.11){
+                                        $bp->{annotate_score} = $tmp_score;
+                                        $bp->{feature} = $tmp_feature;
+                                        $bp->{ts_strand} = $bp->{qstrand};
+                                        $bp->{gene} = $g->name;
+                                        $dist = $tmp_dist;
+                                        #print STDERR "update1 ", $tmp_score, " ", $tmp_feature, " ", $bp->{ts_strand}, " ", $bp->{gene}, " ", $dist, "\n";
+                                }
+                        }
+                        else{
+                                if($tmp_score > $bp->{annotate_score}){
+                                        $bp->{annotate_score} = $tmp_score;
+                                        $bp->{feature} = $tmp_feature;
+                                        $bp->{ts_strand} = $bp->{qstrand};
+                                        $bp->{gene} = $g->name;
+                                        #print STDERR "update1 ", $tmp_score, " ", $tmp_feature, " ", $bp->{ts_strand}, " ", $bp->{gene}, " ", $dist, "\n";
+                                }
+                        }
 		}
 
 		print STDERR "gm_tree = gm->sub_model($chr, $rev_strand)\n" if($debug);
@@ -1157,14 +1171,36 @@ sub annotate_bp{
 			$tmp_score = -0.5 if($tmp_feature eq 'intron');
 			$tmp_score = -0.1 if($tmp_feature eq 'intergenic');
 			my $tmp_dist = (abs($g->start - $tpos) < abs($g->end - $tpos)) ? abs($g->start - $tpos) : abs($g->end - $tpos);
-			if(abs($tmp_score) > abs($bp->{annotate_score}) || ($tmp_dist < $dist && abs($bp->{annotate_score}) == 0.1)) {
-				$bp->{annotate_score} = $tmp_score;
-				$bp->{feature} = $tmp_feature;
-				$bp->{ts_strand} = -1*$bp->{qstrand};
-				$bp->{gene} = $g->name;
-				$dist = $tmp_dist if(abs($bp->{annotate_score}) == 0.1);
-			}
-			return $bp if(abs($bp->{annotate_score}) == 1); 
+			
+			return $bp if($bp->{annotate_score} == -1);
+
+                        if($tmp_feature eq 'intergenic')
+                        {
+                                if($tmp_dist < $dist && abs($bp->{annotate_score}) < 0.11){
+                                        $bp->{annotate_score} = $tmp_score;
+                                        $bp->{feature} = $tmp_feature;
+                                        $bp->{ts_strand} = -1*$bp->{qstrand};
+                                        $bp->{gene} = $g->name;
+                                        $dist = $tmp_dist;
+                                        #print STDERR "update2 ", $tmp_score, " ", $tmp_feature, " ", $bp->{ts_strand}, " ", $bp->{gene}, " ", $dist, "\n";
+                                }
+                        }
+                        else{
+                                if(($bp->{annotate_score} > -0.11) && ($bp->{annotate_score} < 0.11)){
+                                        $bp->{annotate_score} = $tmp_score;
+                                        $bp->{feature} = $tmp_feature;
+                                        $bp->{ts_strand} = -1*$bp->{qstrand};
+                                        $bp->{gene} = $g->name;
+                                        #print STDERR "update2 ", $tmp_score, " ", $tmp_feature, " ", $bp->{ts_strand}, " ", $bp->{gene}, " ", $dist, "\n";
+                                }
+                                elsif((($bp->{annotate_score} > -0.81) && ($bp->{annotate_score} < -0.49)) && (abs($tmp_score) > abs($bp->{annotate_score}))){
+                                        $bp->{annotate_score} = $tmp_score;
+                                        $bp->{feature} = $tmp_feature;
+                                        $bp->{ts_strand} = -1*$bp->{qstrand};
+                                        $bp->{gene} = $g->name;
+                                        #print STDERR "update2 ", $tmp_score, " ", $tmp_feature, " ", $bp->{ts_strand}, " ", $bp->{gene}, " ", $dist, "\n";
+                                }
+                        }
 		}
 	}
 	return $bp; 
