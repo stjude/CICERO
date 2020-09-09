@@ -124,8 +124,10 @@ docker run -v <outdir>:/results mnedmonson/public:rnapeg RNApeg.sh -b bamfile -f
 ### Running RNApeg via Singularity:
 
 ```bash
-singularity run --bind <outdir>:/results docker://mnedmonson/public:rnapeg RNApeg.sh -b bamfile -f fasta -r refflat
+singularity run --containall --bind <outdir>:/results docker://mnedmonson/public:rnapeg RNApeg.sh -b bamfile -f fasta -r refflat
 ```
+
+You will also need to add `--bind` arguments to mount the file paths for `bamfile`, `fasta`, and `refflat` into the container. 
 
 ## Downloading reference files <a name="reference"></a>
 
