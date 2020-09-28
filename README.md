@@ -112,6 +112,8 @@ for running and interpreting results is available in the [user guide](https://st
 
 RNApeg is required to generate a junctions file for use by CICERO. You can get RNApeg from both Docker and Singularity. Once RNApeg is complete, the `*.junctions.tab.shifted.tab` file can be provided to CICERO using the `-j` argument. 
 
+RNApeg is authored by Michael N. Edmonson ([@mnedmonson](https://github.com/mnedmonson)).
+
 ### RNApeg overview
 
 This software analyzes nextgen RNA sequencing data which has been mapped to whole-genome coordinates, identifying evidence of both known and novel splicing events from the resulting alignments. The raw junction sites in the mapped BAMs undergo postprocessing to correct various issues related to mapping ambiguity. The result is a more compact and consistent set of junction calls, simplifying downstream quantification, analysis, and comparison.
