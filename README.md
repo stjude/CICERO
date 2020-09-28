@@ -112,6 +112,54 @@ for running and interpreting results is available in the [user guide](https://st
 
 RNApeg is required to generate a junctions file for use by CICERO. You can get RNApeg from both Docker and Singularity. Once RNApeg is complete, the `*.junctions.tab.shifted.tab` file can be provided to CICERO using the `-j` argument. 
 
+RNApeg is authored by Michael N. Edmonson ([@mnedmonson](https://github.com/mnedmonson)).
+
+### RNApeg overview
+
+This software analyzes nextgen RNA sequencing data which has been mapped to whole-genome coordinates, identifying evidence of both known and novel splicing events from the resulting alignments. The raw junction sites in the mapped BAMs undergo postprocessing to correct various issues related to mapping ambiguity. The result is a more compact and consistent set of junction calls, simplifying downstream quantification, analysis, and comparison.
+
+### RNApeg key features
+
+#### Raw junction extraction
+
+First, the BAM read mappings are analyzed to identify putative junction sites. This produces a list of junction sites along with counts of supporting reads and several associated quality metrics. While reflective of the BAM data, this output typically requires refinement by the following steps.
+
+#### Correction vs. reference junctions
+
+Novel junctions are compared with reference exon junction boundaries and evaluated for mapping ambiguity which can justify adjusting the sites to match. Even small ambiguities such as the presence of the same nucleotide on either side of a junction can be enough to nudge a prediction that would otherwise perfectly match a reference isoform out of place.
+
+#### Self-correction for novel junctions
+
+Mapping ambiguity is next evaluated within the novel junctions themselves. Ambiguous junctions are combined where possible, merging their counts of supporting reads and related annotations. This reduces the population of novel junctions while simultaneously improving the evidence for those remaining. Combining evidence for poorly-covered sites also improves the chances of these sites passing the default minimum level of 3 supporting reads required for reporting junctions in the final output.
+
+#### Correction vs. novel skips of known exons
+
+Additional correction of novel junctions is also performed to identify previously unknown skips of an exon (or exons) within known reference isoforms. Special handling is required in these cases because while the corrected boundaries are known, the events themselves are novel.
+
+#### Edge correction of novel junctions vs. reference exons
+
+Junctions may also be shifted in cases of ambiguity involving a single edge (i.e. junction start or end). While not doubly-anchorable as with known reference junctions or novel skips of known exons, this adjustment can standardize evidence e.g. for novel exons.
+
+#### Junction calling
+
+Novel junctions are subjected to additional scrutiny before being reported:
+
+- must be supported by a minimum of 3 reads
+- at least one read must pass minimum flanking sequence requirements, to avoid false positives near read ends due to insufficient anchoring
+- the junction must be either observed bidirectionally, or be supported by very clean alignments (either perfect or with very few high-quality mismatches, insertions, deletions, or soft clips)
+
+While these requirements are minimal, they substantially reduce background noise.
+
+#### Cross-sample correction
+
+This step pools results for a set of samples and does additional standardization of novel exons based on the combined set. Mostly this has the effect of standardizing ambiguous novel junction sites across samples, but it can occasionally result in combinations of sites as well.
+
+#### Output
+
+The primary output files are tab-delimited text.
+
+Output is also written in UCSC .bed format, which can be used to visualize the junctions and supporting read counts within the UCSC genome browser.
+
 ### Running RNApeg via Docker
 
 ```bash
@@ -124,8 +172,10 @@ docker run -v <outdir>:/results mnedmonson/public:rnapeg RNApeg.sh -b bamfile -f
 ### Running RNApeg via Singularity:
 
 ```bash
-singularity run --bind <outdir>:/results docker://mnedmonson/public:rnapeg RNApeg.sh -b bamfile -f fasta -r refflat
+singularity run --containall --bind <outdir>:/results docker://mnedmonson/public:rnapeg RNApeg.sh -b bamfile -f fasta -r refflat
 ```
+
+You will also need to add `--bind` arguments to mount the file paths for `bamfile`, `fasta`, and `refflat` into the container. 
 
 ## Downloading reference files <a name="reference"></a>
 
