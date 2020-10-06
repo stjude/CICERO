@@ -212,7 +212,7 @@ sub run {
 
 	foreach my $qname (keys %partial_mappings){
 		my $pm = $partial_mappings{$qname};
-		next if($pm->{low_complexity} == 1);
+		#next if($pm->{low_complexity} == 1);#Tian, rescue IGH-DUX4 for the situation: the SC reads at IGH, but SC part can be mupltiple mapping to DUX4 loci
 		my @tmp1_SVs = ();
 		print STDERR "\n*****mapping: ", $pm->{qname}, "\tpm->ort: ", $pm->{ort}, "\n" if($debug);
 		my $locally_mapped = 0;
