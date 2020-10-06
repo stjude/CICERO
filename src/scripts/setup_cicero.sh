@@ -63,7 +63,7 @@ while read case_bam
  do
    bam="$DATA_DIR/\$case_bam/\$case_bam.bam"
    LEN=\`getReadLength.sh \$bam\` 
-   get_sc_cmds.pl -i \$bam -o $DATA_DIR/\$case_bam -genome $GENOME -l \$LEN >> `get_step_cmds_file`
+   get_sc_cmds.pl -c 10 -i \$bam -o $DATA_DIR/\$case_bam -genome $GENOME -l \$LEN >> `get_step_cmds_file`
    echo "get_geneInfo.pl -i \$bam -o $DATA_DIR/\$case_bam -l \$LEN -genome $GENOME -s \$case_bam " >> `get_step_cmds_file`
  done < $RUN_DIR/config.txt
 EOF
@@ -117,7 +117,7 @@ while read case_bam
    LEN=\`getReadLength.sh \$bam\` 
    
    get_cicero_cmds.pl -i \$bam -genome $GENOME -l \$LEN -o $DATA_DIR/\$case_bam >> `get_step_cmds_file`
-#   echo "Cicero.pl -d \$bam -o $DATA_DIR/\$case_bam -l \$LEN" --ref_genome $GENOME -f $DATA_DIR/\$case_bam/\$case_bam.sclip.txt >> `get_step_cmds_file`
+#   echo "Cicero.pl -c 10 -d \$bam -o $DATA_DIR/\$case_bam -l \$LEN" --ref_genome $GENOME -f $DATA_DIR/\$case_bam/\$case_bam.sclip.txt >> `get_step_cmds_file`
  done < $RUN_DIR/config.txt 
 EOF
 write_step_submit_script
@@ -167,9 +167,9 @@ while read case_bam
  do
    bam="$DATA_DIR/\$case_bam/\$case_bam.bam"
    LEN=\`getReadLength.sh \$bam\` 
-   ln -s `which blacklist.genes.txt` $DATA_DIR/\$case_bam
-   echo "annotate.pl -i \$bam -o $DATA_DIR/\$case_bam -l \$LEN -genome $GENOME -s \$case_bam -f $DATA_DIR/\$case_bam/\$case_bam.gene_info.txt -j $DATA_DIR/\$case_bam/\$case_bam.bam.junctions.tab.shifted.tab" >> `get_step_cmds_file`
-   echo "annotate.pl -i \$bam -o $DATA_DIR/\$case_bam -l \$LEN -genome $GENOME -s \$case_bam -f $DATA_DIR/\$case_bam/\$case_bam.gene_info.txt -internal" >> `get_step_cmds_file`
+   ln -s $BLACKLIST_GENES $DATA_DIR/\$case_bam
+   echo "annotate.pl -c 10 -i \$bam -o $DATA_DIR/\$case_bam -l \$LEN -genome $GENOME -s \$case_bam -f $DATA_DIR/\$case_bam/\$case_bam.gene_info.txt -j $DATA_DIR/\$case_bam/\$case_bam.bam.junctions.tab.shifted.tab" >> `get_step_cmds_file`
+   echo "annotate.pl -c 10 -i \$bam -o $DATA_DIR/\$case_bam -l \$LEN -genome $GENOME -s \$case_bam -f $DATA_DIR/\$case_bam/\$case_bam.gene_info.txt -internal" >> `get_step_cmds_file`
  done < $RUN_DIR/config.txt 
 EOF
 write_step_submit_script

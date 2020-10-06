@@ -17,7 +17,7 @@ use File::Temp qw/ tempdir /;
 
 use CiceroSCValidator qw($lowqual_cutoff LEFT_CLIP RIGHT_CLIP);
 use CiceroUtil qw(prepare_reads_file parse_range rev_comp
-	is_PCR_dup read_fa_file get_discordant_reads get_sclip_reads);
+	is_PCR_dup read_fa_file get_discordant_reads get_sclip_reads normalizeChromosomeName);
 
 require CiceroExtTools;
 
@@ -292,6 +292,7 @@ while(<$ITD_F>){
 # Load gene pairs that are enhancer activated
 # involving T-cell receptors and immunoglobulin loci
 my %enhancer_activated_genes = ();
+my %known_fusion_partners = ();
 if($known_fusion_file && -e $known_fusion_file){
    open(my $KFF, $known_fusion_file);
    while(<$KFF>){
@@ -301,6 +302,8 @@ if($known_fusion_file && -e $known_fusion_file){
 	next if exists($enhancer_activated_genes{$gene2});
 	$enhancer_activated_genes{$gene2} = $gene1 if($gene1 =~ m/^IG.$/ || $gene1 =~ m/^TR.$/);
 	$enhancer_activated_genes{$gene1} = $gene2 if($gene2 =~ m/^IG.$/ || $gene2 =~ m/^TR.$/);
+	$known_fusion_partners{$gene1}{$gene2} = 1;
+	$known_fusion_partners{$gene2}{$gene1} = 1;
    }
    close($KFF);
 }
@@ -416,8 +419,10 @@ while(my $line = <$UNF>){
 	$second_bp->{gene} = $crB if($crB);
 
 	# Check if the reference uses 'chr' prefixes
+	$first_bp->{tname} = normalizeChromosomeName($seq_ids[0], $first_bp->{tname});
+	$second_bp->{tname} = normalizeChromosomeName($seq_ids[0], $second_bp->{tname});
+
 	# Ensure that the breakpoint chromosome names match
-	unless($seq_ids[0] =~ m/chr/) {$first_bp->{tname} =~ s/chr//; $second_bp->{tname} =~ s/chr//;}
 	next if(!$internal && is_bad_fusion($first_bp->{tname}, $first_bp->{tpos}, $second_bp->{tname}, $second_bp->{tpos}));
 
 	# Determine the variant type: CTX, Internal_inv, Interal_splicing, Internal_dup, ITX, read_through, DEL, INS
@@ -464,10 +469,12 @@ if($junction_file){
   open(my $JUNC, "$junction_file");
   while(my $line = <$JUNC>){
 	chomp($line);
-	next unless($line =~ m/novel/ || $line =~ m/chrX:1331/);
+	# chrX:1212 is the hg38 coordinate prefix for CRLF2 (chrX:1,190,449-1,212,815(GRCh38/hg38))
+	# chrX:1331 is the hg19 coordinate prefix for CRLF2 (chrX:1,314,869-1,331,616(GRCh37/hg19))
+	next unless($line =~ m/novel/ || $line =~ m/chrX:1212/ || $line =~ m/chrX:1331/);
 	my @fields = split("\t",$line);
 	my ($junction, $gene, $qc_flanking, $qc_perfect_reads, $qc_clean_reads) = @fields[0,3,5,8,9];
-	unless($line =~ m/chrX:1331/){
+	unless($line =~ m/chrX:1212/ || $line =~ m/chrX:1331/){
 		next if($qc_perfect_reads < 2 || $qc_flanking < 5);
 		next if($qc_perfect_reads + $qc_clean_reads < 5);
 	}
@@ -516,7 +523,10 @@ if($junction_file){
 	next if($bad_fusion);
 	next if($qc_perfect_reads < $cutoff);
 
-	unless($seq_ids[0] =~ m/chr/) {$chr1 =~ s/chr//; $chr2 =~ s/chr//;}
+	# Ensure that the breakpoint chromosome names match
+	$chr1 = normalizeChromosomeName($seq_ids[0], $chr1);
+	$chr2 = normalizeChromosomeName($seq_ids[0], $chr2);
+
 	if($cutoff == -1){
 		my $bg_reads1 =  count_coverage($sam_d, $chr1, $pos1);
 		my $bg_reads2 =  count_coverage($sam_d, $chr1, $pos2);
@@ -599,8 +609,10 @@ foreach my $fn (@cover_files) {
 		chomp;
 		my $line = $_;
 		chomp($line);
-		$line =~ s/chr//;
+
 		my ($chr, $pos, $clip, $sc_cover, $cover, $psc, $nsc, $pn, $nn) = split(/\t/,$line);
+		$chr = normalizeChromosomeName($seq_ids[0], $chr);
+
 		$clip = RIGHT_CLIP if($clip eq "+");
 		$clip = LEFT_CLIP if($clip eq "-");
 		# If this is a new site, add it to the list of breakpoints
@@ -645,10 +657,11 @@ foreach my $sv (@raw_SVs){
 	next if($bad_gene);
 	print STDERR "next if($contigSeq && ", $contig_recurrance{$contigSeq}," > $max_num_hits)\n" if(abs($sv->{second_bp}->{tpos} - 170818803)<10 || abs($sv->{first_bp}->{tpos} - 170818803)<10); 
 
-		my $bp1_site = join("_", $first_bp->{tname}, $first_bp->{tpos}, $first_bp->{clip});
-		my $bp2_site = join("_", $second_bp->{tname}, $second_bp->{tpos}, $second_bp->{clip});
-		$bp1_site =~ s/chr//;
-		$bp2_site =~ s/chr//;
+	my $bp1_site = join("_", $first_bp->{tname}, $first_bp->{tpos}, $first_bp->{clip});
+	my $bp2_site = join("_", $second_bp->{tname}, $second_bp->{tpos}, $second_bp->{clip});
+	$bp1_site = normalizeChromosomeName($seq_ids[0], $bp1_site);
+	$bp2_site = normalizeChromosomeName($seq_ids[0], $bp2_site);
+
 
 	my $start_run = time();
 	print STDERR "\nstart to quantify the fusion... ", join(" ", $sv->{first_bp}->{tname}, $sv->{first_bp}->{tpos}, $sv->{second_bp}->{tname}, $sv->{second_bp}->{tpos}), "\n" if(abs($sv->{second_bp}->{tpos} - 170818803)<10 || abs($sv->{first_bp}->{tpos} - 170818803)<10);
@@ -689,8 +702,11 @@ foreach my $sv (@annotated_SVs){
 	print STDERR "xxx\n" if(abs($sv->{second_bp}->{tpos} - 170818803)<10 || abs($sv->{first_bp}->{tpos} - 170818803)<10);
 	my ($bp1, $bp2, $qseq) = ($sv->{first_bp}, $sv->{second_bp}, $sv->{junc_seq});
 	if(exists($blacklist{$bp1->{gene}}) || exists($blacklist{$bp2->{gene}})){
-		print STDERR "Removing duplicate: gene1: ".$bp1->{gene}." gene2: ".$bp2->{gene}."\n";
-		next;
+		# If the highly recurrent fusion doesn't involve known partners, remove it.
+		if ( !(exists($known_fusion_partners{$bp1->{gene}}{$bp2->{gene}}) || exists($known_fusion_partners{$bp2->{gene}}{$bp1->{gene}}))){
+			print STDERR "Removing duplicate: gene1: ".$bp1->{gene}." gene2: ".$bp2->{gene}."\n";
+			next;
+		}
 	}
 	if($sv && ! is_dup_SV(\@uniq_SVs, $sv)){
 		push @uniq_SVs, $sv;
@@ -1263,10 +1279,10 @@ sub quantification {
 	my @mappings;
 	print STDERR "start mapping ... $contig_file\n" if($debug && -s $contig_file);
 	print STDERR join("\t", $chr1, $pos1, $clip1, $read_len), "\n" if($debug);
-	my $ref_chr1 = $chr1; $ref_chr1 =~ s/chr//;
+	my $ref_chr1 = normalizeChromosomeName($seq_ids[0], $chr1);
 	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr1, -scSite=>$pos1, -CLIP=>$clip1, -READ_LEN => $read_len) if(-s $contig_file);
 	print STDERR "number of mapping: ", scalar @mappings, "\n" if($debug);
-	my $ref_chr2 = $chr2; $ref_chr2 =~ s/chr//;
+	my $ref_chr2 = normalizeChromosomeName($seq_ids[0], $chr2);
 	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr2, -scSite=>$pos2, -CLIP=>$clip2, -READ_LEN => $read_len) if(-s $contig_file);
 	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr2, -scSite=>$pos2, -CLIP=>$clip2, -READ_LEN => $read_len) if(($SV->{type} eq 'Internal_dup' || !@mappings) && -s $contig_file);
 

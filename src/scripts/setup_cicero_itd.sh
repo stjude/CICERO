@@ -205,7 +205,7 @@ while read case_bam
  do
    bam="$DATA_DIR/\$case_bam/\$case_bam.bam"
    LEN=\`getReadLength.sh \$bam\` 
-   ln -s `which blacklist.genes.txt` $DATA_DIR/\$case_bam
+   ln -s $BLACKLIST_GENES $DATA_DIR/\$case_bam
    if [ "$ANALYTE" == "DNA" ]
    then 
      echo "annotate.pl -i \$bam -o $DATA_DIR/\$case_bam -f $DATA_DIR/\$case_bam/\$case_bam.gene_info.txt -l \$LEN -genome $GENOME -s \$case_bam -internal -DNA" >> `get_step_cmds_file`

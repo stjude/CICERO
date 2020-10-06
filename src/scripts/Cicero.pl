@@ -24,7 +24,7 @@ use TdtConfig;
 
 use CiceroSCValidator qw($min_percent_hq LEFT_CLIP RIGHT_CLIP);
 use CiceroUtil qw(print_out prepare_reads_file parse_range rev_comp is_PCR_dup 
-	          read_fa_file get_discordant_reads get_sclip_reads);
+	          read_fa_file get_discordant_reads get_sclip_reads normalizeChromosomeName);
 require CiceroExtTools;
 
 use Transcript;
@@ -165,6 +165,7 @@ my $tmp_dir = "$out_dir/tmp";
 mkdir $tmp_dir if(!-e $tmp_dir || ! -d $tmp_dir);  
 
 my $sam_d = Bio::DB::Sam->new( -bam => $input_bam, -fasta => $ref_genome);
+my @seq_ids = $sam_d->seq_ids;
 
 my $ret = system("touch $out_dir/unfiltered.fusion.txt"); 
 if ($ret){
@@ -255,7 +256,7 @@ sub detect_SV{
 	print STDERR "finished assembly and start to map contigs...", "\n" if($debug);
 	my @mappings;
 	print STDERR "start mapping ... $contig_file\nsc_site: $sc_site\tclip: $clip\tmin_hit_len: $min_hit_len\n" if($debug && -s $contig_file);
-	my $ref_chr = $chr; $ref_chr =~ s/chr//;
+	my $ref_chr = normalizeChromosomeName($seq_ids[0], $chr);
 	push @mappings, $mapper->run(-QUERY=>$contig_file, -scChr => $ref_chr, -scSite=>$sc_site, -CLIP=>$clip, -READ_LEN=>$read_len) if(-s $contig_file);
 
 	my %num_of_mappings = ();

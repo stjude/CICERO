@@ -8,4 +8,5 @@
 #
 # Aliases are case-sensitive
 
+hg38 GRCh38_no_alt
 hg19 GRCh37-lite
