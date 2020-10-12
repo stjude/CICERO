@@ -41,7 +41,18 @@ if [ "$no_docker_build" == "" ]
 then docker build -t stjude/cicero:$VERS ..
 fi
 
-mkdir -p resources/stjude
-docker save stjude/cicero:$VERS | gzip -c > resources/stjude/cicero-docker.tar.gz
+if [ ! -d resources/stjude/docker ]
+then
+  mkdir -p resources/stjude/docker
+fi 
 
-dx build "$@"
+docker save stjude/cicero:$VERS | gzip -c > resources/stjude/docker/cicero-docker.tar.gz
+
+if [ ! -d resources/stjude/bin ]
+then
+  mkdir -p resources/stjude/bin
+fi 
+
+cp ../src/scripts/getReadLength.sh resources/stjude/bin/
+
+dx build -a "$@"
