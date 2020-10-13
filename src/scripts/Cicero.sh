@@ -26,6 +26,7 @@ THRESHOLD=200000
 SC_CUTOFF=3
 SC_SHIFT=
 OPTIMIZE=1
+DISABLE_EXCLUDE=
 
 usage() {
     echo "Cicero.sh [-h] [-n ncores] -b bamfile -g genome -r refdir [-j junctions] [-o outdir] [-t threshold] [-s sc_cutoff] [-c sc_shift] [-p]"
@@ -35,6 +36,7 @@ usage() {
     echo "-c <num> - clustering distance for grouping similar sites [default=3]"
     echo "-j <file> - junctions file from RNApeg"
     echo "-n <num> - number of cores to utilize with GNU parallel"
+    echo "-d - disable excluded regions file use"
 }
 
 
@@ -55,6 +57,7 @@ while [ ! -z "$1" ]; do
         -c) SC_SHIFT=$2; shift;;
         -p) OPTIMIZE=1;;
         -no-optimize) OPTIMIZE=0;;
+        -d) DISABLE_EXCLUDE=1;;
     esac
     shift
 done
@@ -235,10 +238,17 @@ mkdir -p $CICERO_RUNDIR
 ###############################
 ### Step 01 - extractSClips ###
 ###############################
+
+exclude_arg=
+if [ $DISABLE_EXCLUDE -eq 1 ]
+then
+  exclude_arg="-disable_excludes"
+fi
+
 echo "Step 01 - $(date +'%Y.%m.%d %H:%M:%S') - ExtractSClips"
 {
 LEN=$(getReadLength.sh $BAMFILE)
-get_sc_cmds.pl -i $BAMFILE -genome $GENOME -o $CICERO_DATADIR/$SAMPLE -l $LEN $cluster_arg > cmds-01.sh
+get_sc_cmds.pl -i $BAMFILE -genome $GENOME -o $CICERO_DATADIR/$SAMPLE -l $LEN $cluster_arg $exclude_arg > cmds-01.sh
 echo "get_geneInfo.pl -i $BAMFILE -o $CICERO_DATADIR/$SAMPLE -l $LEN -genome $GENOME -s $SAMPLE" >> cmds-01.sh
 parallel --joblog 01_ExtractSClips.log $PARALLEL_ARG < cmds-01.sh
 } 1> 01_ExtractSClips.out 2> 01_ExtractSClips.err

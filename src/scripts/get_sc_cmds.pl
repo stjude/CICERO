@@ -28,6 +28,7 @@ my $read_length = 100;
 my $sc_shift = 3;
 my $output_dir;
 my $excludes_file;
+my $disable_excludes = 0;
 my $optionOK = GetOptions(
 	's|sample=s'	=> \$sample,
 	'q|queue=s'		=> \$queue,
@@ -40,7 +41,8 @@ my $optionOK = GetOptions(
 	'usage'			=> \$usage,
 	'v|version'		=> \$version,
 	'o|outdir=s'	=> \$output_dir,
-	'e|exclude=s'   => \$excludes_file
+	'e|exclude=s'   => \$excludes_file,
+	'disable_excludes' => \$disable_excludes
 );
 if( !$bam_file) {
 	croak "you must provide sample names or input bam files to run the program\n";
@@ -81,7 +83,7 @@ while (my $chr = <$chrFile>){
 		$skip = 1 if ($chr =~ /.*$bad.*/i); 
 	}
 	next if ($skip);  
-	if($excludes_file){
+	if($excludes_file && ! $disable_excludes){
 		my $s = 0; # Intialize to start of the chromosome to search for regions.
 		foreach my $start (sort {$a <=> $b} keys %{$regions{$chr}}){
 			my $end = $regions{$chr}{$start};
