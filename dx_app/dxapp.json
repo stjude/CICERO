@@ -158,6 +158,12 @@
       "choices": ["GRCh37-lite", "GRCh38_no_alt"],
       "default": "GRCh37-lite",
       "help": "" 
+    },
+    {
+      "optional": true,
+      "class": "boolean",
+      "name": "disable_excludes",
+      "help": "Disable usages of excluded regions list"
     }
   ]
 }

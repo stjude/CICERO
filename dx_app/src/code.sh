@@ -130,6 +130,10 @@ main() {
       optional_args="$optional_args -s $sc__cutoff"
     fi
   fi 
+  if [ "disable_excludes" = "true" ]
+  then
+    optional_args="$optional_args -d"
+  fi
   docker run -v /home/dnanexus/in:/home/dnanexus/in -v /home/dnanexus/out:/home/dnanexus/out -v /stjude/reference:/opt/cicero/reference $image_id Cicero.sh -n 16 -b $star_mapped_sorted_bam_path -g $ref_name -r /opt/cicero/reference $POSSIBLE_JUNCTION_OPTION -o $OUT_DIR $optional_args 
 
   echo ""
