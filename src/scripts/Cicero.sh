@@ -26,7 +26,7 @@ THRESHOLD=200000
 SC_CUTOFF=3
 SC_SHIFT=
 OPTIMIZE=1
-DISABLE_EXCLUDE=
+DISABLE_EXCLUDE=0
 
 usage() {
     echo "Cicero.sh [-h] [-n ncores] -b bamfile -g genome -r refdir [-j junctions] [-o outdir] [-t threshold] [-s sc_cutoff] [-c sc_shift] [-p]"
@@ -242,6 +242,7 @@ mkdir -p $CICERO_RUNDIR
 exclude_arg=
 if [ $DISABLE_EXCLUDE -eq 1 ]
 then
+  echo "Disabling excluded regions list"
   exclude_arg="-disable_excludes"
 fi
 
