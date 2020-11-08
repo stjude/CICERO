@@ -61,7 +61,7 @@ while(<$KF>){
 	if($fg1 gt $fg2){
 		my $tmp = $fg1;
 		$fg1 = $fg2;
-		$fg2 = $fg1;
+		$fg2 = $tmp;
 	}
 	my $fusion = $fg1.":".$fg2;
 	next if(exists($known_fusions{$fusion}));
