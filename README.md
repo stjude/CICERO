@@ -21,7 +21,7 @@
      <img alt="Actions: CI Status"
           src="https://img.shields.io/endpoint.svg?url=https%3A%2F%2Factions-badge.atrox.dev%2Fstjude%2FCICERO%2Fbadge&style=flat" />
    </a>
-   <a href="https://github.com/stjudecloud/ngsderive/blob/master/LICENSE.md" target="_blank">
+   <a href="https://github.com/stjude/CICERO/blob/master/LICENSE.md" target="_blank">
      <img alt="License: MIT"
           src="https://img.shields.io/badge/License-MIT-blue.svg" />
    </a>
