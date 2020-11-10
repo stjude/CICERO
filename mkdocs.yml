@@ -1,0 +1,13 @@
+site_name: "CICERO - St. Jude"
+repo_url: "https://github.com/stjude/CICERO"
+
+site_description: "CICERO (Clipped-reads Extended for RNA Optimization) is an assembly-based algorithm to detect diverse classes of driver gene fusions from RNA-seq."
+site_author: "St. Jude Cloud"
+copyright: "© 2020 St. Jude Children's Research Hospital"
+
+nav:
+  - "Home": "index.md"
+  - "Subcommands":
+    - "installation": "subcommands/installation.md"
+
+theme: cosmo
