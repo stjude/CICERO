@@ -7,7 +7,5 @@ copyright: "© 2020 St. Jude Children's Research Hospital"
 
 nav:
   - "Home": "index.md"
-  - "Subcommands":
-    - "installation": "subcommands/installation.md"
 
 theme: cosmo
