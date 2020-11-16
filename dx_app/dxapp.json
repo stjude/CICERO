@@ -1,0 +1,169 @@
+{
+  "openSource": false,
+  "developers": [ "user-clmcleod", "user-athrashe" ],
+  "authorizedUsers": [
+    "user-clmcleod",
+    "user-snewman",
+    "user-athrashe",
+    "user-appdpdnanexus_stjude.org",
+    "user-appdddnanexus_stjude.org",
+    "org-stjude_cloud_app_runners",
+    "org-stjude_cloud"
+  ],
+  "regionalOptions": {
+    "aws:us-east-1": {
+      "systemRequirements": {
+        "*": {
+          "instanceType": "mem3_ssd1_x16"
+        }
+      }
+    },
+    "azure:westus": {
+      "systemRequirements": {
+        "*": {
+          "instanceType": "azure:mem3_ssd1_x16"
+        }
+      }
+    }
+  },
+  "billTo": "org-stjude_cloud",
+  "access": {
+    "network": [
+      "*"
+    ],
+    "allProjects": "VIEW"
+  },
+  "runSpec": {
+    "distribution": "Ubuntu",
+    "interpreter": "bash",
+    "release": "16.04",
+    "file": "src/code.sh",
+    "timeoutPolicy": {
+      "*": {
+        "hours": 30
+      }
+    },
+    "execDepends": [
+      { "name": "git" },
+      { "name": "build-essential" },
+      { "name": "zlib1g-dev" },
+      { "name": "parallel" },
+      { "name": "bioperl" },
+      { "name": "realpath" },
+      { "name": "samtools" },
+      { "name": "libbio-samtools-perl" },
+      { "name": "parallel" },
+      { "name": "perlbrew" },
+      { "name": "libdbi-perl" },
+      { "version": "1.25", "package_manager": "cpan", "name": "Data::Compare" },
+      { "version": "12.008696", "package_manager": "cpan", "name": "Bundle::DBI" },
+      { "package_manager": "cpan", "name": "enum" }
+    ]
+  },
+  "outputSpec": [
+    {
+      "patterns": [
+        "*.tar.gz"
+      ],
+      "class": "file",
+      "help": "",
+      "label": "Cicero output",
+      "name": "cicero_output"
+    },
+    {
+      "patterns": [
+        "*.txt"
+      ],
+      "class": "file",
+      "help": "",
+      "label": "Cicero final fusions",
+      "name": "cicero_final_fusions"
+    },
+    {
+      "patterns": [
+        "*.html"
+      ],
+      "class": "file",
+      "help": "",
+      "label": "Cicero final fusions HTML",
+      "name": "cicero_final_fusions_html"
+    }
+  ],
+  "name": "stjude_cicero",
+  "title": "Cicero (St. Jude)",
+  "summary": "Detects fusion junctions using RNA-Seq data",
+  "details": {
+    "contactEmail": "clay.mcleod@stjude.org"
+  },
+  "categories": [
+    "RNA-Seq",
+    "Structural Variation",
+    "Variation Calling"
+  ],
+  "version": "1.3.0",
+  "dxapi": "1.0.1",
+  "inputSpec": [
+    {
+      "optional": false,
+      "patterns": [
+        "*.bam"
+      ],
+      "class": "file",
+      "help": "",
+      "label": "STAR-mapped, sorted BAM file",
+      "name": "star_mapped_sorted_bam"
+    },
+    {
+      "optional": true,
+      "patterns": [
+        "*.bai"
+      ],
+      "class": "file",
+      "help": "",
+      "label": "Index for STAR-mapped, sorted BAM file",
+      "name": "bam_index"
+    },
+    {
+      "optional": true,
+      "patterns": [
+        "*.tab.shifted.tab"
+      ],
+      "class": "file",
+      "label": "RNApeg junctions file",
+      "name": "rnapeg_junctions"
+    },
+    {
+      "optional": true,
+      "class": "boolean",
+      "name": "optimize",
+      "help": "Changes defaults for minimum soft clip support and distance to consider the same soft clip event"
+    },
+    {
+      "optional": true,
+      "class": "int",
+      "name": "sc_cutoff",
+      "help": "Changes defaults for minimum soft clip support" 
+    },
+    {
+      "optional": true,
+      "class": "int",
+      "name": "sc_shift",
+      "help": "Changes defaults for distance to consider the same soft clip event"
+    },
+    {
+      "class": "string",
+      "label": "Genome",
+      "name": "ref_name",
+      "optional": false,
+      "choices": ["GRCh37-lite", "GRCh38_no_alt"],
+      "default": "GRCh37-lite",
+      "help": "" 
+    },
+    {
+      "optional": true,
+      "class": "boolean",
+      "name": "disable_excludes",
+      "help": "Disable usages of excluded regions list"
+    }
+  ]
+}

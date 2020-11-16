@@ -1,0 +1,23 @@
+`
+
+runproteinpaint({
+	host:host,
+	holder:document.getElementById('aaa'),
+	genome:'hg19',
+	fusioneditor:{
+		input:rawtext,
+		dataname:'cicero test'
+	}
+})
+/*
+d3.json(host+'/putfile').post(text,function(data){
+	if(data.error) {
+		alert(data.error)
+	} else {
+		window.location.replace(host+'?fused='+data.id+'&genome=hg19')
+	}
+})
+*/
+</script>
+</body>
+</html>
