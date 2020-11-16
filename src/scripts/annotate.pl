@@ -448,6 +448,7 @@ while(my $line = <$UNF>){
 	# If our SV is not a duplicate (same chromosome and within 10bp of the breakpoints)
 	if($tmp_SV && ! is_dup_raw_SV(\@raw_SVs, $tmp_SV)){
 		push @raw_SVs, $tmp_SV;
+
 		# If we've seen this sequence string, increment
 		# recurrance count
 		if(exists($contig_recurrance{$qseq})){
@@ -576,8 +577,8 @@ open(my $NBLK, ">$New_blacklist_file");
 foreach my $g (sort { $gene_recurrance{$b} <=> $gene_recurrance{$a} } keys %gene_recurrance) {
 	last if($gene_recurrance{$g} < $max_num_hits*10);
 	next if($g eq "NA" || $g eq "IGH" || $g eq "TCRA" || $g eq "TCRB" || $g eq "TARP");
-	#next if($cr_hash{$g});
-	$blacklist{$g} = 1;
+	next if($cr_hash{$g});
+#	$blacklist{$g} = 1;#Tian to rescue IGH-CRLF2 when CRLF2 has many partner genes, will not add CRLF2 to blacklist
 	print STDERR "Adding $g to blacklist with recurrance: ".$gene_recurrance{$g}."\n"; 
 	print $NBLK join("\t",$g, $gene_recurrance{$g}),"\n";
 }
@@ -1112,6 +1113,9 @@ sub annotate_bp{
 	$bp->{ts_strand} = 0;
 	$bp->{gene} = 'NA';
 	my $dist = 40000;
+
+	#priority order: same_direction exon > diff_direction exon > same_direction utr > diff_direction utr 
+	#   > same_direction intron > diff_direction intron > min_distance intergenic (for all same/diff direction intergenic genes)
 	foreach my $extend_size (10, 5000, 10000, 40000){
 	
 		my ($start, $end) = ($tpos - $extend_size, $tpos + $extend_size);
@@ -1131,14 +1135,28 @@ sub annotate_bp{
 			$tmp_score = 0.1 if($tmp_feature eq 'intergenic');
 			my $tmp_dist = (abs($g->start - $tpos) < abs($g->end - $tpos)) ? abs($g->start - $tpos) : abs($g->end - $tpos);
 	
-			if($tmp_score > $bp->{annotate_score} || ($tmp_dist < $dist && $bp->{annotate_score} == 0.1)){
-				$bp->{annotate_score} = $tmp_score;
-				$bp->{feature} = $tmp_feature;
-				$bp->{ts_strand} = $bp->{qstrand};
-				$bp->{gene} = $g->name;
-				$dist = $tmp_dist if($bp->{annotate_score} == 0.1);
-			}
-			return $bp if($bp->{annotate_score} == 1); 
+			return $bp if($bp->{annotate_score} == 1);
+
+                        if($tmp_feature eq 'intergenic')
+                        {
+                                if($tmp_dist < $dist && abs($bp->{annotate_score}) < 0.11){#Tian if saved feature is +/- intergenic, update the annotation if dist is smaller
+                                        $bp->{annotate_score} = $tmp_score;
+                                        $bp->{feature} = $tmp_feature;
+                                        $bp->{ts_strand} = $bp->{qstrand};
+                                        $bp->{gene} = $g->name;
+                                        $dist = $tmp_dist;
+                                        #print STDERR "update1 ", $tmp_score, " ", $tmp_feature, " ", $bp->{ts_strand}, " ", $bp->{gene}, " ", $dist, "\n";
+                                }
+                        }
+                        else{
+                                if($tmp_score > abs($bp->{annotate_score})){
+                                        $bp->{annotate_score} = $tmp_score;
+                                        $bp->{feature} = $tmp_feature;
+                                        $bp->{ts_strand} = $bp->{qstrand};
+                                        $bp->{gene} = $g->name;
+                                        #print STDERR "update1 ", $tmp_score, " ", $tmp_feature, " ", $bp->{ts_strand}, " ", $bp->{gene}, " ", $dist, "\n";
+                                }
+                        }
 		}
 
 		print STDERR "gm_tree = gm->sub_model($chr, $rev_strand)\n" if($debug);
@@ -1157,14 +1175,29 @@ sub annotate_bp{
 			$tmp_score = -0.5 if($tmp_feature eq 'intron');
 			$tmp_score = -0.1 if($tmp_feature eq 'intergenic');
 			my $tmp_dist = (abs($g->start - $tpos) < abs($g->end - $tpos)) ? abs($g->start - $tpos) : abs($g->end - $tpos);
-			if(abs($tmp_score) > abs($bp->{annotate_score}) || ($tmp_dist < $dist && abs($bp->{annotate_score}) == 0.1)) {
-				$bp->{annotate_score} = $tmp_score;
-				$bp->{feature} = $tmp_feature;
-				$bp->{ts_strand} = -1*$bp->{qstrand};
-				$bp->{gene} = $g->name;
-				$dist = $tmp_dist if(abs($bp->{annotate_score}) == 0.1);
-			}
-			return $bp if(abs($bp->{annotate_score}) == 1); 
+			
+			return $bp if($bp->{annotate_score} == -1);
+
+                        if($tmp_feature eq 'intergenic')
+                        {
+                                if($tmp_dist < $dist && abs($bp->{annotate_score}) < 0.11){#Tian if saved feature is +/- intergenic, update the annotation if dist is smaller
+                                        $bp->{annotate_score} = $tmp_score;
+                                        $bp->{feature} = $tmp_feature;
+                                        $bp->{ts_strand} = -1*$bp->{qstrand};
+                                        $bp->{gene} = $g->name;
+                                        $dist = $tmp_dist;
+                                        #print STDERR "update2 ", $tmp_score, " ", $tmp_feature, " ", $bp->{ts_strand}, " ", $bp->{gene}, " ", $dist, "\n";
+                                }
+                        }
+                        else{
+                                if(abs($tmp_score) > abs($bp->{annotate_score})){
+                                        $bp->{annotate_score} = $tmp_score;
+                                        $bp->{feature} = $tmp_feature;
+                                        $bp->{ts_strand} = -1*$bp->{qstrand};
+                                        $bp->{gene} = $g->name;
+                                        #print STDERR "update2 ", $tmp_score, " ", $tmp_feature, " ", $bp->{ts_strand}, " ", $bp->{gene}, " ", $dist, "\n";
+                                }
+                        }
 		}
 	}
 	return $bp; 
@@ -1413,7 +1446,7 @@ sub get_junc_reads{
 	my ($psl_file, $bp, $ort, $cutoff) = @_;
 	my %junc_reads = ();
 	my $coverage = 0;
-	my $debug = 0;
+	my $debug = 0;#Tiam
 	open(hFi, $psl_file);
 	my %supports = ();
 	while(<hFi>){
@@ -1504,7 +1537,7 @@ sub get_gene_name {
 sub get_type {
 
 	my ($first_bp, $second_bp, $same_gene, $transcript_strand) = @_;
-	my $debug = 0;
+	my $debug = 0;#Tian
 	print STDERR "=== get_type ===", join("\t", $first_bp->{gene}, $second_bp->{gene}, $second_bp->{tname}, $first_bp->{tname}), "\n" if($debug);
 	return "CTX" if($second_bp->{tname} ne $first_bp->{tname});
 
