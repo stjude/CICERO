@@ -68,8 +68,9 @@ sub get_feature {
 
 	return 'intergenic' if($bp > $self->end && $strand eq '+');
 	return 'intergenic' if($bp < $self->start && $strand eq '-');
-	return 'intergenic' if($bp < $self->start && $strand eq '+');#Tian
-	return 'intergenic' if($bp > $self->end && $strand eq '-');#Tian
+	return 'intergenic' if($bp < $self->start && $strand eq '+');
+	return 'intergenic' if($bp > $self->end && $strand eq '-');
+
 	my @tmp = @{$self->[EXONS]};
 	#print STDERR "--strand $strand\n";
 	foreach my $e (@tmp) {
