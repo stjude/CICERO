@@ -32,13 +32,13 @@
     CICERO (Clipped-reads Extended for RNA Optimization) is an assembly-based algorithm to detect diverse classes
     of driver gene fusions from RNA-seq.
    <br />
-   <a href="https://stjudecloud.github.io/cicero/"><strong>Explore the docs »</strong></a>
+   <a href="https://stjude.github.io/cicero/"><strong>Explore the docs »</strong></a>
    <br />
    <a href="https://genomebiology.biomedcentral.com/articles/10.1186/s13059-020-02043-x"><strong>Read the paper »</strong></a>
    <br />
    <br />
-   <a href="https://github.com/stjudecloud/cicero/issues/new?assignees=&labels=&template=feature_request.md&title=Descriptive%20Title&labels=enhancement">Request Feature</a>
-   <a href="https://github.com/stjudecloud/cicero/issues/new?assignees=&labels=&template=bug_report.md&title=Descriptive%20Title&labels=bug">Report Bug</a>
+   <a href="https://github.com/stjude/cicero/issues/new?assignees=&labels=&template=feature_request.md&title=Descriptive%20Title&labels=enhancement">Request Feature</a>
+   <a href="https://github.com/stjude/cicero/issues/new?assignees=&labels=&template=bug_report.md&title=Descriptive%20Title&labels=bug">Report Bug</a>
    <br />
     ⭐ Consider starring the repo! ⭐
    <br />
