@@ -243,7 +243,6 @@ Tian, L., Li, Y., Edmonson, M.N. et al. CICERO: a versatile method for detecting
 
 ## License <a name="license"></a>
 Copyright 2020 St. Jude Children's Research Hospital
-=======
 
 Licensed under a modified version of the Apache License, Version 2.0
 (the "License") for academic research use only; you may not use this
