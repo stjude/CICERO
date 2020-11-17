@@ -20,6 +20,7 @@ use FAI;
 use GenomeUtils qw(complement);
 use CacheManager;
 use DebugRAM qw(debug_ram);
+use Set::IntSpan;
 
 use MethodMaker qw(
 rows
@@ -797,6 +798,7 @@ sub find_gene_interval {
   my $single = $options{"-single"};
   confess "-single [0|1]" unless defined $single;
   my $buffer_upstream = $options{"-buffer-upstream"};
+  my $unique_overlapped_exons = $options{"-unique-overlapped-exons"};
 
   my $wanted = $self->find_by_gene($gene);
   die "no rows for $gene" unless $wanted;
@@ -820,27 +822,53 @@ sub find_gene_interval {
     foreach my $key (sort keys %bucket) {
       # separate rows by chrom for e.g. DUX4
       my (@starts, @ends, $chr, $strand);
+      my $set_exons = new Set::IntSpan();
       foreach my $r (@{$bucket{$key}}) {
-	push @starts, $r->{txStart} || die;
-	push @ends, $r->{txEnd} || die;
 	$chr = $r->{chrom} || die;
 	$strand = $r->{strand} || die;
+	# fixed for set
+
+	if ($unique_overlapped_exons) {
+	  my $exons = $r->{exons} || die;
+	  foreach my $exon (@{$exons}) {
+	    my $start = $exon->{start} || die;
+	    my $end = $exon->{end} || die;
+	    die unless $start < $end;
+	    my $range = join "-", $start, $end;
+	    printf STDERR "exon %s %s\n", $r->{name}, $range;
+	    $set_exons = union $set_exons $range;
+	  }
+	} else {
+	  push @starts, $r->{txStart} || die;
+	  push @ends, $r->{txEnd} || die;
+	}
       }
 
-      my $start = min(@starts) - $buffer;
-      my $end = max(@ends) + $buffer;
-      if ($buffer_upstream) {
-#	printf STDERR "before %s\n", join ",", $gene, $chr, $start, $end, $strand;
-	if ($strand eq "+") {
-	  # translation begins at genomic mapping start
-	  $start -= $buffer_upstream;
-	} elsif ($strand eq "-") {
-	  # translation begins at genomic mapping end
-	  $end += $buffer_upstream;
+      my ($start, $end);
+      if ($unique_overlapped_exons) {
+#	printf STDERR "merged: %s %s\n", $chr, $set_exons;
+	my @runs = split /,/, run_list $set_exons;
+	foreach my $run (@runs) {
+	  my @f = split /\-/, $run;
+	  die unless @f == 2;
+	  push @results, [ $chr, @f ];
 	}
+      } else {
+	$start = min(@starts) - $buffer;
+	$end = max(@ends) + $buffer;
+	if ($buffer_upstream) {
+#	printf STDERR "before %s\n", join ",", $gene, $chr, $start, $end, $strand;
+	  if ($strand eq "+") {
+	    # translation begins at genomic mapping start
+	    $start -= $buffer_upstream;
+	  } elsif ($strand eq "-") {
+	    # translation begins at genomic mapping end
+	    $end += $buffer_upstream;
+	  }
 #	printf STDERR "after %s\n", join ",", $gene, $chr, $start, $end, $strand;
+	}
+	push @results, [ $chr, $start, $end ];
       }
-      push @results, [ $chr, $start, $end ];
     }
 
     if (@results > 1) {
@@ -884,6 +912,7 @@ sub get_strand_for_accession {
 
 sub uniquify_accessions {
   # STATIC / exported
+#  cluck "start uniquify";
   my ($rows) = @_;
 
   my %counts;
@@ -906,6 +935,75 @@ sub uniquify_accessions {
     }
     $counts{$r->{name}}++;
   }
+}
+
+sub get_genes {
+  my ($self) = @_;
+  $self->find_by_gene("bogus");
+  # init index
+  return [ keys %{$self->idx_gene} ];
+}
+
+sub get_neighbor_exon_distances {
+  # given an intron position in a transcript, return distances
+  # to nearest exons
+  my ($self, %options) = @_;
+  my $row = $options{"-row"} || die;
+  my $pos = $options{"-base"} || die;
+  dump_die($row, "Debug", 1);
+
+  my @es = split /,/, $row->{"exonStarts"} || die;
+  foreach (@es) {
+    $_++;
+    # convert from interbase to in-base
+  }
+  my @ee = split /,/, $row->{"exonEnds"} || die;
+
+  die unless @es == @ee;
+  my $end = @es - 1;
+  my %results;
+  my $strand = $row->{strand} || die;
+
+  for (my $i = 0; $i < $end; $i++) {
+    # examine exon pairs
+    die "out of order" unless $es[$i] < $ee[$i];
+
+    my $end_this = $ee[$i];
+    my $start_next = $es[$i + 1];
+
+    if ($pos > $end_this and $pos < $start_next) {
+      # found exons bounding intronic site
+
+      my ($k1, $k2);
+      if ($strand eq "+") {
+	$k1 = "downstream";
+	# downstream to next exon
+	$k2 = "upstream";
+	# upstream to previous exon
+      } elsif ($strand eq "-") {
+	$k1 = "upstream";
+	$k2 = "downstream";
+      } else {
+	die;
+      }
+
+      $results{$k1} = {
+	"boundary" => $start_next,
+	"distance" => $start_next - $pos
+      };
+
+      $results{$k2} = {
+	"boundary" => $end_this,
+	"distance" => $pos - $end_this
+      };
+
+    }
+#    printf STDERR "  %d-%d\n", $es[$i + 1], $ee[$i + 1];
+  }
+  die "can't find site" unless %results;
+
+  return \%results;
+
 }
 
 1;

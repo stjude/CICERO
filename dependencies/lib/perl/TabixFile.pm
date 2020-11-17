@@ -6,6 +6,7 @@ use FileHandle;
 use Exporter;
 use Carp qw(confess cluck);
 use File::Copy;
+use File::Basename;
 
 use Vcf;
 use Configurable;
@@ -396,7 +397,12 @@ sub query {
 	push @{$results}, \%r;
       }
       $fh_v2t->close();
-
+      if ($?) {
+	copy($temp_vcf_fn, basename($temp_vcf_fn)) if $ENV{VCF2TAB_DEBUG};
+	die "$cmd failed with $?: $cmd" if $?;
+	# vcf2tab crash/exception?  shouldn't happen
+      }
+      
     }
   }
 

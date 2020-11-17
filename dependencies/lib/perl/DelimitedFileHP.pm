@@ -84,9 +84,9 @@ sub next_row {
 
 sub get_hash {
   # convert current line to hash.  SLOW, so defeats main purpose of module
-  my ($self) = @_;
+  my ($self, $line) = @_;
   my %h;
-  @h{@{$self->headers}} = @{$self->current_line};
+  @h{@{$self->headers}} = @{$line || $self->current_line};
   return \%h;
 }
 
@@ -97,6 +97,15 @@ sub get_value {
   my $idx = $self->h2i()->{$field};
   confess(sprintf "can't find a column named %s: available fields=%s", $field, join ",", sort keys %{$self->h2i()}) unless defined $idx;
   return $line->[$idx];
+}
+
+sub set_value {
+  # set value of named field in given row
+  my ($self, $field, $value, $line) = @_;
+  $line = $self->current_line() unless $line;
+  my $idx = $self->h2i()->{$field};
+  confess(sprintf "can't find a column named %s: available fields=%s", $field, join ",", sort keys %{$self->h2i()}) unless defined $idx;
+  $line->[$idx] = $value;
 }
 
 sub write_init {
@@ -210,7 +219,7 @@ sub prepare_query {
   foreach my $f (@{$fields}) {
     my $idx = $self->h2i()->{$f};
     unless (defined $idx) {
-      printf STDERR "ERROR: no field %s, available:\n";
+      printf STDERR "ERROR: no field %s, available:\n", $f;
       foreach $_ (sort keys (%{$self->h2i()})) {
 	printf STDERR "  %s\n", $_;
       }

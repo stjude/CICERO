@@ -135,7 +135,12 @@ sub header_setup {
       push @skipped_lines, $line;
     }
     $self->skipped_lines(\@skipped_lines);
+  } elsif ($self->headers() == 4) {
+    # passed-in headers for headerless file
+    my $headers_raw = $self->headers_raw || die "mode 4 requires headers_raw";
+    @headers = @{$headers_raw};
   } else {
+    # autodetect
     while (1) {
       @headers = $self->next();
       last if $pattern ? $self->last_line =~ /$pattern/ : 1;

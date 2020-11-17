@@ -328,10 +328,16 @@ source
 
     if ($self->ignore_non_coding) {
       my $refseq = $row->{name};
-      $refseq =~ /^([A-Z]+)_/ || die "can't parse prefix for $refseq";
-      my $prefix = $1;
-      my $is_coding = $prefix2coding{$prefix};
-      die "coding prefix not defined for $prefix" unless defined $is_coding;
+      my $is_coding;
+      if ($refseq =~ /^([A-Z]+)_/) {
+	my $prefix = $1;
+	$is_coding = $prefix2coding{$prefix};
+	die "coding prefix not defined for $prefix" unless defined $is_coding;
+      } else {
+	# 10/2020: CICERO's refFlat file may now have non-refSeq records
+	# appended from e.g. ENSEMBL
+	printf STDERR "WARNING: accession %s not in refSeq format, assuming non-coding\n", $refseq;
+      }
       next unless $is_coding;
     }
 
