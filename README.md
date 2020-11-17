@@ -54,10 +54,6 @@
 
 
 <br />
-<p align="center">
-  <img alt="Overview of CICERO algorithm which consists of fusion detection through analysis of candidate SV breakpoints and splice junction, fusion annotation, and ranking." src="docs/CICERO.png"/>
-</p>
-<br />
 
 ## 📝 Table of Contents
 
