@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="description" content="CICERO (Clipped-reads Extended for RNA Optimization) is an assembly-based algorithm to detect diverse classes of driver gene fusions from RNA-seq.">
+        <meta name="author" content="St. Jude Cloud">
+        
+        <link rel="shortcut icon" href="img/favicon.ico">
+        <title>CICERO - St. Jude</title>
+        <link href="css/bootstrap.min.css" rel="stylesheet">
+        <link href="css/font-awesome.min.css" rel="stylesheet">
+        <link href="css/base.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/purebasic.min.css">
+
+        <script src="js/jquery-1.10.2.min.js" defer></script>
+        <script src="js/bootstrap.min.js" defer></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+        <script>hljs.initHighlightingOnLoad();</script> 
+    </head>
+
+    <body class="homepage">
+        <div class="navbar fixed-top navbar-expand-lg navbar-dark bg-primary">
+            <div class="container">
+                <a class="navbar-brand" href=".">CICERO - St. Jude</a>
+                <!-- Expander button -->
+                <button type="button" class="navbar-toggler" data-toggle="collapse" data-target="#navbar-collapse">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+
+                <!-- Expanded navigation -->
+                <div id="navbar-collapse" class="navbar-collapse collapse">
+
+                    <ul class="nav navbar-nav ml-auto">
+                        <li class="nav-item">
+                            <a href="#" class="nav-link" data-toggle="modal" data-target="#mkdocs_search_modal">
+                                <i class="fa fa-search"></i> Search
+                            </a>
+                        </li>
+                            <li class="nav-item">
+                                <a href="https://github.com/stjude/CICERO/edit/master/docs/index.md" class="nav-link"><i class="fa fa-github"></i> Edit on GitHub</a>
+                            </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="row">
+                    <div class="col-md-3"><div class="navbar-light navbar-expand-md bs-sidebar hidden-print affix" role="complementary">
+    <div class="navbar-header">
+        <button type="button" class="navbar-toggler collapsed" data-toggle="collapse" data-target="#toc-collapse" title="Table of Contents">
+            <span class="fa fa-angle-down"></span>
+        </button>
+    </div>
+
+    
+    <div id="toc-collapse" class="navbar-collapse collapse card bg-secondary">
+        <ul class="nav flex-column">
+            
+            <li class="nav-item" data-level="2"><a href="#table-of-contents" class="nav-link">📝 Table of Contents</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            
+            <li class="nav-item" data-level="2"><a href="#running-cicero" class="nav-link">Running CICERO </a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            
+            <li class="nav-item" data-level="2"><a href="#dependencies" class="nav-link">Dependencies </a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            
+            <li class="nav-item" data-level="2"><a href="#running-with-docker" class="nav-link">Running with Docker </a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            
+            <li class="nav-item" data-level="2"><a href="#running-with-st-jude-cloud" class="nav-link">Running with St. Jude Cloud </a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            
+            <li class="nav-item" data-level="2"><a href="#generate-junctions-file-with-rnapeg" class="nav-link">Generate junctions file with RNApeg </a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            
+            <li class="nav-item" data-level="2"><a href="#downloading-reference-files" class="nav-link">Downloading reference files </a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            
+            <li class="nav-item" data-level="2"><a href="#supported-genome-version" class="nav-link">Supported Genome Version </a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            
+            <li class="nav-item" data-level="2"><a href="#demo" class="nav-link">Demo </a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            
+            <li class="nav-item" data-level="2"><a href="#citation" class="nav-link">Citation </a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            
+            <li class="nav-item" data-level="2"><a href="#license" class="nav-link">License </a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+        </ul>
+    </div>
+</div></div>
+                    <div class="col-md-9" role="main">
+
+<p align="center">
+
+  <h1 align="center">
+    CICERO 0.3.0
+  </h1>
+
+  <p align="center">
+   <a href="https://github.com/stjude/CICERO" target="_blank">
+     <img alt="Status"
+          src="https://img.shields.io/badge/status-active-success.svg" />
+   </a>
+   <a href="https://github.com/stjude/CICERO/issues" target="_blank">
+     <img alt="Github Issues"
+          src="https://img.shields.io/github/issues/stjude/CICERO" />
+   </a>
+   <a href="https://github.com/stjude/CICERO/pulls" target="_blank">
+     <img alt="Pull Requests"
+          src="https://img.shields.io/github/issues-pr/stjude/CICERO" />
+   </a>
+   <a href="https://actions-badge.atrox.dev/stjude/CICERO/goto" target="_blank">
+     <img alt="Actions: CI Status"
+          src="https://img.shields.io/endpoint.svg?url=https%3A%2F%2Factions-badge.atrox.dev%2Fstjude%2FCICERO%2Fbadge&style=flat" />
+   </a>
+   <a href="https://github.com/stjude/CICERO/blob/master/LICENSE.md" target="_blank">
+     <img alt="License: MIT"
+          src="https://img.shields.io/badge/License-MIT-blue.svg" />
+   </a>
+  </p>
+
+
+  <p align="center">
+    CICERO (Clipped-reads Extended for RNA Optimization) is an assembly-based algorithm to detect diverse classes
+    of driver gene fusions from RNA-seq.
+   <br />
+   <a href="https://stjude.github.io/cicero/"><strong>Explore the docs »</strong></a>
+   <br />
+   <a href="https://genomebiology.biomedcentral.com/articles/10.1186/s13059-020-02043-x"><strong>Read the paper »</strong></a>
+   <br />
+   <br />
+   <a href="https://github.com/stjude/cicero/issues/new?assignees=&labels=&template=feature_request.md&title=Descriptive%20Title&labels=enhancement">Request Feature</a>
+   <a href="https://github.com/stjude/cicero/issues/new?assignees=&labels=&template=bug_report.md&title=Descriptive%20Title&labels=bug">Report Bug</a>
+   <br />
+    ⭐ Consider starring the repo! ⭐
+   <br />
+  </p>
+</p>
+
+<hr />
+<p align="center">
+  To discover driver fusions beyond canonical exon-to-exon chimeric transcripts, we develop CICERO, a local assembly-based algorithm that integrates RNA-seq read support with extensive annotation for candidate ranking. CICERO outperforms commonly used methods, achieving a 95% detection rate for 184 independently validated driver fusions including internal tandem duplications and other non-canonical events in 170 pediatric cancer transcriptomes.
+   <img alt="Overview of CICERO algorithm which consists of fusion detection through analysis of candidate SV breakpoints and splice junction, fusion annotation, and ranking." src="CICERO.png"/>
+  </p>
+
+<p><br /></p>
+<h2 id="table-of-contents">📝 Table of Contents</h2>
+<ul>
+<li><a href="#running">Running CICERO</a></li>
+<li><a href="#dependencies">Dependencies</a></li>
+<li><a href="#docker">Running with Docker</a></li>
+<li><a href="#cloud">Running with St. Jude Cloud</a></li>
+<li><a href="#junctions">Generate Junctions</a></li>
+<li><a href="#reference">Reference Files</a></li>
+<li><a href="#genomes">Supported Genomes</a></li>
+<li><a href="#demo">Demo</a></li>
+<li><a href="#citation">Citation</a></li>
+<li><a href="#license">License</a></li>
+</ul>
+<h2 id="running-cicero">Running CICERO <a name="running"></a></h2>
+<p>Add the <code>src/scripts</code> directory to your system <code>PATH</code> variable. Add the <code>src/perllib</code> and <code>dependencies/lib/perl</code> directories to your system <code>PERL5LIB</code> variable.</p>
+<p>Then invoke the CICERO wrapper as</p>
+<pre><code>Cicero.sh [-h] [-n ncores] -b bamfile -g genome -r refdir [-j junctions] [-o outdir] [-t threshold] [-s sc_cutoff] [-c sc_shift] [-p] [-d]
+
+-p - optimize CICERO, sets sc_cutoff=3 and sc_shift=10 [default true]
+-s &lt;num&gt; - minimum number of soft clip support required [default=2]
+-t &lt;num&gt; - threshold for enabling increased soft clip cutoff [default=200000]
+-c &lt;num&gt; - clustering distance for grouping similar sites [default=3]
+-j &lt;file&gt; - junctions file from RNApeg
+-n &lt;num&gt; - number of cores to utilize with GNU parallel
+-d - disable excluded regions file use
+</code></pre>
+<ul>
+<li><code>ncores</code> is the number of cores to be run on (with <a href="https://www.gnu.org/software/parallel/">GNU parallel</a>).</li>
+<li><code>bamfile</code> is the input bamfile mapped to human genome builds GRCh37-lite or GRCh38_no_alt. <a href="mailto:liqing.tian@stjude.org">Contact us</a> if your bam is based on other reference version.</li>
+<li><code>genome</code> is either <code>GRCh37-lite</code> or <code>GRCh38_no_alt</code>. CICERO only support the two human reference genome versions.</li>
+<li><code>refdir</code> is the reference file directory specific to CICERO. Download <a href="#reference">Reference Files</a> below. e.g. <code>-r /home/user/software/CICERO/reference_hg38/</code> or <code>-r /home/user/software/CICERO/reference_hg19/</code></li>
+<li><code>outdir</code> is user defined output file folder.</li>
+<li><code>junctions</code> is the junctions file output from RNApeg. See <a href="#junctions">Generate Junctions</a> below. CICERO can detect fusion by analysis of splice junction reads. If this option is omitted, fusions generated by small deletions may be missed as these events may lack the soft-clipped reads.</li>
+<li><code>threshold</code> CICERO first detects all soft-clipped positions supported by &gt;=2 reads from bam file. For sample with &lt;=threshold (default 200,000) soft-clipped positions, CICERO will detect fusions based on these soft-clipped positons; otherwise, to speed-up CICERO running, CICERO will detect fusions based on soft-clipped positions supported by &gt;=sc_cutoff (3, default for optimize mode, see below) reads. For sample with lots of soft-clipped positions, a smaller threshold will speed-up CICERO running, however, some fusion events (i.e. only supported by 2 reads) may be missed.</li>
+<li><code>sc_cutoff</code> controls the number of soft clip reads required to support a putative site. The default is 2, but for samples with large numbers of soft clip reads, it may be desirable to require additional support to reduce the computational time required.</li>
+<li><code>sc_shift</code> sets the threshold for considering events to be the same site.</li>
+<li><code>optimize</code> defaults to ON. This sets <code>sc_cutoff</code> to 3 for samples where the number of soft clip sites exceeds 200,000. It also sets <code>sc_shift</code> to 10 which sets the distance to consider events the same.</li>
+<li><code>-no-optimize</code> turns optimizations off. This can increase sensitivity, but increases the computational requirements.</li>
+</ul>
+<p>The final CICERO fusion result file will be located at <code>&lt;outdir&gt;/CICERO_DATADIR/&lt;sample name&gt;/final_fusions.txt</code>. Use the following <a href="https://www.stjude.cloud/docs/guides/genomics-platform/analyzing-data/rapid-rnaseq/">guide</a> to interpret the results.</p>
+<p>To visualize CICERO fusion output you can load the final fusion output file at https://proteinpaint.stjude.org/FusionEditor/.</p>
+<h2 id="dependencies">Dependencies <a name="dependencies"></a></h2>
+<ul>
+<li><a href="https://www.gnu.org/software/parallel/">GNU parallel</a></li>
+<li><a href="http://www.htslib.org/doc/samtools-1.3.1.html">Samtools 1.3.1</a></li>
+<li><a href="https://www.ncbi.nlm.nih.gov/pubmed/10508846">Cap3</a></li>
+<li><a href="https://genome.ucsc.edu/goldenpath/help/blatSpec.html">Blat</a></li>
+<li>Java 1.8.0</li>
+<li>Perl 5.10.1 with libraries:<ul>
+<li>base</li>
+<li>Bio</li>
+<li>Carp</li>
+<li>Compress</li>
+<li>Cwd</li>
+<li>Data</li>
+<li>DBI</li>
+<li>diagnostics</li>
+<li>Digest</li>
+<li>English</li>
+<li>enum</li>
+<li>Exporter</li>
+<li>File</li>
+<li>FileHandle</li>
+<li>List</li>
+<li>POSIX</li>
+<li>strict</li>
+<li>Sys</li>
+<li>Tree</li>
+<li>warnings</li>
+</ul>
+</li>
+</ul>
+<h2 id="running-with-docker">Running with Docker <a name="docker"></a></h2>
+<p>CICERO can be run with Docker. To begin, build the Docker image using the Dockerfile in this repository.</p>
+<pre><code class="language-bash">docker build -t stjude/cicero:0.3.0 .
+</code></pre>
+<p>Then invoke the CICERO wrapper using Docker.</p>
+<pre><code class="language-bash">docker run -v &lt;path to reference directory&gt;:/reference stjude/cicero:0.3.0 Cicero.sh [-n cores] -b &lt;bam file path&gt; -g &lt;genome&gt; -r /reference -o &lt;output directory&gt; [-j junctions file] [-p] [-s int] [-t int] [-c int]
+</code></pre>
+<p>See <a href="#running">Running CICERO</a> for details of the parameters.</p>
+<h2 id="running-with-st-jude-cloud">Running with St. Jude Cloud <a name="cloud"></a></h2>
+<p>CICERO is integrated in the St. Jude Cloud Rapid RNA-Seq workflow. To run CICERO in St. Jude Cloud, access the tool through the <a href="https://platform.stjude.cloud/workflows/rapid_rna-seq">platform page</a>. Documentation
+for running and interpreting results is available in the <a href="https://stjudecloud.github.io/docs/guides/genomics-platform/analyzing-data/rapid-rnaseq/">user guide</a>.</p>
+<h2 id="generate-junctions-file-with-rnapeg">Generate junctions file with RNApeg <a name="junctions"></a></h2>
+<p>RNApeg is required to generate a junctions file for use by CICERO. You can get RNApeg from both Docker and Singularity. Once RNApeg is complete, the <code>*.junctions.tab.shifted.tab</code> file can be provided to CICERO using the <code>-j</code> argument. </p>
+<h3 id="running-rnapeg-via-docker">Running RNApeg via Docker:</h3>
+<p>RNApeg is authored by Michael N. Edmonson (<a href="https://github.com/mnedmonson">@mnedmonson</a>).</p>
+<h3 id="rnapeg-overview">RNApeg overview</h3>
+<p>This software analyzes nextgen RNA sequencing data which has been mapped to whole-genome coordinates, identifying evidence of both known and novel splicing events from the resulting alignments. The raw junction sites in the mapped BAMs undergo postprocessing to correct various issues related to mapping ambiguity. The result is a more compact and consistent set of junction calls, simplifying downstream quantification, analysis, and comparison.</p>
+<h3 id="rnapeg-key-features">RNApeg key features</h3>
+<h4 id="raw-junction-extraction">Raw junction extraction</h4>
+<p>First, the BAM read mappings are analyzed to identify putative junction sites. This produces a list of junction sites along with counts of supporting reads and several associated quality metrics. While reflective of the BAM data, this output typically requires refinement by the following steps.</p>
+<h4 id="correction-vs-reference-junctions">Correction vs. reference junctions</h4>
+<p>Novel junctions are compared with reference exon junction boundaries and evaluated for mapping ambiguity which can justify adjusting the sites to match. Even small ambiguities such as the presence of the same nucleotide on either side of a junction can be enough to nudge a prediction that would otherwise perfectly match a reference isoform out of place.</p>
+<h4 id="self-correction-for-novel-junctions">Self-correction for novel junctions</h4>
+<p>Mapping ambiguity is next evaluated within the novel junctions themselves. Ambiguous junctions are combined where possible, merging their counts of supporting reads and related annotations. This reduces the population of novel junctions while simultaneously improving the evidence for those remaining. Combining evidence for poorly-covered sites also improves the chances of these sites passing the default minimum level of 3 supporting reads required for reporting junctions in the final output.</p>
+<h4 id="correction-vs-novel-skips-of-known-exons">Correction vs. novel skips of known exons</h4>
+<p>Additional correction of novel junctions is also performed to identify previously unknown skips of an exon (or exons) within known reference isoforms. Special handling is required in these cases because while the corrected boundaries are known, the events themselves are novel.</p>
+<h4 id="edge-correction-of-novel-junctions-vs-reference-exons">Edge correction of novel junctions vs. reference exons</h4>
+<p>Junctions may also be shifted in cases of ambiguity involving a single edge (i.e. junction start or end). While not doubly-anchorable as with known reference junctions or novel skips of known exons, this adjustment can standardize evidence e.g. for novel exons.</p>
+<h4 id="junction-calling">Junction calling</h4>
+<p>Novel junctions are subjected to additional scrutiny before being reported:</p>
+<ul>
+<li>must be supported by a minimum of 3 reads</li>
+<li>at least one read must pass minimum flanking sequence requirements, to avoid false positives near read ends due to insufficient anchoring</li>
+<li>the junction must be either observed bidirectionally, or be supported by very clean alignments (either perfect or with very few high-quality mismatches, insertions, deletions, or soft clips)</li>
+</ul>
+<p>While these requirements are minimal, they substantially reduce background noise.</p>
+<h4 id="cross-sample-correction">Cross-sample correction</h4>
+<p>This step pools results for a set of samples and does additional standardization of novel exons based on the combined set. Mostly this has the effect of standardizing ambiguous novel junction sites across samples, but it can occasionally result in combinations of sites as well.</p>
+<h4 id="output">Output</h4>
+<p>The primary output files are tab-delimited text.</p>
+<p>Output is also written in UCSC .bed format, which can be used to visualize the junctions and supporting read counts within the UCSC genome browser.</p>
+<h3 id="running-rnapeg-via-docker_1">Running RNApeg via Docker</h3>
+<pre><code class="language-bash">docker run -v &lt;outdir&gt;:/results mnedmonson/public:rnapeg RNApeg.sh -b bamfile -f fasta -r refflat
+</code></pre>
+<ul>
+<li><code>fasta</code> reference genome; i.e. "Homo_sapiens/GRCh38_no_alt/FASTA/GRCh38_no_alt.fa" or "Homo_sapiens/GRCh37-lite/FASTA/GRCh37-lite.fa" from <a href="#reference">Reference Files</a>.</li>
+<li><code>refflat</code> i.e. "Homo_sapiens/GRCh38_no_alt/mRNA/RefSeq/refFlat.txt" or "Homo_sapiens/GRCh37-lite/mRNA/Combined/all_refFlats.txt" from <a href="#reference">Reference Files</a>.</li>
+</ul>
+<h3 id="running-rnapeg-via-singularity">Running RNApeg via Singularity:</h3>
+<pre><code class="language-bash">singularity run --containall --bind &lt;outdir&gt;:/results docker://mnedmonson/public:rnapeg RNApeg.sh -b bamfile -f fasta -r refflat
+</code></pre>
+<p>You will also need to add <code>--bind</code> arguments to mount the file paths for <code>bamfile</code>, <code>fasta</code>, and <code>refflat</code> into the container. </p>
+<h2 id="downloading-reference-files">Downloading reference files <a name="reference"></a></h2>
+<p>Reference files are required to run CICERO. They can be found at the following location:</p>
+<ul>
+<li>GRCh37-lite: https://doi.org/10.5281/zenodo.3817656</li>
+<li>GRCh38_no_alt: https://doi.org/10.5281/zenodo.3894739</li>
+</ul>
+<h2 id="supported-genome-version">Supported Genome Version <a name="genomes"></a></h2>
+<p>CICERO currently supports <code>GRCh37-lite</code> and <code>GRCh38_no_alt</code>. </p>
+<h2 id="demo">Demo <a name="demo"></a></h2>
+<p>A demo of CICERO can be found at the following location:
+* https://www.stjuderesearch.org/site/lab/zhang/cicero</p>
+<h2 id="citation">Citation <a name="citation"></a></h2>
+<p>Tian, L., Li, Y., Edmonson, M.N. et al. CICERO: a versatile method for detecting complex and diverse driver fusions using cancer RNA sequencing data. Genome Biol 21, 126 (2020). https://doi.org/10.1186/s13059-020-02043-x</p>
+<h2 id="license">License <a name="license"></a></h2>
+<p>Copyright 2020 St. Jude Children's Research Hospital</p>
+<p>Licensed under a modified version of the Apache License, Version 2.0
+(the "License") for academic research use only; you may not use this
+file except in compliance with the License. To inquire about commercial
+use, please contact the St. Jude Office of Technology Licensing at
+scott.elmer@stjude.org.</p>
+<p>Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.</p></div>
+            </div>
+        </div>
+
+        <footer class="col-md-12">
+            <hr>
+                <p>© 2020 St. Jude Children's Research Hospital</p>
+            <p>Documentation built with <a href="https://www.mkdocs.org/">MkDocs</a>.</p>
+        </footer>
+        <script>
+            var base_url = ".",
+                shortcuts = {"help": 191, "next": 78, "previous": 80, "search": 83};
+        </script>
+        <script src="js/base.js" defer></script>
+        <script src="search/main.js" defer></script>
+
+        <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="searchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="searchModalLabel">Search</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+                <p>
+                    From here you can search these documents. Enter
+                    your search terms below.
+                </p>
+                <form>
+                    <div class="form-group">
+                        <input type="search" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
+                    </div>
+                </form>
+                <div id="mkdocs-search-results"></div>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div><div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="keyboardModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="keyboardModalLabel">Keyboard Shortcuts</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Keys</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="help shortcut"><kbd>?</kbd></td>
+                    <td>Open this help</td>
+                  </tr>
+                  <tr>
+                    <td class="next shortcut"><kbd>n</kbd></td>
+                    <td>Next page</td>
+                  </tr>
+                  <tr>
+                    <td class="prev shortcut"><kbd>p</kbd></td>
+                    <td>Previous page</td>
+                  </tr>
+                  <tr>
+                    <td class="search shortcut"><kbd>s</kbd></td>
+                    <td>Search</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+
+    </body>
+</html>
+
+<!--
+MkDocs version : 1.1.2
+Build Date UTC : 2020-11-18 14:17:20.620599+00:00
+-->
