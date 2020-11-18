@@ -4,3 +4,4 @@ test/data/input/SJBALL020016_C27.1.1/SJBALL020016_C27.1.1.bam
 *.tmp
 gfServer.log
 src/perllib/DBTools.pm
+site/
