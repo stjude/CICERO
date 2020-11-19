@@ -2,6 +2,8 @@
 # extract features from blob of GenBank-formatted refGene records:
 # ftp://ftp.ncbi.nlm.nih.gov/refseq/H_sapiens/mRNA_Prot/human.rna.gbff.gz
 # MNE 8/2014
+#
+# TO DO: swarm option with split preprocessed files?
 
 use strict;
 use warnings;
@@ -12,8 +14,10 @@ use 5.10.1;
 use Getopt::Long;
 use Bio::SeqIO;
 
-use MiscUtils qw(dump_die);
+use MiscUtils qw(dump_die log_message);
 use FileUtils qw(universal_open read_simple_file);
+use File::Basename;
+use Digest::MD5 qw(md5_hex);
 
 use Reporter;
 use DelimitedFile qw(df_bucket_by_header);
@@ -31,15 +35,17 @@ use constant REPORT_HEADERS => qw(
 				   gi
 				   gene
 				   protein
+				   transcript_variant
 				);
 
 my @GBFF;
 GetOptions(\%FLAGS,
 	   "-rna-gbff=s" => \@GBFF,
 	   # download from NCBI:
-	   # ftp://ftp.ncbi.nlm.nih.gov/refseq/H_sapiens/mRNA_Prot/human.?.rna.bff.gz
+	   # ftp://ftp.ncbi.nlm.nih.gov/refseq/H_sapiens/mRNA_Prot/human.?.rna.gbff.gz
 	   # where ? is 1-X
 	   "-glob-gbff",
+	   "-single-gbff=s",
 
 	   "-out=s",
 
@@ -48,15 +54,28 @@ GetOptions(\%FLAGS,
 	   # from NCBI
 
 	   "-debug-eu=s",
-
+	   "-preprocess-only",
 	  );
 
-push @GBFF, glob("*.gbff.*") if $FLAGS{"glob-gbff"};
+#push @GBFF, glob("*.gbff.*") if $FLAGS{"glob-gbff"};
+push @GBFF, glob("*.gbff.gz") if $FLAGS{"glob-gbff"};
+push @GBFF, $FLAGS{"single-gbff"} if $FLAGS{"single-gbff"};
+# include suffix so outfile is excluded if present
 
 if (@GBFF) {
+  my $of;
+  if ($of = $FLAGS{out}) {
+  } else {
+    if (@GBFF == 1) {
+      $of = basename($GBFF[0]) . ".refgene2protein.tab";
+    } else {
+      $of = "refgene2protein.tab";
+    }
+  }
+
   generate_refgene2protein(
 			   "-in" => \@GBFF,
-			   "-out" => ($FLAGS{out} || "refgene2protein.tab")
+			   "-out" => $of,
 			  );
 } elsif (my $fn = $FLAGS{"fetch-old-genbank"}) {
   fetch_old_genbank($fn);
@@ -78,6 +97,67 @@ sub generate_refgene2protein {
   }
   die unless @infiles;
 
+  my $preprocess = $FLAGS{"single-gbff"} ? 0 : 1;
+
+  if ($preprocess) {
+    # parser is extremely slow, so digest input to just refGene records.
+    # even parsing the ~50k NM_ accessions is very slow but MUCH
+    # faster than having to parse everything.
+    my $md5 = md5_hex(map {$_, -s $_} @infiles);
+    my $f_cooked = sprintf "refgene.%s.txt.gz", $md5;
+    my $f_split_template = sprintf "refgene_split.%s.txt.%%03d.gz", $md5;
+
+    unless (-s $f_cooked) {
+      my $wf = new WorkingFile($f_cooked, "-compress" => "gz");
+      my $fh_out = $wf->output_filehandle();
+
+      my $wf_chunk;
+      my $fh_chunk;
+      my $chunk_num = 0;
+      my $nm_count = 0;
+      my $chunk_size = 1000;
+
+      foreach my $infile (@infiles) {
+	printf STDERR "preprocessing %s...\n", $infile;
+	my $fh = universal_open($infile);
+	my $usable;
+	while (<$fh>) {
+	  if (/^LOCUS\s+(\w+)/) {
+#	    $usable = $1 =~ /^NM_/;
+	    $usable = $1 =~ /^N[MR]_/;
+	    # 12/2019: also include NR_ as these can have transcript
+	    # variant numbers, which may be used by VEP+ to assist
+	    # isoform filtering
+
+	    if ($usable) {
+	      if ($nm_count++ % $chunk_size == 0) {
+		$wf_chunk->finish() if $wf_chunk;
+		my $cfn = sprintf $f_split_template, $chunk_num++;
+#		print STDERR " $cfn\n";
+		$wf_chunk = new WorkingFile($cfn, "-compress" => "gz");
+		$fh_chunk = $wf_chunk->output_filehandle();
+	      }
+#	      print "$nm_count\n";
+	    }
+
+	  }
+	  if ($usable) {
+	    print $fh_out $_;
+	    print $fh_chunk $_;
+	  }
+	}
+      }
+      $wf->finish();
+      $wf_chunk->finish();
+    }
+
+    @infiles = $f_cooked;
+    if ($FLAGS{"preprocess-only"}) {
+      printf STDERR "preprocessing finished\n";
+      exit(0);
+    }
+  }
+
   my $rpt = new Reporter(
 			 "-file" => $outfile,
 			 "-delimiter" => "\t",
@@ -85,30 +165,46 @@ sub generate_refgene2protein {
 			 "-auto_qc" => 1,
 			);
 
-  my $skipped_non_nm = 0;
-
+  my $skipped = 0;
+  my $records = 0;
+  my $ping = 1000;
+  my $wrote = 0;
   foreach my $blob (@infiles) {
-    printf STDERR "parsing %s...\n", $blob;
+    log_message("parsing $blob...");
     my $fh = universal_open($blob);
     my $stream = Bio::SeqIO->new("-fh" => $fh,
 				 -format => 'GenBank');
     while (my $record = $stream->next_seq()) {
       # Bio::SeqIO::genbank
+
       my $info = parse_one_genbank($record);
-      if ($info->{protein}) {
-	# only protein-coding (i.e. not NR_)
-	if ($info->{accession} =~ /NM_/) {
-	  # exclude predicted XM_ records which don't appear in refFlat.txt
-	  $rpt->end_row($info);
-	} else {
-	  $skipped_non_nm++;
-	}
+      $info->{protein} = "" unless exists $info->{protein};
+      # won't be present for NR_
+
+      my $acc = $info->{accession} || die;
+      my $protein = $info->{protein} || "";
+      # not present for NR_
+      my $usable = $acc =~ /^N[MR]_/ ? 1 : 0;
+      # exclude predicted XM_ records which don't appear in refFlat.txt
+      die "WTF" if $acc =~ /^NM_/ and !$protein;
+      # sanity check
+
+      if ($usable) {
+	$rpt->end_row($info);
+	$wrote++;
+      } else {
+	$skipped++;
       }
+
+      if (++$records % $ping == 0) {
+	log_message(sprintf "raw:%d wrote:%d at:%s", $records, $wrote, $info->{accession});
+      }
+
     }
   }
   $rpt->finish;
 
-  printf STDERR "skipped %d non-NM records\n", $skipped_non_nm;
+  printf STDERR "skipped %d records\n", $skipped;
 }
 
 sub fetch_old_genbank {
@@ -234,8 +330,11 @@ sub parse_one_genbank {
 
   my $accession = $record->accession_number();
   my $version = $record->version();
+  my $desc = $record->desc() || die "no desc for $accession";
 
   my $cds_count = 0;
+  my $transcript_variant = $desc =~ /transcript variant (\d+)/ ? $1 : 0;
+
   my %r;
   $r{accession} = $accession;
   $r{version} = $version;
@@ -243,6 +342,7 @@ sub parse_one_genbank {
   # fail: this is the GI of the refSeq record, not the protein gi
   $r{gi} = "";
   # protein gi might not be present
+  $r{transcript_variant} = $transcript_variant;
 
   print STDERR "\n" if $verbose > 1;
   printf STDERR "starting %s.%d...\n", $accession, $version if $verbose;
