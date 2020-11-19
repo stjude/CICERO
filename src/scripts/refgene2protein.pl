@@ -186,7 +186,7 @@ sub generate_refgene2protein {
       # not present for NR_
       my $usable = $acc =~ /^N[MR]_/ ? 1 : 0;
       # exclude predicted XM_ records which don't appear in refFlat.txt
-      die "WTF" if $acc =~ /^NM_/ and !$protein;
+      die "refseq accession $acc has no protein sequence" if $acc =~ /^NM_/ and !$protein;
       # sanity check
 
       if ($usable) {
