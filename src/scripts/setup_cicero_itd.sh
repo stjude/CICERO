@@ -166,18 +166,18 @@ while read case_bam
   do
     bam="$DATA_DIR/\$case_bam/\$case_bam.bam"
     LEN=\`getReadLength.sh \$bam\`
-    SOFTCLIP_COUNT=\`wc -l $DATA_DIR/\$case_bam/*.cover | tail -n 1 | awk \'{print \$1}\'\`
+    SOFTCLIP_COUNT=\`wc -l $DATA_DIR/\$case_bam/*.cover | tail -n 1 | awk '{print \$1}'\`
 
     sc_cutoff_arg=
     if [ \$THRESHOLD -gt 0 ]
     then
        if [ \$SOFTCLIP_COUNT -gt \$THRESHOLD ]
        then
-          sc_cutoff_arg=\"-m \$SC_CUTOFF\"
+          sc_cutoff_arg="-m \$SC_CUTOFF"
        fi
     fi
 
-    prepareCiceroInput.pl -o $DATA_DIR/\$case_bam -genome $GENOME -s 250 -p \$case_bam -l \$LEN -f $DATA_DIR/\$case_bam/\$case_bam.gene_info.txt \$sc_cutoff_arg
+    prepareCiceroInput.pl -o $DATA_DIR/\$case_bam -genome $GENOME -s 250 -p local -l \$LEN -f $DATA_DIR/\$case_bam/\$case_bam.gene_info.txt \$sc_cutoff_arg
   done < $RUN_DIR/config.txt
 EOF
 
@@ -191,13 +191,28 @@ while read case_bam
    bam="$DATA_DIR/\$case_bam/\$case_bam.bam"
    LEN=\`getReadLength.sh \$bam\` 
    
-   get_cicero_cmds.pl -i \$bam -genome $GENOME -l \$LEN -o $DATA_DIR/\$case_bam -c 10>> `get_step_cmds_file`
+   get_cicero_cmds.pl -i \$bam -genome $GENOME -l \$LEN -o $DATA_DIR/\$case_bam -c 10 -out_prefix=local >> `get_step_cmds_file`
  done < $RUN_DIR/config.txt 
 EOF
 write_step_submit_script
 
 #
-# Step 03: annotate
+# Step 03: combine
+#
+
+init_step combine
+cat > `get_step_local_work_script` <<EOF
+#!/bin/bash
+while read case_bam
+  do
+    bam="$DATA_DIR/\$case_bam/\$case_bam.bam"
+    cat $DATA_DIR/\$case_bam/*/unfiltered.fusion.txt > $DATA_DIR/\$case_bam/unfiltered.fusion.txt
+    cat $DATA_DIR/\$case_bam/*/unfiltered.internal.txt > $DATA_DIR/\$case_bam/unfiltered.internal.txt
+  done < $RUN_DIR/config.txt
+EOF
+
+#
+# Step 04: annotate
 #
 init_step annotate
 
@@ -245,7 +260,7 @@ write_step_submit_script
 
 
 #
-# Step 04: filter
+# Step 05: filter
 #
 init_step filter
 
@@ -277,7 +292,9 @@ done < $RUN_DIR/config.txt > `get_step_cmds_file`
 EOF
 write_step_submit_script
 
-# Step 05
+#
+# Step 06
+#
 init_step final_qa
 
 cat > `get_step_qc_script` <<EOF
