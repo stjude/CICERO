@@ -108,7 +108,7 @@ while read case_bam
    then
       if [ \$SOFTCLIP_COUNT -gt $SOFTCLIP_THRESHOLD ]
       then
-         sc_cutoff_arg=\"-m $SC_CUTOFF\"
+         sc_cutoff_arg="-m $SC_CUTOFF"
       fi
    fi
 
