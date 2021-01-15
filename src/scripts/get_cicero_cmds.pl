@@ -24,6 +24,7 @@ my $bam_file;
 my $genome; 
 my $read_length = 100;
 my $output_dir;
+my $cluster_arg = 10;
 my $optionOK = GetOptions(
 	'out_prefix=s'	=> \$out_prefix,
 	'q|queue=s'		=> \$queue,

@@ -104,7 +104,7 @@ while read case_bam
  do
    bam="$DATA_DIR/\$case_bam/\$case_bam.bam"
    LEN=\`getReadLength.sh \$bam\` 
-   SOFTCLIP_COUNT=\`wc -l $DATA_DIR/\$case_bam/*.cover | tail -n 1 | awk \'{print \$1}\'\`
+   SOFTCLIP_COUNT=\`wc -l $DATA_DIR/\$case_bam/*.cover | tail -n 1 | awk '{print \$1}'\`
 
    sc_cutoff_arg=
    if [ \$THRESHOLD -gt 0 ]
