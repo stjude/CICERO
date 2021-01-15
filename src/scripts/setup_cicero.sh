@@ -97,9 +97,6 @@ EOF
 cat > `get_step_local_work_script` <<EOF
 #!/bin/bash
 
-THRESHOLD=200000
-SC_CUTOFF=3
-
 while read case_bam 
  do
    bam="$DATA_DIR/\$case_bam/\$case_bam.bam"
@@ -107,11 +104,11 @@ while read case_bam
    SOFTCLIP_COUNT=\`wc -l $DATA_DIR/\$case_bam/*.cover | tail -n 1 | awk '{print \$1}'\`
 
    sc_cutoff_arg=
-   if [ \$THRESHOLD -gt 0 ]
+   if [ $SOFTCLIP_THRESHOLD -gt 0 ]
    then
-      if [ \$SOFTCLIP_COUNT -gt \$THRESHOLD ]
+      if [ \$SOFTCLIP_COUNT -gt $SOFTCLIP_THRESHOLD ]
       then
-         sc_cutoff_arg=\"-m \$SC_CUTOFF\"
+         sc_cutoff_arg=\"-m $SC_CUTOFF\"
       fi
    fi
 
