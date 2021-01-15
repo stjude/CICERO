@@ -58,8 +58,10 @@ while(<$BLK>){
 close($BLK);
 
 my $breakpoints_file = $conf->{'KNOWN_BREAKPOINTS'};
-open(my $BRK, "<", "$breakpoints_file");
 my %breakpoints = (); 
+
+if (defined $breakpoints_file && $breakpoints_file ne ''){
+open(my $BRK, "<", "$breakpoints_file");
 print STDERR "Parsing known break points $breakpoints_file\n"; 
 while(<$BRK>){
 	my $line = $_;
@@ -68,6 +70,7 @@ while(<$BRK>){
 	$breakpoints{$chr}{$pos} = 1;
 }
 close($BRK);
+}
 
 my %gene_info;
 print STDERR "Parsing gene info file\n"; 
