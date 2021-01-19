@@ -24,6 +24,7 @@ my $bam_file;
 my $genome; 
 my $read_length = 100;
 my $output_dir;
+my $cluster_arg = 10;
 my $optionOK = GetOptions(
 	'out_prefix=s'	=> \$out_prefix,
 	'q|queue=s'		=> \$queue,
@@ -35,6 +36,7 @@ my $optionOK = GetOptions(
 	'usage'			=> \$usage,
 	'v|version'		=> \$version,
 	'o|outdir=s'	=> \$output_dir,
+    'c|cluster=i'   => \$cluster_arg,
 );
 if( !$bam_file) {
 	croak "you must provide an input bam file to run the program\n";
@@ -59,6 +61,6 @@ foreach my $file (@files){
 	my $out = $file; 
 	$out =~ s/.SC$//;
 	mkdir $out;  
-	my $cmd = "Cicero.pl -genome $genome -i $bam_file -o $out -l $read_length -f $file";
+	my $cmd = "Cicero.pl -genome $genome -i $bam_file -o $out -l $read_length -f $file -c $cluster_arg";
 	print $cmd."\n";
 }

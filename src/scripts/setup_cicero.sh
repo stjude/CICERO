@@ -96,12 +96,26 @@ EOF
 #get_geneInfo.pl and extract_range.pl - DONE
 cat > `get_step_local_work_script` <<EOF
 #!/bin/bash
+
+THRESHOLD=200000
+SC_CUTOFF=3
+
 while read case_bam 
  do
    bam="$DATA_DIR/\$case_bam/\$case_bam.bam"
    LEN=\`getReadLength.sh \$bam\` 
+   SOFTCLIP_COUNT=\`wc -l $DATA_DIR/\$case_bam/*.cover | tail -n 1 | awk '{print \$1}'\`
 
-   prepareCiceroInput.pl -o $DATA_DIR/\$case_bam -genome $GENOME -s 250 -p \$case_bam -l \$LEN -f $DATA_DIR/\$case_bam/\$case_bam.gene_info.txt
+   sc_cutoff_arg=
+   if [ \$THRESHOLD -gt 0 ]
+   then
+      if [ \$SOFTCLIP_COUNT -gt \$THRESHOLD ]
+      then
+         sc_cutoff_arg=\"-m \$SC_CUTOFF\"
+      fi
+   fi
+
+   prepareCiceroInput.pl -o $DATA_DIR/\$case_bam -genome $GENOME -s 250 -p \$case_bam -l \$LEN -f $DATA_DIR/\$case_bam/\$case_bam.gene_info.txt \$sc_cutoff_arg
  done < $RUN_DIR/config.txt 
 EOF
 
@@ -116,8 +130,7 @@ while read case_bam
    bam="$DATA_DIR/\$case_bam/\$case_bam.bam"
    LEN=\`getReadLength.sh \$bam\` 
    
-   get_cicero_cmds.pl -i \$bam -genome $GENOME -l \$LEN -o $DATA_DIR/\$case_bam >> `get_step_cmds_file`
-#   echo "Cicero.pl -c 10 -d \$bam -o $DATA_DIR/\$case_bam -l \$LEN" --ref_genome $GENOME -f $DATA_DIR/\$case_bam/\$case_bam.sclip.txt >> `get_step_cmds_file`
+   get_cicero_cmds.pl -i \$bam -genome $GENOME -l \$LEN -o $DATA_DIR/\$case_bam -c 10 >> `get_step_cmds_file`
  done < $RUN_DIR/config.txt 
 EOF
 write_step_submit_script
