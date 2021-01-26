@@ -121,7 +121,7 @@
 <p align="center">
 
   <h1 align="center">
-    CICERO 0.3.0
+    CICERO
   </h1>
 
   <p align="center">
@@ -246,10 +246,10 @@
 </ul>
 <h2 id="running-with-docker">Running with Docker <a name="docker"></a></h2>
 <p>CICERO can be run with Docker. To begin, build the Docker image using the Dockerfile in this repository.</p>
-<pre><code class="language-bash">docker build -t stjude/cicero:0.3.0 .
+<pre><code class="language-bash">docker build -t stjude/cicero:1.4.0 .
 </code></pre>
 <p>Then invoke the CICERO wrapper using Docker.</p>
-<pre><code class="language-bash">docker run -v &lt;path to reference directory&gt;:/reference stjude/cicero:0.3.0 Cicero.sh [-n cores] -b &lt;bam file path&gt; -g &lt;genome&gt; -r /reference -o &lt;output directory&gt; [-j junctions file] [-p] [-s int] [-t int] [-c int]
+<pre><code class="language-bash">docker run -v &lt;path to reference directory&gt;:/reference stjude/cicero:1.4.0 Cicero.sh [-n cores] -b &lt;bam file path&gt; -g &lt;genome&gt; -r /reference -o &lt;output directory&gt; [-j junctions file] [-p] [-s int] [-t int] [-c int]
 </code></pre>
 <p>See <a href="#running">Running CICERO</a> for details of the parameters.</p>
 <h2 id="running-with-st-jude-cloud">Running with St. Jude Cloud <a name="cloud"></a></h2>
@@ -405,5 +405,5 @@ limitations under the License.</p></div>
 
 <!--
 MkDocs version : 1.1.2
-Build Date UTC : 2021-01-26 14:28:04.304861+00:00
+Build Date UTC : 2021-01-26 14:30:44.798056+00:00
 -->
