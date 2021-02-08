@@ -136,19 +136,22 @@
       "optional": true,
       "class": "boolean",
       "name": "optimize",
-      "help": "Changes defaults for minimum soft clip support and distance to consider the same soft clip event"
+      "help": "Changes defaults for minimum soft clip support and distance to consider the same soft clip event",
+      "default": true
     },
     {
       "optional": true,
       "class": "int",
       "name": "sc_cutoff",
-      "help": "Changes defaults for minimum soft clip support" 
+      "help": "Changes defaults for minimum soft clip support. Ignored if optimize is true.",
+      "default": 2 
     },
     {
       "optional": true,
       "class": "int",
       "name": "sc_shift",
-      "help": "Changes defaults for distance to consider the same soft clip event"
+      "help": "Changes defaults for distance to consider the same soft clip event. Ignored if optimize is true.",
+      "default": 3
     },
     {
       "class": "string",
@@ -164,7 +167,8 @@
       "class": "boolean",
       "name": "disable_excludes",
       "label": "Disable excluded regions",
-      "help": "Disable usages of excluded regions list"
+      "help": "Disable usages of excluded regions list",
+      "default": false
     }
   ]
 }
