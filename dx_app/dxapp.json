@@ -144,7 +144,7 @@
       "class": "int",
       "name": "sc_cutoff",
       "help": "Changes defaults for minimum soft clip support. Ignored if optimize is true.",
-      "default": 2 
+      "default": 2
     },
     {
       "optional": true,
