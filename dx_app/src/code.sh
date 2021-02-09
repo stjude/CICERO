@@ -117,11 +117,18 @@ main() {
   image_id=`docker images -q stjude/cicero | head -n 1`
  
   echo "=== Cicero ==="
+  echo "      - Optimize: $optimize"
+  echo "      - Soft clip cutoff: $sc_cutoff"
+  echo "      - Soft clip shift: $sc_shift"
+  echo "      - Reference: $ref_name"
+  echo "      - Disable excludes list: $disable_excludes"
+
   optional_args=
   if [ "$optimize" = "true" ]
   then
     optional_args="-p"
   else
+    optional_args="-no-optimize"
     if [ $sc_shift ]
     then
       optional_args="$optional_args -c $sc_shift"
