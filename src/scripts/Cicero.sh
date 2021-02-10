@@ -72,15 +72,15 @@ fi
 ### Validate inputs ###
 #######################
 if [[ ! -f $BAMFILE ]]; then
-    >&2 echo "ERROR: Bamfile '$BAMFILE' DNE"
+    >&2 echo "ERROR: Bamfile '$BAMFILE' does not exist"
     usage
     exit 1
 elif [[ ! -f $BAMFILE.bai ]]; then
-    >&2 echo "ERROR: Bam index (.bai) '$BAMFILE.bai' DNE"
+    >&2 echo "ERROR: Bam index (.bai) '$BAMFILE.bai' does not exist"
     usage
     exit 1
 elif [[ ! -d $REFDIR ]]; then
-    >&2 echo "ERROR: Reference directory '$REFFA' DNE"
+    >&2 echo "ERROR: Reference directory '$REFFA' does not exist"
     usage
     exit 1
 elif [[ ! $GENOME ]]; then
@@ -88,7 +88,7 @@ elif [[ ! $GENOME ]]; then
     usage
     exit 1
 elif [[ $JUNCTIONS && ! -f $JUNCTIONS ]]; then
-    >&2 echo "ERROR: Junctions file '$JUNCTIONS' DNE"
+    >&2 echo "ERROR: Junctions file '$JUNCTIONS' does not exist"
     usage
     exit 1
 fi
