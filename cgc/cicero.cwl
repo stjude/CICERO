@@ -2,7 +2,7 @@ class: CommandLineTool
 cwlVersion: v1.0
 $namespaces:
   sbg: 'https://sevenbridges.com'
-id: an.thrasher/cicero-benchmark/cicero/8
+id: cicero
 baseCommand: []
 inputs:
   - id: disable_optimize
