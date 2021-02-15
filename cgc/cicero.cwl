@@ -97,4 +97,4 @@ requirements:
   - class: InlineJavascriptRequirement
 hints:
   - class: DockerRequirement
-    dockerPull: 'ghcr.io/jordan-rash/cicero:latest'
+    dockerPull: 'ghcr.io/stjude/cicero:latest'
