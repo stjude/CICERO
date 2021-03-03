@@ -1,6 +1,6 @@
 {
   "openSource": false,
-  "developers": [ "user-clmcleod", "user-athrashe" ],
+  "developers": [ "user-clmcleod", "user-athrashe", "user-appdpdnanexus_stjude.org" ],
   "authorizedUsers": [
     "user-clmcleod",
     "user-snewman",
@@ -100,7 +100,7 @@
     "Structural Variation",
     "Variation Calling"
   ],
-  "version": "1.3.0",
+  "version": "1.4.1",
   "dxapi": "1.0.1",
   "inputSpec": [
     {
@@ -136,19 +136,22 @@
       "optional": true,
       "class": "boolean",
       "name": "optimize",
-      "help": "Changes defaults for minimum soft clip support and distance to consider the same soft clip event"
+      "help": "Changes defaults for minimum soft clip support and distance to consider the same soft clip event",
+      "default": true
     },
     {
       "optional": true,
       "class": "int",
       "name": "sc_cutoff",
-      "help": "Changes defaults for minimum soft clip support" 
+      "help": "Changes defaults for minimum soft clip support. Ignored if optimize is true.",
+      "default": 2
     },
     {
       "optional": true,
       "class": "int",
       "name": "sc_shift",
-      "help": "Changes defaults for distance to consider the same soft clip event"
+      "help": "Changes defaults for distance to consider the same soft clip event. Ignored if optimize is true.",
+      "default": 3
     },
     {
       "class": "string",
@@ -157,13 +160,15 @@
       "optional": false,
       "choices": ["GRCh37-lite", "GRCh38_no_alt"],
       "default": "GRCh37-lite",
-      "help": "" 
+      "help": "Choose the reference genome to which this sample is aligned."
     },
     {
       "optional": true,
       "class": "boolean",
       "name": "disable_excludes",
-      "help": "Disable usages of excluded regions list"
+      "label": "Disable excluded regions",
+      "help": "Disable usages of excluded regions list",
+      "default": false
     }
   ]
 }
