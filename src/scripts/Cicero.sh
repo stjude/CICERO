@@ -19,6 +19,7 @@ JUNCTIONS=""
 REFFA=""
 GENOME=""
 SAMPLE=""
+FILENAME=""
 TARGET="TRANSCRIPTOME"
 NCORES=
 OUTDIR=$(pwd)
@@ -31,6 +32,7 @@ DISABLE_EXCLUDE=0
 usage() {
     echo "Cicero.sh [-h] [-n ncores] -b bamfile -g genome -r refdir [-j junctions] [-o outdir] [-t threshold] [-s sc_cutoff] [-c sc_shift] [-p]"
     echo "-p - optimize CICERO, sets sc_cutoff=3 and sc_shift=10 [default true]" 
+    echo "-f <file_name> - final results file name [default: final_fusion.txt]"
     echo "-s <num> - minimum number of soft clip support required [default=2]"
     echo "-t <num> - threshold for enabling increased soft clip cutoff [default=200000]"
     echo "-c <num> - clustering distance for grouping similar sites [default=3]"
@@ -51,6 +53,7 @@ while [ ! -z "$1" ]; do
         -j) JUNCTIONS=$2; shift;;
         -r) REFDIR=$2; shift;;
         -g) GENOME=$2; shift;;
+        -f) FILENAME=$2; shift;;
         -o) OUTDIR=$2; shift;;
         -t) THRESHOLD=$2; shift;;
         -s) SC_CUTOFF=$2; shift;;
@@ -348,6 +351,13 @@ cp $CICERO_DATADIR/$SAMPLE/final_fusions.txt $CICERO_DATADIR/$SAMPLE/final_fusio
 if  [ $(wc -l $CICERO_DATADIR/$SAMPLE/final_fusions.txt | awk '{ print $1 }') -eq 1 ]
 then
   echo "No events found"
+fi
+
+###############################
+### STEP 06 - Rename output ###
+###############################
+if [-n $FILENAME]; then
+    mv $OURDIR/$CICERO_DATADIR/$SAMPLE/final_fusions.txt $OURDIR/$CICERO_DATADIR/$SAMPLE/$FILENAME
 fi
 
 ############################
