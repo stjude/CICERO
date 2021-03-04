@@ -356,8 +356,8 @@ fi
 ###############################
 ### STEP 06 - Rename output ###
 ###############################
-if [-n $FILENAME]; then
-    mv $OURDIR/$CICERO_DATADIR/$SAMPLE/final_fusions.txt $OURDIR/$CICERO_DATADIR/$SAMPLE/$FILENAME
+if [[ -n $FILENAME ]]; then
+    mv $OUTDIR/$CICERO_DATADIR/$SAMPLE/final_fusions.txt $OUTDIR/$CICERO_DATADIR/$SAMPLE/$FILENAME
 fi
 
 ############################
