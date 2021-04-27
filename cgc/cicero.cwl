@@ -86,12 +86,15 @@ outputs:
     type: File?
     outputBinding:
       glob: >-
-        $(inputs.bam_file.nameroot)/CICERO_DATADIR/$(inputs.bam_file.nameroot)/final_fusions.txt
+        $(inputs.bam_file.nameroot)/CICERO_DATADIR/$(inputs.bam_file.nameroot)/$(inputs.bam_file.nameroot).final_fusions.txt
 label: cicero
 arguments:
   - position: 101
     prefix: '-o'
-    valueFrom: (inputs.bam_file.nameroot)
+    valueFrom: $(inputs.bam_file.nameroot)
+  - position: 102
+    prefix: '-f'
+    valueFrom: $(inputs.bam_file.nameroot).final_fusions.txt
 requirements:
   - class: ShellCommandRequirement
   - class: InlineJavascriptRequirement
