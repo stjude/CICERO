@@ -231,7 +231,7 @@
                         "id": "output_file",
                         "type": "File",
                         "outputBinding": {
-                            "glob": "$(inputs.bam_file.nameroot)/CICERO_DATADIR/$(inputs.bam_file.nameroot)/final_fusions.txt"
+                            "glob": "$(inputs.bam_file.nameroot)/CICERO_DATADIR/$(inputs.bam_file.nameroot)/$(inputs.bam_file.nameroot).final_fusions.txt"
                         }
                     }
                 ],
@@ -242,6 +242,12 @@
                         "shellQuote": false,
                         "position": 101,
                         "valueFrom": "$(inputs.bam_file.nameroot)"
+                    },
+                    {
+                        "prefix": "-f",
+                        "shellQuote": false,
+                        "position": 102,
+                        "valueFrom": "$(inputs.bam_file.nameroot).final_fusions.txt"
                     }
                 ],
                 "requirements": [
