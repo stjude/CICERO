@@ -352,6 +352,7 @@ echo "Step 05 - $(date +'%Y.%m.%d %H:%M:%S') - Filter"
 {
 cicero_filter.sh $CICERO_DATADIR $SAMPLE $GENOME
 cp $CICERO_DATADIR/$SAMPLE/final_fusions.txt $CICERO_DATADIR/$SAMPLE/final_fusions.report.html
+cp $CICERO_DATADIR/$SAMPLE/final_fusions.txt $CICERO_DATADIR/$SAMPLE/${SAMPLE}.final_fusions.txt
 } 1> 05_Filter.out 2> 05_Filter.err
 
 ## QC
@@ -364,7 +365,8 @@ fi
 ### STEP 06 - Rename output ###
 ###############################
 if [[ -n $FILENAME ]]; then
-    mv $OUTDIR/$CICERO_DATADIR/$SAMPLE/final_fusions.txt $OUTDIR/$CICERO_DATADIR/$SAMPLE/$FILENAME
+    echo "Renaming output file: $CICERO_DATADIR/$SAMPLE/final_fusions.txt $CICERO_DATADIR/$SAMPLE/$FILENAME" 2>&1
+    cp $CICERO_DATADIR/$SAMPLE/final_fusions.txt $CICERO_DATADIR/$SAMPLE/$FILENAME
 fi
 
 ############################
