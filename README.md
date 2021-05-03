@@ -97,7 +97,7 @@ Cicero.sh [-h] [-n ncores] -b bamfile -g genome -r refdir [-j junctions] [-o out
 - `optimize` defaults to ON. This sets `sc_cutoff` to 3 for samples where the number of soft clip sites exceeds 200,000. It also sets `sc_shift` to 10 which sets the distance to consider events the same.
 - `-no-optimize` turns optimizations off. This can increase sensitivity, but increases the computational requirements.
 
-The final CICERO fusion result file will be located at `<outdir>/CICERO_DATADIR/<sample name>/final_fusions.txt`. Use the following [guide](https://www.stjude.cloud/docs/guides/genomics-platform/analyzing-data/rapid-rnaseq/) to interpret the results.
+The final CICERO fusion result file will be located at `<outdir>/CICERO_DATADIR/<sample name>/final_fusions.txt`. Use the following [guide](https://university.stjude.cloud/docs/genomics-platform/workflow-guides/rapid-rnaseq/#interpreting-results) to interpret the results.
 
 To visualize CICERO fusion output you can load the final fusion output file at https://proteinpaint.stjude.org/FusionEditor/.
 
