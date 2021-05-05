@@ -49,7 +49,7 @@ my ($all_output, $internal, $DNA) = (0, 0, 0);
 my ($min_hit_len, $max_num_hits, $min_fusion_distance);
 $min_hit_len = 25;
 my $sc_shift = 10; 
-my ($blacklist_gene_file, $blacklist_fusion_file, $complex_region_file, $excluded_chroms, $gold_gene_file);
+my ($excluded_gene_file, $excluded_fusion_file, $complex_region_file, $excluded_chroms, $gold_gene_file);
 my ( $help, $man, $version, $usage );
 
 if(@ARGV == 0){
@@ -108,9 +108,9 @@ $blat_port = $conf->{BLAT_PORT} unless($blat_port);
 $dir_2bit = '/';
 $gene_model_file = $conf->{'REFSEQ_REFFLAT'} unless($gene_model_file);
 print STDERR "gene_model_file: $gene_model_file\n";
-$blacklist_gene_file = $conf->{BLACKLIST_GENES} unless($blacklist_gene_file);
-$blacklist_fusion_file = $conf->{BLACKLIST_FUSIONS} unless($blacklist_fusion_file);
-print STDERR "blacklist_fusion_file: $blacklist_fusion_file\n";
+$excluded_gene_file = $conf->{EXCLUDED_GENES} unless($excluded_gene_file);
+$excluded_fusion_file = $conf->{EXCLUDED_FUSIONS} unless($excluded_fusion_file);
+print STDERR "excluded_fusion_file: $excluded_fusion_file\n";
 $known_itd_file = $conf->{KNOWN_ITD_FILE} unless($known_itd_file);
 print STDERR "KNOWN_ITD_FILE: ", $known_itd_file, "\n";
 $known_fusion_file = $conf->{KNOWN_FUSIONS} unless($known_fusion_file);
@@ -225,14 +225,14 @@ my @seq_ids = $sam_d->seq_ids;
 my $validator = CiceroSCValidator->new();
 $validator->remove_validator('strand_validator') if(!$paired);
 
-my %blacklist = ();
-open(my $BLK, "$blacklist_gene_file");
-while(<$BLK>){
+my %excluded = ();
+open(my $EXC, "$excluded_gene_file");
+while(<$EXC>){
 	my $line = $_;
 	chomp($line);
-	$blacklist{$line} = 1;
+	$excluded{$line} = 1;
 }
-close($BLK);
+close($EXC);
 
 my %gold_genes = ();
 if($gold_gene_file && -e $gold_gene_file){
@@ -248,7 +248,7 @@ if($gold_gene_file && -e $gold_gene_file){
 my %bad_fusions;
 if(!$internal){
 	my $df = new DelimitedFile(
-	       "-file" => $blacklist_fusion_file,
+	       "-file" => $excluded_fusion_file,
 	       "-headers" => 1,
 	      );
 
@@ -348,9 +348,9 @@ while(my $line = <$UNF>){
 	# to remove genes with multiple potential partners.
 	my $bad_fusion = 0;
 	foreach my $g1 (@genes1) {
-		$bad_gene = 1 if(exists($blacklist{$g1}));
+		$bad_gene = 1 if(exists($excluded{$g1}));
 		foreach my $g2 (@genes2){
-			$bad_gene = 1 if(exists($blacklist{$g2}));
+			$bad_gene = 1 if(exists($excluded{$g2}));
 			next if ($g1 eq $g2);
 			my $gene_pair = ($g1 le $g2) ? join(":",$g1,$g2) : join(":",$g2,$g1);
 			$bad_fusion = 1 if(exists($bad_fusions{$gene_pair})); 
@@ -569,20 +569,20 @@ if($junction_file){
   close($JUNC);
 }
 
-my $New_blacklist_file = "$out_dir/blacklist.new.txt";
+my $New_excluded_file = "$out_dir/excluded.new.txt";
 if ($internal){
-	$New_blacklist_file = "$out_dir/blacklist.new.internal.txt";
+	$New_excluded_file = "$out_dir/excluded.new.internal.txt";
 }
-open(my $NBLK, ">$New_blacklist_file");
+open(my $NEXC, ">$New_excluded_file");
 foreach my $g (sort { $gene_recurrance{$b} <=> $gene_recurrance{$a} } keys %gene_recurrance) {
 	last if($gene_recurrance{$g} < $max_num_hits*10);
 	next if($g eq "NA" || $g eq "IGH" || $g eq "TCRA" || $g eq "TCRB" || $g eq "TARP");
 	next if($cr_hash{$g});
-#	$blacklist{$g} = 1;#Tian to rescue IGH-CRLF2 when CRLF2 has many partner genes, will not add CRLF2 to blacklist
-	print STDERR "Adding $g to blacklist with recurrance: ".$gene_recurrance{$g}."\n"; 
-	print $NBLK join("\t",$g, $gene_recurrance{$g}),"\n";
+#	$excluded{$g} = 1;#Tian to rescue IGH-CRLF2 when CRLF2 has many partner genes, will not add CRLF2 to excluded
+	print STDERR "Adding $g to excluded with recurrance: ".$gene_recurrance{$g}."\n"; 
+	print $NEXC join("\t",$g, $gene_recurrance{$g}),"\n";
 }
-close($NBLK);
+close($NEXC);
 
 print STDERR "out file is: $out_file\nnumber of SVs: ", scalar @raw_SVs, "\n" if($debug);
 `mkdir  -p $out_dir/tmp_anno`;
@@ -649,11 +649,11 @@ foreach my $sv (@raw_SVs){
 	my $bad_gene = 0;
 	print STDERR "xxx\n" if(abs($sv->{second_bp}->{tpos} - 170818803)<10 || abs($sv->{first_bp}->{tpos} - 170818803)<10);
 	foreach my $g1 (@genes1) {
-		if(exists($blacklist{$g1})) {$bad_gene = 1; last;}
+		if(exists($excluded{$g1})) {$bad_gene = 1; last;}
 	}
 	next if($bad_gene);
 	foreach my $g2 (@genes2){
-		if(exists($blacklist{$g2})) {$bad_gene = 1; last;}
+		if(exists($excluded{$g2})) {$bad_gene = 1; last;}
 	}
 	next if($bad_gene);
 	print STDERR "next if($contigSeq && ", $contig_recurrance{$contigSeq}," > $max_num_hits)\n" if(abs($sv->{second_bp}->{tpos} - 170818803)<10 || abs($sv->{first_bp}->{tpos} - 170818803)<10); 
@@ -702,7 +702,7 @@ my @uniq_SVs;
 foreach my $sv (@annotated_SVs){
 	print STDERR "xxx\n" if(abs($sv->{second_bp}->{tpos} - 170818803)<10 || abs($sv->{first_bp}->{tpos} - 170818803)<10);
 	my ($bp1, $bp2, $qseq) = ($sv->{first_bp}, $sv->{second_bp}, $sv->{junc_seq});
-	if(exists($blacklist{$bp1->{gene}}) || exists($blacklist{$bp2->{gene}})){
+	if(exists($excluded{$bp1->{gene}}) || exists($excluded{$bp2->{gene}})){
 		# If the highly recurrent fusion doesn't involve known partners, remove it.
 		if ( !(exists($known_fusion_partners{$bp1->{gene}}{$bp2->{gene}}) || exists($known_fusion_partners{$bp2->{gene}}{$bp1->{gene}}))){
 			print STDERR "Removing duplicate: gene1: ".$bp1->{gene}." gene2: ".$bp2->{gene}."\n";
