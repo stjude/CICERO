@@ -1,7 +1,5 @@
 FROM ubuntu:18.04 as builder
 
-ENV PATH /opt/conda/bin:$PATH
-
 RUN apt-get update && \
     apt-get upgrade -y && \
     apt-get install wget -y && \
@@ -20,6 +18,26 @@ RUN apt-get update && \
     apt-get install libdb-dev -y && \
     apt-get install locales -y && \
     rm -r /var/lib/apt/lists/*
+
+
+ENV PATH /opt/conda/bin:$PATH
+
+RUN wget "https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh" -O miniconda.sh && \ 
+    /bin/bash miniconda.sh -b -p /opt/conda/ && \
+    rm miniconda.sh
+
+RUN conda update -n base -c defaults conda -y && \
+    conda install \
+    -c conda-forge \
+    -c bioconda \
+    coreutils==8.31 \
+    blat==35 \
+    cap3==10.2011 \
+    samtools==0.1.19 \
+    -y && \
+    conda clean --all -y
+
+ENV PATH /opt/conda/bin:$PATH
 
 RUN locale-gen en_US.UTF-8
 RUN update-locale
@@ -44,24 +62,6 @@ RUN perlbrew info
 
 RUN which perl
 RUN perl -v
-
-RUN wget "https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh" -O miniconda.sh && \ 
-    /bin/bash miniconda.sh -b -p /opt/conda/ && \
-    rm miniconda.sh
-
-RUN conda update -n base -c defaults conda -y && \
-    conda install \
-    -c conda-forge \
-    -c bioconda \
-    coreutils==8.31 \
-    picard==2.20.2 \
-    samtools==0.1.19 \
-    bwa==0.7.17 \
-    star==2.7.1a \
-    blat==35 \
-    cap3==10.2011 \
-    -y && \
-    conda clean --all -y
 
 RUN which perl
 RUN perl -v
@@ -88,11 +88,26 @@ RUN wget https://github.com/samtools/samtools/archive/0.1.17.tar.gz && \
 
 RUN SAMTOOLS="/tmp/samtools-0.1.17" cpanm --force -i Bio::DB::Sam@1.35 && chown -R root:root /usr/local/.cpanm
 
+FROM ubuntu:18.04
+
+COPY --from=builder /opt/conda/bin/gfClient /opt/conda/bin/gfClient
+COPY --from=builder /opt/conda/bin/gfServer /opt/conda/bin/gfServer
+COPY --from=builder /opt/conda/bin/blat /opt/conda/bin/blat
+
+COPY --from=builder /opt/conda/bin/cap3 /opt/conda/bin/cap3
+COPY --from=builder /opt/conda/bin/samtools /opt/conda/bin/samtools
+COPY --from=builder /opt/conda/lib /opt/conda/lib
+COPY --from=builder /usr/bin/parallel /usr/bin/parallel
+
+COPY --from=builder /usr/local/perlbrew/perls/perl-5.10.1 /usr/local/perlbrew/perls/perl-5.10.1
+ENV PATH /usr/local/perlbrew/perls/perl-5.10.1/bin:$PATH
+
 COPY src/scripts /opt/cicero/src/bin
 COPY src/perllib /opt/cicero/src/perllib
 COPY dependencies/lib/perl/* /opt/cicero/src/perllib/
 COPY configs /opt/cicero/configs
 
+ENV PATH /opt/conda/bin:$PATH
 ENV PATH /opt/cicero/src/bin:${PATH}
 ENV PERL5LIB /opt/cicero/src/perllib:${PERL5LIB}
 
