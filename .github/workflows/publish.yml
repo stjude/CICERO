@@ -48,9 +48,9 @@ jobs:
             ghcr.io/${{ env.REPO_LOWER }}:latest
             ghcr.io/${{ env.REPO_LOWER }}:${{ env.SHORT_SHA }}
             ghcr.io/${{ env.REPO_LOWER }}:${{ github.event.release.tag_name }}
-            cgc-images.sbgenomics.com/${{ evn.REPO_LOWER }}:latest
-            cgc-images.sbgenomics.com/${{ evn.REPO_LOWER }}:${{ env.SHORT_SHA }}
-            cgc-images.sbgenomics.com/${{ evn.REPO_LOWER }}:${{ github.event.release.tag_name }}
+            cgc-images.sbgenomics.com/${{ env.REPO_LOWER }}:latest
+            cgc-images.sbgenomics.com/${{ env.REPO_LOWER }}:${{ env.SHORT_SHA }}
+            cgc-images.sbgenomics.com/${{ env.REPO_LOWER }}:${{ github.event.release.tag_name }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }} 
       - 
