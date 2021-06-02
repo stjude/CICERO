@@ -100,7 +100,7 @@
     "Structural Variation",
     "Variation Calling"
   ],
-  "version": "1.4.1",
+  "version": "CICERO_SHORT_VERSION",
   "dxapi": "1.0.1",
   "inputSpec": [
     {

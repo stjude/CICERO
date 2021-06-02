@@ -105,14 +105,6 @@ main() {
   echo "      - Output directory: $OUT_DIR"
   echo ""
 
-
-  echo "  [*] Loading container image ..."
-  image_tarfile_path=/stjude/docker/cicero-docker.tar
-  if [ -e $image_tarfile_path.gz ]
-  then gunzip $image_tarfile_path.gz
-  fi
-  docker load -i $image_tarfile_path
-   
   echo "  [*] Determine image ID ..."
   image_id=`docker images -q stjude/cicero | head -n 1`
  
@@ -144,7 +136,7 @@ main() {
   echo "  [*] Arguments ..."
   echo "      - -n 16 -b $star_mapped_sorted_bam_path -g $ref_name -r /opt/cicero/reference $POSSIBLE_JUNCTION_OPTION -o $OUT_DIR $optional_args"
 
-  docker run -v /home/dnanexus/in:/home/dnanexus/in -v /home/dnanexus/out:/home/dnanexus/out -v /stjude/reference:/opt/cicero/reference $image_id Cicero.sh -n 16 -b $star_mapped_sorted_bam_path -g $ref_name -r /opt/cicero/reference $POSSIBLE_JUNCTION_OPTION -o $OUT_DIR $optional_args 
+  docker run -v /home/dnanexus/in:/home/dnanexus/in -v /home/dnanexus/out:/home/dnanexus/out -v /stjude/reference:/opt/cicero/reference ghcr.io/stjude/cicero:CICERO_VERSION Cicero.sh -n 16 -b $star_mapped_sorted_bam_path -g $ref_name -r /opt/cicero/reference $POSSIBLE_JUNCTION_OPTION -o $OUT_DIR $optional_args
 
   echo ""
   echo "=== Output ==="
