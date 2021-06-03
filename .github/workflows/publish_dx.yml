@@ -16,7 +16,7 @@ jobs:
         run: echo ${{ github.event.release.tag_name }} | sed 's/^v//' | (read; echo SHORT_VERSION=$REPLY) >> $GITHUB_ENV
       -
         name: Update DX version
-        run: sed -i.bak "s/CICERO_SHORT_VERSION/${{ env.SHORT_VERSION }}" dx_app/dxapp.json && sed -i.bak "s/CICERO_VERSION/${{ github.event.release.tag_name }}/" dx_app/src/code.sh
+        run: sed -i.bak "s/CICERO_SHORT_VERSION/${{ env.SHORT_VERSION }}/" dx_app/dxapp.json && sed -i.bak "s/CICERO_VERSION/${{ github.event.release.tag_name }}/" dx_app/src/code.sh
       -
         name: Install DX toolkit
         run: pip3 install dxpy
