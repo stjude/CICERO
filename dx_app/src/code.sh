@@ -105,9 +105,6 @@ main() {
   echo "      - Output directory: $OUT_DIR"
   echo ""
 
-  echo "  [*] Determine image ID ..."
-  image_id=`docker images -q stjude/cicero | head -n 1`
- 
   echo "=== Cicero ==="
   echo "      - Optimize: $optimize"
   echo "      - Soft clip cutoff: $sc_cutoff"
