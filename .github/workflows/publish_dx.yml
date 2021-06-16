@@ -1,0 +1,29 @@
+name: Publish DNAnexus app
+on:
+  release:
+    types: [released, edited]
+        
+jobs:
+  push_to_DNAnexus:
+    name: Push app to DNAnexus
+    runs-on: ubuntu-latest
+    steps:
+      - 
+        name: Check out the repo
+        uses: actions/checkout@v2
+      -
+        name: Sanitize Version for Tagging
+        run: echo ${{ github.event.release.tag_name }} | sed 's/^v//' | (read; echo SHORT_VERSION=$REPLY) >> $GITHUB_ENV
+      -
+        name: Update DX version
+        run: sed -i.bak "s/CICERO_SHORT_VERSION/${{ env.SHORT_VERSION }}/" dx_app/dxapp.json && sed -i.bak "s/CICERO_VERSION/${{ github.event.release.tag_name }}/" dx_app/src/code.sh
+      -
+        name: Install DX toolkit
+        run: pip3 install dxpy
+      -
+        name: Login to DNAnexus
+        run: dx login --token ${{ secrets.DX_TOKEN }}
+      - 
+        name: Build and push
+        id: dx_build
+        run: dx build --app --publish dx_app 
