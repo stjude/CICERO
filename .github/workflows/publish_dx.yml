@@ -22,7 +22,7 @@ jobs:
         run: pip3 install dxpy
       -
         name: Login to DNAnexus
-        run: dx login --token ${{ secrets.DX_TOKEN }}
+        run: dx login --noprojects --token ${{ secrets.DX_TOKEN }}
       - 
         name: Build and push
         id: dx_build
