@@ -13,6 +13,7 @@ jobs:
         with:
           file_location: "cgc/cicero.cwl"
           shortid: "stjude/cicero/cicero"
+          devkey: ${{ secrets.CGC_TOKEN }}
         env: 
           CGC_TOKEN: ${{ secrets.CGC_TOKEN }}
     
