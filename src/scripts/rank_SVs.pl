@@ -297,15 +297,17 @@ sub scoring {
 	my $debug = 0;
 	my $medal = 0;
 	my $rating = 'LQ';
-	$medal = 1 if(exists($known_fusion_partners{$fg1}));
-	$medal = 1 if(exists($known_fusion_partners{$fg2}) && $sv->{ort} eq "?");
-	$medal = 2 if(exists($known_fusion_partners{$fg2}) && $sv->{ort} eq ">");
-	$medal = 3 if(exists($known_fusion_partners{$fg1}) && exists($known_fusion_partners{$fg2}) && $sv->{type} !~ /Internal/);
-	$medal = 4 if(exists($known_fusions{$fusion}));
-	
-	if(exists($known_ITDs{$fg1}) && $type eq 'Internal_dup' &&
-	   ($bp1->{tpos} - $known_ITDs{$fg1}[0]) * ($bp1->{tpos} < $known_ITDs{$fg1}[1]) > 0 &&
-	   ($bp2->{tpos} - $known_ITDs{$fg1}[0]) * ($bp2->{tpos} < $known_ITDs{$fg1}[1]) > 0){
+
+	$medal = 1 if(exist_multiplename_checking(\%known_fusion_partners,$fg1));
+        $medal = 1 if(exist_multiplename_checking(\%known_fusion_partners,$fg2) && $sv->{ort} eq "?");
+        $medal = 2 if(exist_multiplename_checking(\%known_fusion_partners,$fg2) && $sv->{ort} eq ">");
+        $medal = 3 if(exist_multiplename_checking(\%known_fusion_partners,$fg1) && exist_multiplename_checking(\%known_fusion_partners,$fg2) && $sv->{type} !~ /Internal/);
+        $medal = 4 if(exists_knownfusionlist_checking(\%known_fusions,$fg1,$fg2));
+
+	my ($Is_known_ITD, $ITD_left_coor, $ITD_rightt_coor)=match_known_ITD(\%known_ITDs,$fg1);	
+	if($Is_known_ITD && $type eq 'Internal_dup' &&
+	   ($bp1->{tpos} - $ITD_left_coor) * ($bp1->{tpos} < $ITD_rightt_coor) > 0 &&
+	   ($bp2->{tpos} - $ITD_left_coor) * ($bp2->{tpos} < $ITD_rightt_coor) > 0){
 			$rating = 'HQ'; $medal = 4;
 	}
 
@@ -332,7 +334,7 @@ sub scoring {
 	my $score = 0.5*($scoreA+$scoreB)*$ort*$frame;
 	$score *= 0.1 if( $frame < 2 && $type eq 'DEL' || $type eq 'read_through');
 	$score *= 0.1 if( $frame < 2 && $type eq 'Internal_dup');
-	$score *= 0.1 if(!exists($known_ITDs{$fg1}) && $type eq 'Internal_dup');
+	$score *= 0.1 if(!$Is_known_ITD && $type eq 'Internal_dup');
 	$score *= 0.1 if($bp1->{tname} eq $bp2->{tname} && abs($bp1->{tpos} - $bp2->{tpos}) < 40000 && $bp1->{qstrand} ne $bp2->{qstrand});
 	$score *= 0.1 if($bp1->{tname} eq $bp2->{tname} && abs($bp1->{tpos} - $bp2->{tpos}) < 10000 && $bp1->{qstrand} ne $bp2->{qstrand});
 
@@ -361,6 +363,49 @@ sub is_dup_SV {
 			$s->{second_bp}->{tname} eq $sv->{second_bp}->{tname});
 	}
 	return 0;
+}
+
+sub exists_knownfusionlist_checking {
+        my %genelist = %{(shift)};
+        my $targetgene1 = shift;#e.g. targetgene UBTF,MIR6782
+        my $targetgene2 = shift;#e.g. targetgene UBTF,MIR6782
+        my @genes1 = split(/,|\|/, $targetgene1);
+        my @genes2 = split(/,|\|/, $targetgene2);
+
+        foreach my $g1 (@genes1) {
+                foreach my $g2 (@genes2){
+                        return 1 if(exists($known_fusions{$g1.":".$g2}));
+			return 1 if(exists($known_fusions{$g2.":".$g1}));
+                }
+        }
+
+        return 0;
+}
+
+sub exist_multiplename_checking {
+        my %genelist = %{(shift)};
+        my $targetgene = shift;#e.g. targetgene UBTF,MIR6782
+        my @genes = split(/,|\|/, $targetgene);
+
+        foreach my $g1 (@genes) {
+                return 1 if(exists($known_fusion_partners{$g1}));
+        }
+
+        return 0;
+}
+
+sub match_known_ITD {
+	my %knownITDlist = %{(shift)};
+	my $targetgene = shift;#e.g. targetgene UBTF,MIR6782
+        my @genes = split(/,|\|/, $targetgene);
+
+        foreach my $g1 (@genes) {
+                if(exists($knownITDlist{$g1})) {
+			return (1, $knownITDlist{$g1}[0], $knownITDlist{$g1}[1]);
+		}
+        }
+
+	return (0, -1, -1);
 }
 
 =head1 LICENCE AND COPYRIGHT

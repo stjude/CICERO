@@ -132,7 +132,7 @@ foreach my $chr (@chroms){
 					my $a = shift;
 					return if( ($a->flag & 0x0400) || ($a->flag & 0x0004) ); #PCR duplicate or unmapped
 					$cnt++;
-				}) unless(exists($excluded{$g->name}));
+				}) unless(exist_multiplename_checking(\%excluded, $g->name));
 
 			my $sc_cutoff = ($read_len-20)*$cnt/(100*$mRNA_length);
 			my $tmp_gene = {
@@ -170,6 +170,18 @@ sub is_bad_chrom{
 		return 1 if($chr =~ /$bad_chr/i);
 	}
 	return 0;
+}
+
+sub exist_multiplename_checking {
+        my %genelist = %{(shift)};
+        my $targetgene = shift;#e.g. targetgene UBTF,MIR6782
+        my @genes = split(/,|\|/, $targetgene);
+
+        foreach my $g1 (@genes) {
+                return 1 if(exists($genelist{$g1}));
+        }
+
+        return 0;
 }
 
 
