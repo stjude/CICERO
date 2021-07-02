@@ -306,8 +306,8 @@ sub scoring {
 
 	my ($Is_known_ITD, $ITD_left_coor, $ITD_rightt_coor)=match_known_ITD(\%known_ITDs,$fg1);	
 	if($Is_known_ITD && $type eq 'Internal_dup' &&
-	   ($bp1->{tpos} - $ITD_left_coor) * ($bp1->{tpos} < $ITD_rightt_coor) > 0 &&
-	   ($bp2->{tpos} - $ITD_left_coor) * ($bp2->{tpos} < $ITD_rightt_coor) > 0){
+	   ($bp1->{tpos} >= $ITD_left_coor) && ($bp1->{tpos} <= $ITD_rightt_coor) &&
+	   ($bp2->{tpos} >= $ITD_left_coor) && ($bp2->{tpos} <= $ITD_rightt_coor)){
 			$rating = 'HQ'; $medal = 4;
 	}
 

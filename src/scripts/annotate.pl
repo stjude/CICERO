@@ -246,35 +246,15 @@ if($gold_gene_file && -e $gold_gene_file){
 }
 
 my %bad_fusions;
-#if(!$internal){
-	my $df = new DelimitedFile(
-	       "-file" => $excluded_fusion_file,
-	       "-headers" => 1,
-	      );
+my $df = new DelimitedFile(
+	"-file" => $blacklist_fusion_file,
+	"-headers" => 1,
+);
 
-	while (my $row = $df->get_hash()) {
-	      if($row->{geneA} eq '') {$row->{geneA} = "NA";}
-	      if($row->{geneB} eq '') {$row->{geneB} = "NA";}
-
-	      my @gene_a = split(",", $row->{geneA});
-	      my @gene_b = split(",", $row->{geneB});
-	      my ($chrA, $posA, $chrB, $posB) = ($row->{chrA}, $row->{posA}, $row->{chrB}, $row->{posB});
-		#print STDERR "badfusions ".$chrA." ".$posA." ".$chrB." ".$posB."\n";
-	      foreach my $g1 (@gene_a){
-		   next if($g1 eq ''); 
-		   $g1 = join(":", $chrA, $posA) if($g1 eq 'NA');
-		   
-		   foreach my $g2 (@gene_b){
-             		next if($g2 eq '');
-			$g2 = join(":", $chrB, $posB) if($g2 eq 'NA');
-			my $gene_pair = ($g1 le $g2) ? join(":",$g1,$g2) : join(":",$g2,$g1);
-			$bad_fusions{$chrA.":".$posA.":".$chrB.":".$posB} = $gene_pair;
-			#$bad_fusions{$gene_pair} = [$chrA, $posA, $chrB, $posB];
-			print " badfusions genepairs |".$chrA.":".$posA.":".$chrB.":".$posB."|".$gene_pair."|\n";
-		   }
-		}
-	}
-#}
+while (my $row = $df->get_hash()) {
+	my ($chrA, $posA, $chrB, $posB) = ($row->{chrA}, $row->{posA}, $row->{chrB}, $row->{posB});
+	$bad_fusions{$chrA.":".$posA.":".$chrB.":".$posB} = 1;	      
+}
 
 sub is_bad_fusion{
 
@@ -360,15 +340,12 @@ while(my $line = <$UNF>){
 	my $bad_gene = 0;
 
 	# to remove genes with multiple potential partners.
-	#my $bad_fusion = 0;
 	foreach my $g1 (@genes1) {
 		$bad_gene = 1 if(exists($excluded{$g1}));
 		foreach my $g2 (@genes2){
 			$bad_gene = 1 if(exists($excluded{$g2}));
 			next if ($g1 eq $g2);
 			my $gene_pair = ($g1 le $g2) ? join(":",$g1,$g2) : join(":",$g2,$g1);
-			#$bad_fusion = 1 if(exists($bad_fusions{$gene_pair})); 
-			#last if($bad_fusion);
 			next if(exists($genepairs{$gene_pair})); 
 			$genepairs{$gene_pair} = 1;
 			if(exists($gene_recurrance{$g1})){$gene_recurrance{$g1}++;}
@@ -377,7 +354,6 @@ while(my $line = <$UNF>){
 			else{$gene_recurrance{$g2} = 1;}
 		}
 	}
-	#next if($bad_fusion || $bad_gene);
 	next if($bad_gene);
 
 	my $bad_evidence = 0;
@@ -438,17 +414,7 @@ while(my $line = <$UNF>){
 	$second_bp->{tname} = normalizeChromosomeName($seq_ids[0], $second_bp->{tname});
 
 	# Ensure that the breakpoint chromosome names match
-	if(!$internal){
-		#if(is_knownfusiongenepair(\@genes1, \@genes2)){
- 		#	next if(is_bad_fusion($first_bp->{tname}, $first_bp->{tpos}, $second_bp->{tname}, $second_bp->{tpos}));
-		#}
-		#else{
-			#if(is_knownbadfusionpair(\@genes1, \@genes2)) next;#if genename NA in unfiltered.fusion.txt, it does not match bad_fusions; because NA -> chr:pos in bad_fusions; e.g. ATAD3A-ATAD3B in black fusion list; any ATAD3A-ATAD3B in unfiltered.fusion.txt will be filtered
-			#else{#GeneA-GeneB or GeneA-NA or NA-NA in unfiltered.fusion.txt is not in black fusion list
-				next if(is_bad_fusion($first_bp->{tname}, $first_bp->{tpos}, $second_bp->{tname}, $second_bp->{tpos}));
-			#}
-		#}
-	}
+	if(!$internal)	{next if(is_bad_fusion($first_bp->{tname}, $first_bp->{tpos}, $second_bp->{tname}, $second_bp->{tpos}));}
 
 	# Determine the variant type: CTX, Internal_inv, Interal_splicing, Internal_dup, ITX, read_through, DEL, INS
 	my $type = get_type($first_bp, $second_bp, $same_gene);
@@ -464,8 +430,6 @@ while(my $line = <$UNF>){
 		unless(is_good_ITD($first_bp, $second_bp)){
 			next if(!$DNA && ($first_bp->{reads_num} < 5*$cutoff || $first_bp->{reads_num} < 10));
 		}
-
-		#print STDERR "is_bad_fusion |".$first_bp->{tname}."|".$first_bp->{tpos}."|".$second_bp->{tname}."|".$second_bp->{tpos}."|".is_bad_fusion($first_bp->{tname}, $first_bp->{tpos}, $second_bp->{tname}, $second_bp->{tpos})."\n"; 
 
 		next if($type eq 'Internal_dup' && is_bad_fusion($first_bp->{tname}, $first_bp->{tpos}, $second_bp->{tname}, $second_bp->{tpos}));
 	}
@@ -518,7 +482,6 @@ if($junction_file){
 
 	my $cutoff = -1;
 	my ($gene1,$gene2)= ("NA", "NA");
-	#my $bad_fusion = 0;
 
 	foreach("+", "-"){
 		my $gm_tree = $gm->sub_model($chr1, $_);
@@ -546,11 +509,7 @@ if($junction_file){
 			}
 		}
 		$cutoff = ($cutoffA + $cutoffB)/2  if($cutoffA + $cutoffB > 2*$cutoff);
-		my $gene_pair = ($gene1 le $gene2) ? join(":",$gene1,$gene2) : join(":",$gene2,$gene1);
-		#$bad_fusion = 1 if(exists($bad_fusions{$gene_pair})); 
-		#last if($bad_fusion);
 	}
-	#next if($bad_fusion);
 	next if($qc_perfect_reads < $cutoff);
 
 	# Ensure that the breakpoint chromosome names match
