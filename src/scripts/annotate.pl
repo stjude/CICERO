@@ -257,7 +257,7 @@ while (my $row = $df->get_hash()) {
 }
 
 sub is_bad_fusion{
-
+	my $badfusion_distance_cutoff = 200;
 	my ($chrA, $posA, $chrB, $posB) = @_;
 	$chrA = "chr".$chrA unless($chrA =~ /chr/);
 	$chrB = "chr".$chrB unless($chrB =~ /chr/);
@@ -268,9 +268,9 @@ sub is_bad_fusion{
 		my ($chr1, $pos1, $chr2, $pos2) = split(":",$xx);
 		#print STDERR " badfusionlist |".$chr1.":".$pos1.":".$chr2.":".$pos2."\n";
 		return 1 if($chrA eq $chr1 && $chrB eq $chr2 &&
-			    abs($pos1 - $posA) <200 && abs($pos2 - $posB) <200);# cutoff is based on the cutoff of merging GTEx false positive fusions from CICERO running
+			    abs($pos1 - $posA) <$badfusion_distance_cutoff && abs($pos2 - $posB) <$badfusion_distance_cutoff);# cutoff is based on the cutoff of merging GTEx false positive fusions from CICERO running
 		return 1 if($chrA eq $chr2 && $chrB eq $chr1 &&
-			    abs($pos2 - $posA) <200 && abs($pos1 - $posB) <200);
+			    abs($pos2 - $posA) <$badfusion_distance_cutoff && abs($pos1 - $posB) <$badfusion_distance_cutoff);
 	}
 	return 0;
 }
