@@ -335,7 +335,7 @@ echo "annotate.pl -i $BAMFILE -o $CICERO_DATADIR/$SAMPLE -genome $GENOME -l $LEN
 echo "annotate.pl -i $BAMFILE -o $CICERO_DATADIR/$SAMPLE -genome $GENOME -l $LEN -s $SAMPLE -f $CICERO_DATADIR/$SAMPLE/${SAMPLE}.gene_info.txt -internal $cluster_arg" >> cmds-04.sh
 parallel --joblog 04_Annotate.log $PARALLEL_ARG < cmds-04.sh
 
-mv $CICERO_DATADIR/$SAMPLE/blacklist.new.txt $CICERO_DATADIR/$SAMPLE/blacklist.new.fusions.txt
+mv $CICERO_DATADIR/$SAMPLE/excluded.new.txt $CICERO_DATADIR/$SAMPLE/excluded.new.fusions.txt
 cat $CICERO_DATADIR/$SAMPLE/annotated.fusion.txt $CICERO_DATADIR/$SAMPLE/annotated.internal.txt > $CICERO_DATADIR/$SAMPLE/annotated.all.txt
 } 1> 04_Annotate.out 2> 04_Annotate.err
 
