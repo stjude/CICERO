@@ -823,6 +823,18 @@ sub normalizeChromosomeName {
 	return $query; 
 }
 
+sub exist_multiplename_checking {
+	my %genelist = %{(shift)};
+    	my $targetgene = shift;#e.g. targetgene UBTF,MIR6782
+	my @genes = split(/,|\|/, $targetgene);
+
+	foreach my $g1 (@genes) {
+                return 1 if(exists($genelist{$g1}));
+	}
+
+	return 0;
+}
+
 1;
 
 =head1 LICENCE AND COPYRIGHT

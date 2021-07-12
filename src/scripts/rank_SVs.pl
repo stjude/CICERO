@@ -11,6 +11,8 @@ use Cwd qw[abs_path getcwd];
 use List::Util qw[min max];
 use TdtConfig; 
 
+use CiceroUtil qw(exist_multiplename_checking)
+
 use DelimitedFile;
 use File::Temp qw/ tempdir /;
 
@@ -299,15 +301,15 @@ sub scoring {
 	my $rating = 'LQ';
 
 	$medal = 1 if(exist_multiplename_checking(\%known_fusion_partners,$fg1));
-        $medal = 1 if(exist_multiplename_checking(\%known_fusion_partners,$fg2) && $sv->{ort} eq "?");
-        $medal = 2 if(exist_multiplename_checking(\%known_fusion_partners,$fg2) && $sv->{ort} eq ">");
-        $medal = 3 if(exist_multiplename_checking(\%known_fusion_partners,$fg1) && exist_multiplename_checking(\%known_fusion_partners,$fg2) && $sv->{type} !~ /Internal/);
-        $medal = 4 if(exists_knownfusionlist_checking(\%known_fusions,$fg1,$fg2));
+	$medal = 1 if(exist_multiplename_checking(\%known_fusion_partners,$fg2) && $sv->{ort} eq "?");
+	$medal = 2 if(exist_multiplename_checking(\%known_fusion_partners,$fg2) && $sv->{ort} eq ">");
+	$medal = 3 if(exist_multiplename_checking(\%known_fusion_partners,$fg1) && exist_multiplename_checking(\%known_fusion_partners,$fg2) && $sv->{type} !~ /Internal/);
+	$medal = 4 if(exists_knownfusionlist_checking(\%known_fusions,$fg1,$fg2));
 
-	my ($Is_known_ITD, $ITD_left_coor, $ITD_rightt_coor)=match_known_ITD(\%known_ITDs,$fg1);	
+	my ($Is_known_ITD, $ITD_left_coor, $ITD_right_coor)=match_known_ITD(\%known_ITDs,$fg1);
 	if($Is_known_ITD && $type eq 'Internal_dup' &&
-	   ($bp1->{tpos} >= $ITD_left_coor) && ($bp1->{tpos} <= $ITD_rightt_coor) &&
-	   ($bp2->{tpos} >= $ITD_left_coor) && ($bp2->{tpos} <= $ITD_rightt_coor)){
+	   ($bp1->{tpos} >= $ITD_left_coor) && ($bp1->{tpos} <= $ITD_right_coor) &&
+	   ($bp2->{tpos} >= $ITD_left_coor) && ($bp2->{tpos} <= $ITD_right_coor)){
 			$rating = 'HQ'; $medal = 4;
 	}
 
@@ -366,7 +368,6 @@ sub is_dup_SV {
 }
 
 sub exists_knownfusionlist_checking {
-        my %genelist = %{(shift)};
         my $targetgene1 = shift;#e.g. targetgene UBTF,MIR6782
         my $targetgene2 = shift;#e.g. targetgene UBTF,MIR6782
         my @genes1 = split(/,|\|/, $targetgene1);
@@ -377,18 +378,6 @@ sub exists_knownfusionlist_checking {
                         return 1 if(exists($known_fusions{$g1.":".$g2}));
 			return 1 if(exists($known_fusions{$g2.":".$g1}));
                 }
-        }
-
-        return 0;
-}
-
-sub exist_multiplename_checking {
-        my %genelist = %{(shift)};
-        my $targetgene = shift;#e.g. targetgene UBTF,MIR6782
-        my @genes = split(/,|\|/, $targetgene);
-
-        foreach my $g1 (@genes) {
-                return 1 if(exists($known_fusion_partners{$g1}));
         }
 
         return 0;

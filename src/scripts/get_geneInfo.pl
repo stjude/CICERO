@@ -18,7 +18,7 @@ use List::MoreUtils qw/ uniq /;
 use lib dirname($0);
 my $script_dir = dirname($0);
 #custom packages
-use CiceroUtil qw(parse_range is_PCR_dup);
+use CiceroUtil qw(parse_range is_PCR_dup exist_multiplename_checking);
 use TdtConfig; 
 
 use constant FQ_BASE_NUMBER => 33;
@@ -171,19 +171,6 @@ sub is_bad_chrom{
 	}
 	return 0;
 }
-
-sub exist_multiplename_checking {
-        my %genelist = %{(shift)};
-        my $targetgene = shift;#e.g. targetgene UBTF,MIR6782
-        my @genes = split(/,|\|/, $targetgene);
-
-        foreach my $g1 (@genes) {
-                return 1 if(exists($genelist{$g1}));
-        }
-
-        return 0;
-}
-
 
 =head1 LICENCE AND COPYRIGHT
 Copyright 2019 St. Jude Children's Research Hospital 

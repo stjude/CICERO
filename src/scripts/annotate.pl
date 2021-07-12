@@ -17,7 +17,7 @@ use File::Temp qw/ tempdir /;
 
 use CiceroSCValidator qw($lowqual_cutoff LEFT_CLIP RIGHT_CLIP);
 use CiceroUtil qw(prepare_reads_file parse_range rev_comp
-	is_PCR_dup read_fa_file get_discordant_reads get_sclip_reads normalizeChromosomeName);
+	is_PCR_dup read_fa_file get_discordant_reads get_sclip_reads normalizeChromosomeName exist_multiplename_checking);
 
 require CiceroExtTools;
 
@@ -26,6 +26,8 @@ use TdtConfig;
 use Transcript;
 use Gene;
 use GeneModel;
+
+use constant BADFUSION_DISTANCE_CUTOFF => 200;
 
 my $debug = 0;
 
@@ -257,20 +259,16 @@ while (my $row = $df->get_hash()) {
 }
 
 sub is_bad_fusion{
-	my $badfusion_distance_cutoff = 200;
 	my ($chrA, $posA, $chrB, $posB) = @_;
 	$chrA = "chr".$chrA unless($chrA =~ /chr/);
 	$chrB = "chr".$chrB unless($chrB =~ /chr/);
-	#print STDERR " test |".$chrA.":".$posA.":".$chrB.":".$posB."\n";
-	my $size = keys %bad_fusions;
-	#print STDERR " size |".$size."\n";
 	foreach my $xx (keys %bad_fusions) {
 		my ($chr1, $pos1, $chr2, $pos2) = split(":",$xx);
 		#print STDERR " badfusionlist |".$chr1.":".$pos1.":".$chr2.":".$pos2."\n";
 		return 1 if($chrA eq $chr1 && $chrB eq $chr2 &&
-			    abs($pos1 - $posA) <$badfusion_distance_cutoff && abs($pos2 - $posB) <$badfusion_distance_cutoff);# cutoff is based on the cutoff of merging GTEx false positive fusions from CICERO running
+			    abs($pos1 - $posA) < BADFUSION_DISTANCE_CUTOFF && abs($pos2 - $posB) < BADFUSION_DISTANCE_CUTOFF);# cutoff is based on the cutoff of merging GTEx false positive fusions from CICERO running
 		return 1 if($chrA eq $chr2 && $chrB eq $chr1 &&
-			    abs($pos2 - $posA) <$badfusion_distance_cutoff && abs($pos1 - $posB) <$badfusion_distance_cutoff);
+			    abs($pos2 - $posA) < BADFUSION_DISTANCE_CUTOFF && abs($pos1 - $posB) < BADFUSION_DISTANCE_CUTOFF);
 	}
 	return 0;
 }
@@ -414,7 +412,7 @@ while(my $line = <$UNF>){
 	$second_bp->{tname} = normalizeChromosomeName($seq_ids[0], $second_bp->{tname});
 
 	# Ensure that the breakpoint chromosome names match
-	if(!$internal)	{next if(is_bad_fusion($first_bp->{tname}, $first_bp->{tpos}, $second_bp->{tname}, $second_bp->{tpos}));}
+	next if(!$internal && is_bad_fusion($first_bp->{tname}, $first_bp->{tpos}, $second_bp->{tname}, $second_bp->{tpos}));
 
 	# Determine the variant type: CTX, Internal_inv, Interal_splicing, Internal_dup, ITX, read_through, DEL, INS
 	my $type = get_type($first_bp, $second_bp, $same_gene);
@@ -810,34 +808,6 @@ sub exist_multiplename_pair_checking {
 
 	return 0;
 }
-
-sub is_knownfusiongenepair{
-        my @genes1_tmp = %{(shift)};
-        my @genes2_tmp = %{(shift)};
-
-        foreach my $g1 (@genes1_tmp) {
-                foreach my $g2 (@genes2_tmp) {
-                        return 1 if (exists($known_fusion_partners{$g1}{$g2}));
-                }
-        }
-
-        return 0;
-}
-
-
-
-sub exist_multiplename_checking {
-	my %genelist = %{(shift)};
-    	my $targetgene = shift;#e.g. targetgene UBTF,MIR6782
-	my @genes = split(/,|\|/, $targetgene);
-
-	foreach my $g1 (@genes) {
-                return 1 if(exists($genelist{$g1}));
-	}
-
-	return 0;
-}
-
 
 sub is_good_ITD {
 	my($bp1, $bp2) = @_;
