@@ -15,7 +15,8 @@ require Exporter;
 our @ISA = ('Exporter');
 our @EXPORT = qw(print_out is_new_pair prepare_reads_file parse_range
 	is_PCR_dup read_fa_file read_config_file
-	get_sclip_reads get_discordant_reads get_junction_reads rev_comp get_mate_reads normalizeChromosomeName);
+	get_sclip_reads get_discordant_reads get_junction_reads rev_comp get_mate_reads
+	normalizeChromosomeName exist_multiplename_checking);
 
 sub rev_comp {
     my $str = shift;
