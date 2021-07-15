@@ -11,7 +11,7 @@ use Cwd qw[abs_path getcwd];
 use List::Util qw[min max];
 use TdtConfig; 
 
-use CiceroUtil qw(exist_multiplename_checking)
+use CiceroUtil qw(exist_multiplename_checking exists_partners_checking)
 
 use DelimitedFile;
 use File::Temp qw/ tempdir /;
@@ -300,11 +300,13 @@ sub scoring {
 	my $medal = 0;
 	my $rating = 'LQ';
 
-	$medal = 1 if(exist_multiplename_checking(\%known_fusion_partners,$fg1));
-	$medal = 1 if(exist_multiplename_checking(\%known_fusion_partners,$fg2) && $sv->{ort} eq "?");
-	$medal = 2 if(exist_multiplename_checking(\%known_fusion_partners,$fg2) && $sv->{ort} eq ">");
-	$medal = 3 if(exist_multiplename_checking(\%known_fusion_partners,$fg1) && exist_multiplename_checking(\%known_fusion_partners,$fg2) && $sv->{type} !~ /Internal/);
-	$medal = 4 if(exists_knownfusionlist_checking(\%known_fusions,$fg1,$fg2));
+	my $fg1_known_fusion = exist_multiplename_checking(\%known_fusion_partners,$fg1);
+	my $fg2_known_fusion = exist_multiplename_checking(\%known_fusion_partners,$fg2);
+	$medal = 1 if($fg1_known_fusion);
+	$medal = 1 if($fg2_known_fusion && $sv->{ort} eq "?");
+	$medal = 2 if($fg2_known_fusion && $sv->{ort} eq ">");
+	$medal = 3 if($fg1_known_fusion && $fg2_known_fusion && $sv->{type} !~ /Internal/);
+	$medal = 4 if(exists_partners_checking(\%known_fusions,$fg1,$fg2));
 
 	my ($Is_known_ITD, $ITD_left_coor, $ITD_right_coor)=match_known_ITD(\%known_ITDs,$fg1);
 	if($Is_known_ITD && $type eq 'Internal_dup' &&
@@ -365,22 +367,6 @@ sub is_dup_SV {
 			$s->{second_bp}->{tname} eq $sv->{second_bp}->{tname});
 	}
 	return 0;
-}
-
-sub exists_knownfusionlist_checking {
-        my $targetgene1 = shift;#e.g. targetgene UBTF,MIR6782
-        my $targetgene2 = shift;#e.g. targetgene UBTF,MIR6782
-        my @genes1 = split(/,|\|/, $targetgene1);
-        my @genes2 = split(/,|\|/, $targetgene2);
-
-        foreach my $g1 (@genes1) {
-                foreach my $g2 (@genes2){
-                        return 1 if(exists($known_fusions{$g1.":".$g2}));
-			return 1 if(exists($known_fusions{$g2.":".$g1}));
-                }
-        }
-
-        return 0;
 }
 
 sub match_known_ITD {
