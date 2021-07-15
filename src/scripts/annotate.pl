@@ -249,7 +249,7 @@ if($gold_gene_file && -e $gold_gene_file){
 
 my %bad_fusions;
 my $df = new DelimitedFile(
-	"-file" => $blacklist_fusion_file,
+	"-file" => $excluded_fusion_file,
 	"-headers" => 1,
 );
 
