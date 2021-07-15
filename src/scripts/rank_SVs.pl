@@ -11,7 +11,7 @@ use Cwd qw[abs_path getcwd];
 use List::Util qw[min max];
 use TdtConfig; 
 
-use CiceroUtil qw(exist_multiplename_checking exists_partners_checking)
+use CiceroUtil qw(exist_multiplename_checking exists_partners_checking);
 
 use DelimitedFile;
 use File::Temp qw/ tempdir /;
