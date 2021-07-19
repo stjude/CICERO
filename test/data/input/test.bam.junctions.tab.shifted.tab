@@ -1,0 +1,6 @@
+junction	count	type	genes	transcripts	qc_flanking	qc_plus	qc_minus	qc_perfect_reads	qc_clean_reads
+chr1:164563311:+,chr1:164792494:+	5	known	NM_001204961,NM_001204963,NM_002585	NM_001204961,NM_001204963,NM_002585	0	5	0	1	0
+chr1:164748842:+,chr1:164792494:+	11	novel			4	7	4	7	0
+chr1:164782812:+,chr1:164792494:+	6	novel			5	2	4	6	0
+chr19:1615821:+,chr19:1619111:+	254	known	NM_001136139,NM_003200	NM_001136139,NM_003200	172	84	170	34	206
+chr19:1622223:+,chr19:1622313:+	1	known	NM_001136139,NM_003200	NM_001136139,NM_003200	1	1	0	1	0
