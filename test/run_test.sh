@@ -36,5 +36,6 @@ else
 fi
 
 echo "docker run -v ${SCRIPT_DIR}/${REFDIR}:/reference -v ${SCRIPT_DIR}:/data ghcr.io/stjude/cicero:${VERSION} Cicero.sh -b /data/${BAM} -g ${GENOME} -r /reference -o /data/output -j /data/${JUNCTIONS}"
-docker run --cpus=2 -v ${SCRIPT_DIR}/${REFDIR}:/reference -v ${SCRIPT_DIR}:/data ghcr.io/stjude/cicero:${VERSION} Cicero.sh -b /data/${BAM} -g ${GENOME} -r /reference -o /data/output -j /data/${JUNCTIONS}
+docker run --memory="2.5g" --memory-swap="10g" -v ${SCRIPT_DIR}/${REFDIR}:/reference -v ${SCRIPT_DIR}:/data ghcr.io/stjude/cicero:${VERSION} Cicero.sh -b /data/${BAM} -g ${GENOME} -r /reference -o /data/output -j /data/${JUNCTIONS}
+#docker run -v ${SCRIPT_DIR}/${REFDIR}:/reference -v ${SCRIPT_DIR}:/data ghcr.io/stjude/cicero:${VERSION} Cicero.sh -b /data/${BAM} -g ${GENOME} -r /reference -o /data/output -j /data/${JUNCTIONS}
 
