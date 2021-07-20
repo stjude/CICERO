@@ -30,10 +30,11 @@ then
   echo "c2a35c360539c18c0f42cb26c686cb0e  reference.tar.gz" > reference.md5
   md5sum -c reference.md5
   tar -zxf reference.tar.gz
+  find reference
 else
   echo "Reference exists"
 fi
 
-
-docker run -v ${SCRIPT_DIR}/${REFDIR}:/reference -v ${SCRIPT_DIR}:/data ghcr.io/stjude/cicero:${VERSION} Cicero.sh -b /data/${BAM} -g ${GENOME} -r /reference -o /data/output -j /data/${JUNCTIONS}
+echo "docker run -v ${SCRIPT_DIR}/${REFDIR}:/reference -v ${SCRIPT_DIR}:/data ghcr.io/stjude/cicero:${VERSION} Cicero.sh -b /data/${BAM} -g ${GENOME} -r /reference -o /data/output -j /data/${JUNCTIONS}"
+docker run --cpus=2 -v ${SCRIPT_DIR}/${REFDIR}:/reference -v ${SCRIPT_DIR}:/data ghcr.io/stjude/cicero:${VERSION} Cicero.sh -b /data/${BAM} -g ${GENOME} -r /reference -o /data/output -j /data/${JUNCTIONS}
 
