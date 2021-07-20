@@ -218,6 +218,9 @@ if [[ $RETURN_CODE != 0 ]]; then
         else
             >&2 echo "ERROR: The server has probably died. Please review error logs at below location:"
             >&2 echo "$OUTDIR/${GFSERVER_LOG}.err"
+            >&2 cat "$OUTDIR/${GFSERVER_LOG}.err"
+            >&2 cat "$OUTDIR/${GFSERVER_LOG}.log"
+            >&2 cat "$OUTDIR/${GFSERVER_LOG}.out"
             exit 1
         fi
     done
