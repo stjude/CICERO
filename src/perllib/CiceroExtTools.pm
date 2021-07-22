@@ -1,5 +1,12 @@
 package CiceroExtToolsI;
 
+## Exit codes:
+## 20: Error calling assembler (cap3)
+## 21: Error sorting BLAT output in Mapper->run
+## 22: Error sorting BLAT output in overhang_remapping
+## 23: Error running aligner (Aligner->run)
+## 24: Error running fastmap secondary aligner (Aligner->run)
+
 # this package has three major tools that the program is going to use:
 # 1. Assembler, cap3 is used for this purpose
 # 2. Mapper, blat server version is used and highly recommended
@@ -66,7 +73,7 @@ sub run {
 	if ($ret){
 		my $err = $!;
 		print STDERR "Error running assembler: $err\n"; 
-		exit $err;
+		exit 20;
 	}
 	my( $r_count, $r_reads ) = _count_reads("$file.cap.ace");
 	return ("$file.cap.contigs", $r_count, $r_reads, "$file.cap.singlets");
@@ -160,7 +167,7 @@ sub run {
 	if ($?){
 		my $err = $!;
 		print STDERR "Error sorting blat output: $err\n"; 
-		exit $err;
+		exit 21;
 	}
 
 	# Instantiate a parser and load the results into an array to pass to subroutines for checks.
@@ -965,7 +972,7 @@ sub overhang_remapping {
 	if ($?){
 		my $err = $!;
 		print STDERR "Error sorting blat output: $err\n"; 
-		exit $err;
+		exit 22;
 	}
 
 	#print "sc site is $scSite\n";
@@ -1659,7 +1666,7 @@ sub run {
 	if ($ret){
 		my $err = $!;
 		print STDERR "Error running aligner: $err\n"; 
-		exit $err;
+		exit 23;
 	}
 	my $rtn = _find_best_hit($output);
 	if( scalar(keys(%{$rtn})) > 0) {
@@ -1671,7 +1678,7 @@ sub run {
 	if ($ret){
 		my $err = $!;
 		print STDERR "Error running aligner: $err\n"; 
-		exit $err;
+		exit 24;
 	}
 	return $output if($param{-FILE});
 	return _find_best_hit($output);
