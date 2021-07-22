@@ -1,7 +1,19 @@
-#!/usr/bin/env perl 
+#!/usr/bin/env perl
+
+## Exit codes:
+## 1: Invalid arguments
+## 2: Failed to combine internal events file (cat)
+## 3: Failed to combine fusion events file (cat)
+## 4: Failed to create main annotation directory (mkdir)
+## 5: Failed to create temporary annotation directory (mkdir)
+## 6: Breakpoint 1 had invalid orientation
+## 7: Breakpoint 2 had invalid orientation
+## 8: Failed to create Fasta file for assembly (cat)
+## 9: Failed to run blat on first breakpoint fasta
+## 10: Failed to run blat on second breakpoint fasta
 
 use strict;
-use warnings; 
+use warnings;
 
 use Carp;
 use Getopt::Std;
@@ -21,7 +33,7 @@ use CiceroUtil qw(prepare_reads_file parse_range rev_comp
 
 require CiceroExtTools;
 
-use TdtConfig; 
+use TdtConfig;
 
 use Transcript;
 use Gene;
@@ -29,7 +41,7 @@ use GeneModel;
 
 my $debug = 0;
 
-my $out_header = join("\t", "sample", "geneA", "chrA", "posA", "ortA", "featureA", "geneB", "chrB", "posB", "ortB", "featureB", 
+my $out_header = join("\t", "sample", "geneA", "chrA", "posA", "ortA", "featureA", "geneB", "chrB", "posB", "ortB", "featureB",
 		 	"sv_ort", "readsA", "readsB", "matchA", "matchB", "repeatA", "repeatB", , "coverageA", "coverageB",
 			 "ratioA", "ratioB", "qposA", "qposB", "total_readsA", "total_readsB", "contig", "type");
 
@@ -48,14 +60,14 @@ my ($input_bam, $read_len, $sample);
 my ($all_output, $internal, $DNA) = (0, 0, 0);
 my ($min_hit_len, $max_num_hits, $min_fusion_distance);
 $min_hit_len = 25;
-my $sc_shift = 10; 
+my $sc_shift = 10;
 my ($excluded_gene_file, $excluded_fusion_file, $complex_region_file, $excluded_chroms, $gold_gene_file);
 my ( $help, $man, $version, $usage );
 
 if(@ARGV == 0){
 	#TODO: get the correct usage string
-	print STDERR "Usage: $0 -g <genome> -i <bam_file> -o <out_dir> -f <gene_info>\n"; 
-	exit 1; 
+	print STDERR "Usage: $0 -g <genome> -i <bam_file> -o <out_dir> -f <gene_info>\n";
+	exit 1;
 }
 
 my $optionOK = GetOptions(
@@ -89,14 +101,14 @@ my $optionOK = GetOptions(
 );
 
 if ($header){
-	print STDOUT $out_header; 
+	print STDOUT $out_header;
 	exit;
 }
 
-my $conf; 
+my $conf;
 # Load configuration values for the genome build
 if (&TdtConfig::findConfig("genome", $genome)){
-	$conf = &TdtConfig::readConfig("genome", $genome); 
+	$conf = &TdtConfig::readConfig("genome", $genome);
 }
 else{
 	croak("no config");
@@ -120,7 +132,7 @@ $excluded_chroms = $conf->{EXCLD_CHR} unless($excluded_chroms);
 $complex_region_file = $conf->{COMPLEX_REGIONS} unless($complex_region_file);
 
 # Load Cicero-specific configuration settings
-$conf = &TdtConfig::readConfig('app', 'cicero'); 
+$conf = &TdtConfig::readConfig('app', 'cicero');
 $min_hit_len = $conf->{MIN_HIT_LEN} unless($min_hit_len);
 $max_num_hits = $conf->{MAX_NUM_HITS} unless($max_num_hits);
 $min_fusion_distance = $conf->{MIN_FUSION_DIST} unless($min_fusion_distance);
@@ -140,7 +152,7 @@ my @complex_regions;
 		next if(/Start/);
 		my ($name, $chr, $start, $end) = split(/\t/);
 		my $cr = {
-			name => $name, 
+			name => $name,
 			chr => $chr,
 			start => $start,
 			end => $end
@@ -154,14 +166,14 @@ my @complex_regions;
 
 # Combine all of the individual results from Cicero.pl
 my $unfiltered_file = "$out_dir/unfiltered.fusion.txt";
-if($internal) { 
+if($internal) {
 	$unfiltered_file = "$out_dir/unfiltered.internal.txt";
 	unless (-s $unfiltered_file){
 		`cat $out_dir/*/unfiltered.internal.txt > $unfiltered_file`;
 		if ($?){
 			my $err = $!;
-			print STDERR "Error combining internal events: $err\n"; 
-			exit $err;
+			print STDERR "Error combining internal events: $err\n";
+			exit 2;
 		}		
 	}
 }
@@ -170,12 +182,12 @@ else{
 		`cat $out_dir/*/unfiltered.fusion.txt > $unfiltered_file`;
 		if ($?){
 			my $err = $!;
-			print STDERR "Error combining fusion events: $err\n"; 
-			exit $err;
+			print STDERR "Error combining fusion events: $err\n";
+			exit 3;
 		}
 	}
 }
-print "Unfiltered fusions file: $unfiltered_file\n"; 
+print "Unfiltered fusions file: $unfiltered_file\n";
 
 if (! $gene_info_file || ! -e $gene_info_file){
 	my $out_prefix = basename($input_bam, ".bam");
@@ -198,7 +210,7 @@ close $GI;
 
 # Intialize CAP3 and BLAT utilities
 # These variables will be global
-my $assembler = Assembler->new( 
+my $assembler = Assembler->new(
 	-PRG => "cap3",
 	-OPTIONS => $cap3_options
 );
@@ -217,7 +229,7 @@ my $gm_format = "REFFLAT";
 my $gm = GeneModel->new if($gene_model_file);
 $gm->from_file($gene_model_file, $gm_format);
 
-croak "Specify a genome: $ref_genome" unless (-f $ref_genome); 
+croak "Specify a genome: $ref_genome" unless (-f $ref_genome);
 
 # Load the BAM file
 my $sam_d = Bio::DB::Sam->new( -bam => $input_bam, -fasta => $ref_genome);
@@ -311,33 +323,33 @@ if($known_fusion_file && -e $known_fusion_file){
 my @raw_SVs = ();
 my %gene_recurrance = ();
 my %contig_recurrance = ();
-my %genepairs = (); 
-my %breakpoint_sites = (); 
+my %genepairs = ();
+my %breakpoint_sites = ();
 open(my $UNF, "$unfiltered_file");
-print STDERR "Reading unfiltered file\n"; 
+print STDERR "Reading unfiltered file\n";
 while(my $line = <$UNF>){
 	chomp($line);
 	my @fields = split("\t", $line);
-	my ($gene1, $gene2) = ($fields[1], $fields[2]); 
+	my ($gene1, $gene2) = ($fields[1], $fields[2]);
 	my $cutoff = $fields[4];
 	my $qseq = $fields[17];
 
 	if($gene1 eq "NA"){
 			my $crA = in_complex_region($fields[8], $fields[5]);
 			if($crA){
-					$gene1 = $crA;
+				$gene1 = $crA;
 			}
 			else{
-					$gene1 = join(":", $fields[8], $fields[5]);
+				$gene1 = join(":", $fields[8], $fields[5]);
 			}
 	}
 	if($gene2 eq "NA"){
 			my $crB = in_complex_region($fields[19], $fields[6]);
 			if($crB){
-					$gene2 = $crB;
+				$gene2 = $crB;
 			}
 			else{
-					$gene2 = join(":", $fields[19], $fields[6]);
+				$gene2 = join(":", $fields[19], $fields[6]);
 			}
 	}
 
@@ -353,9 +365,9 @@ while(my $line = <$UNF>){
 			$bad_gene = 1 if(exists($excluded{$g2}));
 			next if ($g1 eq $g2);
 			my $gene_pair = ($g1 le $g2) ? join(":",$g1,$g2) : join(":",$g2,$g1);
-			$bad_fusion = 1 if(exists($bad_fusions{$gene_pair})); 
+			$bad_fusion = 1 if(exists($bad_fusions{$gene_pair}));
 			last if($bad_fusion);
-			next if(exists($genepairs{$gene_pair})); 
+			next if(exists($genepairs{$gene_pair}));
 			$genepairs{$gene_pair} = 1;
 			if(exists($gene_recurrance{$g1})){$gene_recurrance{$g1}++;}
 			else{$gene_recurrance{$g1} = 1;}
@@ -381,7 +393,7 @@ while(my $line = <$UNF>){
 	};
 	$first_bp->{clip} = $first_bp->{qstrand}*$first_bp->{ort};
 	my $qpos = $first_bp->{ort} > 0 ? $first_bp->{qend} : $first_bp->{qstart};
-	if($qpos > 30 && $qpos < length($qseq) - 30){ 
+	if($qpos > 30 && $qpos < length($qseq) - 30){
 		my $junc_seq = substr($qseq, $qpos - 30, 60);
 		$bad_evidence += 2 if(low_complexity($junc_seq));
 	}
@@ -427,7 +439,7 @@ while(my $line = <$UNF>){
 
 	# Determine the variant type: CTX, Internal_inv, Interal_splicing, Internal_dup, ITX, read_through, DEL, INS
 	my $type = get_type($first_bp, $second_bp, $same_gene);
-	print STDERR "type: $type\n" if ($debug); 
+	print STDERR "type: $type\n" if ($debug);
 	# If we're not processing combined results (-all) and this is an Internal event
 	if(!$all_output && $type =~ m/Internal/){
 		if(%gold_genes){
@@ -466,7 +478,7 @@ while(my $line = <$UNF>){
 close($UNF);
 
 if($junction_file){
-  print STDERR "Reading junction file\n"; 
+  print STDERR "Reading junction file\n";
   open(my $JUNC, "$junction_file");
   while(my $line = <$JUNC>){
 	chomp($line);
@@ -518,7 +530,7 @@ if($junction_file){
 		}
 		$cutoff = ($cutoffA + $cutoffB)/2  if($cutoffA + $cutoffB > 2*$cutoff);
 		my $gene_pair = ($gene1 le $gene2) ? join(":",$gene1,$gene2) : join(":",$gene2,$gene1);
-		$bad_fusion = 1 if(exists($bad_fusions{$gene_pair})); 
+		$bad_fusion = 1 if(exists($bad_fusions{$gene_pair}));
 		last if($bad_fusion);
 	}
 	next if($bad_fusion);
@@ -579,7 +591,7 @@ foreach my $g (sort { $gene_recurrance{$b} <=> $gene_recurrance{$a} } keys %gene
 	next if($g eq "NA" || $g eq "IGH" || $g eq "TCRA" || $g eq "TCRB" || $g eq "TARP");
 	next if($cr_hash{$g});
 #	$excluded{$g} = 1;#Tian to rescue IGH-CRLF2 when CRLF2 has many partner genes, will not add CRLF2 to excluded
-	print STDERR "Adding $g to excluded with recurrance: ".$gene_recurrance{$g}."\n"; 
+	print STDERR "Adding $g to excluded with recurrance: ".$gene_recurrance{$g}."\n";
 	print $NEXC join("\t",$g, $gene_recurrance{$g}),"\n";
 }
 close($NEXC);
@@ -588,19 +600,19 @@ print STDERR "out file is: $out_file\nnumber of SVs: ", scalar @raw_SVs, "\n" if
 `mkdir  -p $out_dir/tmp_anno`;
 if ($?){
 	my $err = $!;
-	print STDERR "Error creating annotation directory: $err\n"; 
-	exit $err;
+	print STDERR "Error creating annotation directory: $err\n";
+	exit 4;
 }
 my $annotation_dir = tempdir(DIR => "$out_dir/tmp_anno");
 `mkdir -p $annotation_dir`;
 if ($?){
 	my $err = $!;
-	print STDERR "Error creating temp directory for annotation: $err\n"; 
-	exit $err;
+	print STDERR "Error creating temp directory for annotation: $err\n";
+	exit 5;
 }
-print STDERR "Annotation Dir: $annotation_dir\n" if($debug); 
+print STDERR "Annotation Dir: $annotation_dir\n" if($debug);
 
-print STDERR "Reading cover files\n"; 
+print STDERR "Reading cover files\n";
 # Loop over the soft clip files again
 my @cover_files = <$out_dir/*.cover>;
 foreach my $fn (@cover_files) {
@@ -637,7 +649,7 @@ foreach my $fn (@cover_files) {
 	close($IN);
 }
 
-print STDERR "Processing raw SVs\n"; 
+print STDERR "Processing raw SVs\n";
 my @annotated_SVs;
 foreach my $sv (@raw_SVs){
 	next if($sv->{type} eq "Internal_splicing");
@@ -656,7 +668,7 @@ foreach my $sv (@raw_SVs){
 		if(exists($excluded{$g2})) {$bad_gene = 1; last;}
 	}
 	next if($bad_gene);
-	print STDERR "next if($contigSeq && ", $contig_recurrance{$contigSeq}," > $max_num_hits)\n" if(abs($sv->{second_bp}->{tpos} - 170818803)<10 || abs($sv->{first_bp}->{tpos} - 170818803)<10); 
+	print STDERR "next if($contigSeq && ", $contig_recurrance{$contigSeq}," > $max_num_hits)\n" if(abs($sv->{second_bp}->{tpos} - 170818803)<10 || abs($sv->{first_bp}->{tpos} - 170818803)<10);
 
 	my $bp1_site = join("_", $first_bp->{tname}, $first_bp->{tpos}, $first_bp->{clip});
 	my $bp2_site = join("_", $second_bp->{tname}, $second_bp->{tpos}, $second_bp->{clip});
@@ -676,11 +688,11 @@ foreach my $sv (@raw_SVs){
 		   );
  	my $end_run = time();
 	my $run_time = $end_run - $start_run;
-	print STDERR "Quantification run time: $run_time\n" if($debug); 
+	print STDERR "Quantification run time: $run_time\n" if($debug);
 
 	foreach my $quantified_SV (@quantified_SVs){
 		my $annotated_SV = annotate($gm, $quantified_SV) if($quantified_SV);
-		print STDERR "annotated_SV: $annotated_SV\n" if($debug); 
+		print STDERR "annotated_SV: $annotated_SV\n" if($debug);
 		next unless($annotated_SV);
 		my ($first_bp, $second_bp, $type) = ($annotated_SV->{first_bp}, $annotated_SV->{second_bp}, $annotated_SV->{type});
 		if(!$all_output && $type =~ m/Internal/){
@@ -689,14 +701,14 @@ foreach my $sv (@raw_SVs){
 			}
 			elsif(!$DNA){
 				next if($type eq 'Internal_splicing');
-			        next unless( $first_bp->{feature} =~ m/coding/ || 
+			        next unless( $first_bp->{feature} =~ m/coding/ ||
 				    $second_bp->{feature} =~ m/coding/);
 			}
 		}
 		push @annotated_SVs, $annotated_SV;
 	}
 }
-print "annotated_SVs: ", scalar @annotated_SVs, "\n"; 
+print "annotated_SVs: ", scalar @annotated_SVs, "\n";
 
 my @uniq_SVs;
 foreach my $sv (@annotated_SVs){
@@ -717,16 +729,16 @@ foreach my $sv (@annotated_SVs){
 	}
 }
 
-print "unique_SVs ", scalar @uniq_SVs, "\n"; 
+print "unique_SVs ", scalar @uniq_SVs, "\n";
 
 open(hFo, ">$out_file");
 print hFo $out_header, "\n";
 foreach my $sv (@uniq_SVs){
 	my ($bp1, $bp2, $qseq, $type) = ($sv->{first_bp}, $sv->{second_bp}, $sv->{junc_seq}, $sv->{type});
 	my ($geneA, $geneB) = ($bp1->{gene}, $bp2->{gene});
-	my $ratioA = (exists($gene_info{$geneA}) && $gene_info{$geneA} > 0 && $bp1->{feature} ne 'intergenic') ? 
+	my $ratioA = (exists($gene_info{$geneA}) && $gene_info{$geneA} > 0 && $bp1->{feature} ne 'intergenic') ?
 		     (($bp1->{reads_num}+0.01)/80)/$gene_info{$geneA} : ($bp1->{reads_num}+0.01)/(count_coverage($sam_d, $bp1->{tname}, $bp1->{tpos}) + 1);
-	my $ratioB = (exists($gene_info{$geneB}) && $gene_info{$geneB} > 0 && $bp2->{feature} ne 'intergenic') ? 
+	my $ratioB = (exists($gene_info{$geneB}) && $gene_info{$geneB} > 0 && $bp2->{feature} ne 'intergenic') ?
 		     (($bp2->{reads_num}+0.01)/80)/$gene_info{$geneB} : ($bp2->{reads_num}+0.01)/(count_coverage($sam_d, $bp2->{tname}, $bp2->{tpos}) + 1);
 	$ratioA = 1 if($ratioA > 1);  $ratioB = 1 if($ratioB > 1);
 
@@ -797,9 +809,9 @@ foreach my $sv (@uniq_SVs){
 	$total_readsB = $bp2->{reads_num} if($bp2->{reads_num} > $total_readsB);
 
 	unless($seq_ids[0] =~ m/chr/) {$bp1->{tname} = "chr".$bp1->{tname}; $bp2->{tname} = "chr".$bp2->{tname};}
-	my $out_string = join("\t", $sample, $bp1->{gene}, $bp1->{tname}, $bp1->{tpos}, $bp1->{qstrand}, $bp1->{feature}, 
-				$bp2->{gene}, $bp2->{tname}, $bp2->{tpos}, $bp2->{qstrand}, $bp2->{feature}, $sv->{ort}, 
-				$bp1->{reads_num}, $bp2->{reads_num}, $bp1->{matches}, $bp2->{matches}, sprintf("%.2f", $bp1->{repeat}), 
+	my $out_string = join("\t", $sample, $bp1->{gene}, $bp1->{tname}, $bp1->{tpos}, $bp1->{qstrand}, $bp1->{feature},
+				$bp2->{gene}, $bp2->{tname}, $bp2->{tpos}, $bp2->{qstrand}, $bp2->{feature}, $sv->{ort},
+				$bp1->{reads_num}, $bp2->{reads_num}, $bp1->{matches}, $bp2->{matches}, sprintf("%.2f", $bp1->{repeat}),
 				sprintf("%.2f", $bp2->{repeat}), $bp1->{area}, $bp2->{area}, sprintf("%.2f", $mafA), sprintf("%.2f", $mafB),
 				 $bp1->{qpos}, $bp2->{qpos}, $total_readsA, $total_readsB, $qseq, $type);
 	print hFo $out_string, "\n";
@@ -810,10 +822,10 @@ rmtree(["$annotation_dir"]);
 sub is_good_ITD {
 	my($bp1, $bp2) = @_;
 	my $gene = $bp1->{gene};
-	return 1 if(%known_ITDs && exists($known_ITDs{$gene}) && 
-	   	 $bp1->{tpos} > $known_ITDs{$gene}[0] && 
-	   	 $bp1->{tpos} < $known_ITDs{$gene}[1] && 
-	   	 $bp2->{tpos} > $known_ITDs{$gene}[0] && 
+	return 1 if(%known_ITDs && exists($known_ITDs{$gene}) &&
+	   	 $bp1->{tpos} > $known_ITDs{$gene}[0] &&
+	   	 $bp1->{tpos} < $known_ITDs{$gene}[1] &&
+	   	 $bp2->{tpos} > $known_ITDs{$gene}[0] &&
 	   	 $bp2->{tpos} < $known_ITDs{$gene}[1]);
 	return 0;
 }
@@ -824,13 +836,13 @@ sub is_dup_raw_SV {
 		return 1
 		if( abs($s->{first_bp}->{tpos} - $sv->{first_bp}->{tpos}) < 10 &&
 		    abs($s->{second_bp}->{tpos} - $sv->{second_bp}->{tpos}) < 10 &&
-		        $s->{first_bp}->{tname} eq $sv->{first_bp}->{tname} &&
+			$s->{first_bp}->{tname} eq $sv->{first_bp}->{tname} &&
 			$s->{second_bp}->{tname} eq $sv->{second_bp}->{tname}
 		);
 
 		if( abs($s->{first_bp}->{tpos} - $sv->{second_bp}->{tpos}) < 10 &&
 		    abs($s->{second_bp}->{tpos} - $sv->{first_bp}->{tpos}) < 10 &&
-		        $s->{first_bp}->{tname} eq $sv->{second_bp}->{tname} &&
+			$s->{first_bp}->{tname} eq $sv->{second_bp}->{tname} &&
 			$s->{second_bp}->{tname} eq $sv->{first_bp}->{tname}
 		){
 			$s->{second_bp} = $sv->{first_bp};
@@ -966,12 +978,12 @@ sub annotate {
 	print STDERR "clip info: ", $first_bp->{clip}, "\t", $second_bp->{clip}, "\n" if($debug);
 	print STDERR "\nstart bp1 annotation .....\n" if($debug);
 	$annotated_first_bp = annotate_bp($first_bp) unless($annotated_first_bp->{feature});
-	print STDERR "bp1 annotation: ", join("\t", $annotated_first_bp->{feature}, $annotated_first_bp->{annotate_score}, 
+	print STDERR "bp1 annotation: ", join("\t", $annotated_first_bp->{feature}, $annotated_first_bp->{annotate_score},
 		$annotated_first_bp->{gene}), "\n" if($debug);
 
 	print STDERR "\nstart bp2 annotation .....\n" if($debug);
 	$annotated_second_bp = annotate_bp($second_bp) unless($annotated_second_bp->{feature});
-	print STDERR "bp2 annotation: ", join("\t", $annotated_second_bp->{feature}, $annotated_second_bp->{annotate_score}, 
+	print STDERR "bp2 annotation: ", join("\t", $annotated_second_bp->{feature}, $annotated_second_bp->{annotate_score},
 		$annotated_second_bp->{gene}), "\n" if($debug);
 
 	my $qseq_ort = sign($annotated_first_bp->{annotate_score} + $annotated_second_bp->{annotate_score}, 'd');
@@ -1070,7 +1082,7 @@ sub annotate_enhancer_gene_bp{
 			$bp->{feature} = $tmp_feature;
 			$bp->{ts_strand} = $bp->{qstrand};
 			$bp->{gene} = $g->name;
-			return $bp if($bp->{annotate_score} == 1); 
+			return $bp if($bp->{annotate_score} == 1);
 		}
 
 		print STDERR "gm_tree = gm->sub_model($chr, $rev_strand)\n" if($debug);
@@ -1093,9 +1105,9 @@ sub annotate_enhancer_gene_bp{
 			$bp->{feature} = $tmp_feature;
 			$bp->{ts_strand} = -1*$bp->{qstrand};
 			$bp->{gene} = $g->name;
-			return $bp if(abs($bp->{annotate_score}) == 1); 
+			return $bp if(abs($bp->{annotate_score}) == 1);
 		}
-	return $bp; 
+	return $bp;
 }
 
 sub annotate_bp{
@@ -1114,7 +1126,7 @@ sub annotate_bp{
 	$bp->{gene} = 'NA';
 	my $dist = 40000;
 
-	#priority order: same_direction exon > diff_direction exon > same_direction utr > diff_direction utr 
+	#priority order: same_direction exon > diff_direction exon > same_direction utr > diff_direction utr
 	#   > same_direction intron > diff_direction intron > min_distance intergenic (for all same/diff direction intergenic genes)
 	foreach my $extend_size (10, 5000, 10000, 40000){
 	
@@ -1200,13 +1212,13 @@ sub annotate_bp{
                         }
 		}
 	}
-	return $bp; 
+	return $bp;
 }
 
 sub quantification {
 	my $debug = 0;
 	my %args = @_;
-	my ($gm, $sam, $validator, $paired, $SV, $anno_dir) = 
+	my ($gm, $sam, $validator, $paired, $SV, $anno_dir) =
 		($args{-GeneModel}, $args{-SAM}, $args{-VALIDATOR}, $args{-PAIRED}, $args{-SV}, $args{-ANNO_DIR});
 	my ($bp1, $bp2) = ($SV->{first_bp}, $SV->{second_bp});
 	my ($chr1, $pos1, $start1, $end1) = ($bp1->{tname}, $bp1->{tpos}, $bp1->{ort}, $bp1->{tstart}, $bp1->{tend});
@@ -1219,16 +1231,16 @@ sub quantification {
 	# right clip or left clip?
 	my $clip1;
 	if($bp1->{ort} != 1 && $bp1->{ort} != -1){
-		print STDERR "bp1->ort ", $bp1->{ort}, " error!\n" if($debug);
-		exit;
+		print STDERR "bp1->ort ", $bp1->{ort}, " error!\n";
+		exit 6;
 	}
 	$clip1 = $bp1->{ort}*$bp1->{qstrand};
 
 	# right clip or left clip?
 	my $clip2;
 	if($bp2->{ort} != 1 && $bp2->{ort} != -1){
-		print STDERR "bp2->ort ", $bp2->{ort}, " error!\n" if($debug);
-		exit;
+		print STDERR "bp2->ort ", $bp2->{ort}, " error!\n";
+		exit 7;
 	}
 	$clip2 = $bp2->{ort}*$bp2->{qstrand};
 
@@ -1243,16 +1255,17 @@ sub quantification {
 	my $fa_file1 = "$anno_dir/".join(".", $chr1,$pos1, ($clip1+1), "fa");
 	my $output_mate = 1;
 	$output_mate = 0 if($SV->{type} eq "Internal_dup");	
-	prepare_reads_file(-OUT => $fa_file1,
-		           -SAM => $sam,
-			   -CHR =>$chr1, 
-			   -POS => $pos1, 
-		   	-CLIP => $clip1, 
-		   	-VALIDATOR => $validator,
-		   	-PAIRED => $paired,
-		   	-RMDUP => $rmdup,
-		   	-MIN_SC => 1,
-		   	-SC_SHIFT => $sc_shift,
+	prepare_reads_file(
+			-OUT => $fa_file1,
+		        -SAM => $sam,
+			-CHR =>$chr1,
+			-POS => $pos1,
+			-CLIP => $clip1,
+			-VALIDATOR => $validator,
+			-PAIRED => $paired,
+			-RMDUP => $rmdup,
+			-MIN_SC => 1,
+			-SC_SHIFT => $sc_shift,
 			-MIN_SC_LEN => 3,
 			-GAP_SIZE => $gap_size,
 			-FIXSC => $fixSC1,
@@ -1262,16 +1275,17 @@ sub quantification {
 	print STDERR "fa_file1: *$fa_file1*\n" if($debug);
 
 	my $fa_file2 = "$anno_dir/".join(".", $chr2, $pos2, ($clip2+1), "fa");
-	prepare_reads_file(-OUT => $fa_file2,
-		           -SAM => $sam,
-			   -CHR =>$chr2, 
-			   -POS => $pos2, 
-		   	-CLIP => $clip2, 
-		   	-VALIDATOR => $validator,
-		   	-PAIRED => $paired,
-		   	-RMDUP => $rmdup,
-		   	-MIN_SC => 1,
-		   	-SC_SHIFT => $sc_shift,
+	prepare_reads_file(
+			-OUT => $fa_file2,
+		        -SAM => $sam,
+			-CHR =>$chr2,
+			-POS => $pos2,
+			-CLIP => $clip2,
+			-VALIDATOR => $validator,
+			-PAIRED => $paired,
+			-RMDUP => $rmdup,
+			-MIN_SC => 1,
+			-SC_SHIFT => $sc_shift,
 			-MIN_SC_LEN => 3,
 			-GAP_SIZE => $gap_size,
 			-FIXSC => $fixSC2,
@@ -1283,31 +1297,31 @@ sub quantification {
 
 	my $fa_file = "$anno_dir/reads.$chr1.$pos1.$chr2.$pos2.fa";
 	if($fa_file1 eq $fa_file2){
-		#`cat $fa_file1 > $fa_file`; 
-		$fa_file = $fa_file1; 
+		#`cat $fa_file1 > $fa_file`;
+		$fa_file = $fa_file1;
 		#`cat $fa_file1.qual > $fa_file.qual` if(-s "$fa_file1.qual");
 	}
 	else {
 		unlink $fa_file if(-s $fa_file);
 		#unlink "$fa_file.qual" if(-s "$fa_file.qual");
-		my $arg = ""; 
+		my $arg = "";
 		$arg .= " $fa_file1 " if (-f $fa_file1 && -s $fa_file1);
 		$arg .= " $fa_file2 " if (-f $fa_file2 && -s $fa_file2);
 		if ($arg ne ""){
-			`cat $arg >> $fa_file`; 
-      if ($?){
-			  my $err = $!;
-			  print STDERR "Error creating fasta file: $err\n"; 
-			  exit $err;
-		  } 
+			`cat $arg >> $fa_file`;
+			if ($?){
+				my $err = $!;
+				print STDERR "Error creating fasta file: $err\n";
+				exit 8;
+			}
 		}
 		#`cat $fa_file1 >> $fa_file` if(-f $fa_file1 && -s $fa_file1);
 		#`cat $fa_file2 >> $fa_file` if(-f $fa_file2 && -s $fa_file2);
 		#`cat $fa_file1.qual >> $fa_file.qual` if(-f "$fa_file1.qual" && -s "$fa_file1.qual");
 		#`cat $fa_file2.qual >> $fa_file.qual` if(-f "$fa_file2.qual" && -s "$fa_file2.qual");
 	}
-	print STDERR "to do assembly ...\n" if($debug); 
-	my($contig_file, $sclip_count, $contig_reads) = $assembler->run($fa_file); 
+	print STDERR "to do assembly ...\n" if($debug);
+	my($contig_file, $sclip_count, $contig_reads) = $assembler->run($fa_file);
 
 	my @mappings;
 	print STDERR "start mapping ... $contig_file\n" if($debug && -s $contig_file);
@@ -1324,13 +1338,13 @@ sub quantification {
 		print STDERR "\n***mapping of new contig: ", $sv->{junc_seq}, "\n" if($debug);
 
 		my ($first_bp, $second_bp, $qseq) = ($sv->{first_bp}, $sv->{second_bp}, $sv->{junc_seq});
-		my ($ortA, $chrA, $tstartA, $tendA, $qstartA, $qendA, $qstrandA, $matchesA, $percentA, $repeatA) = 
+		my ($ortA, $chrA, $tstartA, $tendA, $qstartA, $qendA, $qstrandA, $matchesA, $percentA, $repeatA) =
 		   ($first_bp->{ort}, $first_bp->{tname}, $first_bp->{tstart}, $first_bp->{tend}, $first_bp->{qstart}, $first_bp->{qend}, $first_bp->{qstrand}, $first_bp->{matches}, $first_bp->{percent}, $first_bp->{repeat});
-		my ($ortB ,$chrB, $tstartB, $tendB, $qstartB, $qendB, $qstrandB, $matchesB, $percentB, $repeatB) = 
+		my ($ortB ,$chrB, $tstartB, $tendB, $qstartB, $qendB, $qstrandB, $matchesB, $percentB, $repeatB) =
 		   ($second_bp->{ort}, $second_bp->{tname}, $second_bp->{tstart}, $second_bp->{tend}, $second_bp->{qstart}, $second_bp->{qend}, $second_bp->{qstrand}, $second_bp->{matches}, $second_bp->{percent}, $second_bp->{repeat});
 		if($bp1->{tname} =~ m/chr/) {
 			if ($chrA !~ m/^chr/){
-			  $chrA = "chr".$chrA; 
+			  $chrA = "chr".$chrA;
 			}
 			if ($chrB !~ m/^chr/){
 			  $chrB = "chr".$chrB;
@@ -1349,13 +1363,13 @@ sub quantification {
 		print STDERR "bp2: ", join("\t", $bp2->{ort}, $bp2->{tname}, $bp2->{tpos}, $bp2->{qstrand}), "\n" if($debug);
 	
 		next unless(($chrA eq $bp1->{tname} && abs($bp1->{tpos} - $tposA)<50 &&
-			    $bp2->{tname} eq $chrB && abs($bp2->{tpos} - $tposB)<50) || 
+			    $bp2->{tname} eq $chrB && abs($bp2->{tpos} - $tposB)<50) ||
 			    ($bp2->{tname} eq $chrA && abs($bp2->{tpos} - $tposA)<50 &&
                             $bp1->{tname} eq $chrB && abs($bp1->{tpos} - $tposB)<50));
 		# to do alignment
 		my $tmp_ctg_file = "$anno_dir/reads.$chr1.$pos1.$chr2.$pos2.fa.tmp.contig";
 		open(my $CTG, ">$tmp_ctg_file");
-		print $CTG ">ctg\n$qseq\n"; 
+		print $CTG ">ctg\n$qseq\n";
 		close($CTG);
 
 		my ($psl_file1, $psl_file2) = ("$anno_dir/bp1.psl", "$anno_dir/bp2.psl",);
@@ -1365,22 +1379,24 @@ sub quantification {
 			`blat -noHead -maxIntron=5 $tmp_ctg_file $fa_file1 $psl_file1`;
 			if ($?){
 				my $err = $!;
-				print STDERR "Error running blat: $err\n"; 
-				exit $err;
+				print STDERR "Error running blat: $err\n";
+				print STDERR "File: $fa_file1\n";
+				exit 9;
 			}
 		}
 		if (-s $fa_file2){
 			`blat -noHead -maxIntron=5 $tmp_ctg_file $fa_file2 $psl_file2`;
 			if ($?){
 				my $err = $!;
-				print STDERR "Error running blat: $err\n"; 
-				exit $err;
+				print STDERR "Error running blat: $err\n";
+				print STDERR "File: $fa_file2\n";
+				exit 10;
 			}
 		}
 		my ($readsA, $areaA, $readsB, $areaB) = (0,1,0,1);
 		my $shift_bases = 5;
 		if($chrA eq $bp1->{tname} && abs($bp1->{tpos} - $tposA)<50 &&
-		   $bp2->{tname} eq $chrB && abs($bp2->{tpos} - $tposB)<50){ 
+		   $bp2->{tname} eq $chrB && abs($bp2->{tpos} - $tposB)<50){
 				$tposA = $bp1->{tpos};
 				$tposB = $bp2->{tpos};
 				($readsA, $areaA) = get_junc_reads($psl_file1, $qposA, $ortA, $shift_bases) if(-f $psl_file1);
@@ -1482,15 +1498,15 @@ sub get_genes {
 	my ($gm, $chr, $start, $end) = @_;
 	my ($f_tree, $r_tree) = ($gm->sub_model($chr, "+"), $gm->sub_model($chr, "-"));
 	my (%genes, @f_genes, @r_genes);
-	push @f_genes, $f_tree->intersect([$start, $end]); 
-	push @r_genes, $r_tree->intersect([$start, $end]); 
-	if(!@f_genes && !@r_genes){ 
-		push @f_genes, $f_tree->intersect([$start-5000, $end+5000]); 
-		push @r_genes, $r_tree->intersect([$start-5000, $end+5000]); 
+	push @f_genes, $f_tree->intersect([$start, $end]);
+	push @r_genes, $r_tree->intersect([$start, $end]);
+	if(!@f_genes && !@r_genes){
+		push @f_genes, $f_tree->intersect([$start-5000, $end+5000]);
+		push @r_genes, $r_tree->intersect([$start-5000, $end+5000]);
 	}
-	if(!@f_genes && !@r_genes){ 
-		push @f_genes, $f_tree->intersect([$start-10000, $end+10000]); 
-		push @r_genes, $r_tree->intersect([$start-10000, $end+10000]); 
+	if(!@f_genes && !@r_genes){
+		push @f_genes, $f_tree->intersect([$start-10000, $end+10000]);
+		push @r_genes, $r_tree->intersect([$start-10000, $end+10000]);
 	}
 	return (\@f_genes, \@r_genes);
 }
@@ -1499,19 +1515,19 @@ sub get_gene_name {
 	my ($gm, $chr, $start, $end) = @_;
 	my ($f_tree, $r_tree) = ($gm->sub_model($chr, "+"), $gm->sub_model($chr, "-"));
 	my (%genes, @f_genes, @r_genes);
-	push @f_genes, $f_tree->intersect([$start, $end]); 
-	push @r_genes, $r_tree->intersect([$start, $end]); 
-	if(!@f_genes && !@r_genes){ 
-		push @f_genes, $f_tree->intersect([$start-5000, $end+5000]); 
-		push @r_genes, $r_tree->intersect([$start-5000, $end+5000]); 
+	push @f_genes, $f_tree->intersect([$start, $end]);
+	push @r_genes, $r_tree->intersect([$start, $end]);
+	if(!@f_genes && !@r_genes){
+		push @f_genes, $f_tree->intersect([$start-5000, $end+5000]);
+		push @r_genes, $r_tree->intersect([$start-5000, $end+5000]);
 	}
-	if(!@f_genes && !@r_genes){ 
-		push @f_genes, $f_tree->intersect([$start-10000, $end+10000]); 
-		push @r_genes, $r_tree->intersect([$start-10000, $end+10000]); 
+	if(!@f_genes && !@r_genes){
+		push @f_genes, $f_tree->intersect([$start-10000, $end+10000]);
+		push @r_genes, $r_tree->intersect([$start-10000, $end+10000]);
 	}
-	if(!@f_genes && !@r_genes){ 
-		push @f_genes, $f_tree->intersect([$start-40000, $end+40000]); 
-		push @r_genes, $r_tree->intersect([$start-40000, $end+40000]); 
+	if(!@f_genes && !@r_genes){
+		push @f_genes, $f_tree->intersect([$start-40000, $end+40000]);
+		push @r_genes, $r_tree->intersect([$start-40000, $end+40000]);
 	}
 	if(!@f_genes && !@r_genes) {
 		$genes{'NA'} = 0;
@@ -1522,14 +1538,14 @@ sub get_gene_name {
 		my @gene_names = split(/,|\|/,$g->val->name);
 		foreach my $g1 (@gene_names){
 			$genes{$g1} = 1;
-		} 
+		}
 	}	
 
 	foreach my $g (@r_genes){
 		my @gene_names = split(/,|\|/,$g->val->name);
 		foreach my $g1 (@gene_names){
 			$genes{$g1} = -1;
-		} 
+		}
 	}	
 	return \%genes;
 }
@@ -1575,7 +1591,7 @@ sub same_gene{
 }
 
 =head1 LICENCE AND COPYRIGHT
-Copyright 2019 St. Jude Children's Research Hospital 
+Copyright 2019 St. Jude Children's Research Hospital
 
 Licensed under a modified version of the Apache License, Version 2.0
 (the "License") for academic research use only; you may not use this

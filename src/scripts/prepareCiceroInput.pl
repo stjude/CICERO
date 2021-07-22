@@ -1,5 +1,8 @@
 #!/usr/bin/env perl 
 
+## Exit codes:
+## 1: Failed to combine cover files (ls, xargs, cat)
+
 use strict;
 use warnings; 
 
@@ -87,7 +90,7 @@ my $SC_file = "$out_dir/$out_prefix.SC.txt";
 if ($?){
 	my $err = $!;
 	print STDERR "Error combining cover files: $err\n"; 
-	exit $err;
+	exit 1;
 }
 
 print STDERR $SC_file, "\n";
