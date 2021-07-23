@@ -33,13 +33,13 @@ do
     ls -l $file >&2
     failtestifactive Found at least one cover that was too small
   fi
-done< <(ls $CaseDir/$CASE.gInfo.txt | sed '$d' )
+done< <(ls $CaseDir/$CASE.gene_info.txt | sed '$d' )
 passtestbydefault
 
 
 starttest CoverSize
 anynonempty=
-anysmall=
+# anysmall=
 cutoff=200
 while read file
 do
@@ -57,8 +57,8 @@ do
 done< <(ls $CaseDir/$CASE.*.cover | sed '$d')
 if [ ! "$anynonempty" ]
 then failtest All cover files were empty
-elif [ "$anysmall" ]
-then warntest Found at least one cover that was too small
+# elif [ "$anysmall" ]
+# then warntest Found at least one cover that was too small
 else passtest
 fi
 
