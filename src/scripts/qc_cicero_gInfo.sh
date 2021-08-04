@@ -28,9 +28,9 @@ do
   if [ "`filesize $file`" -lt $cutoff ]
   then 
     ls -l $file >&2
-    failtestifactive Found at least one cover that was too small
+    failtestifactive Found at least one gene_info.txt file that was too small
   fi
-done< <(ls $CaseDir/$CASE.gInfo.txt | sed '$d' )
+done< <(ls $CaseDir/$CASE.gene_info.txt | sed '$d' )
 passtestbydefault
 
 summarize

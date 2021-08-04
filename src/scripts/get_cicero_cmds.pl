@@ -1,5 +1,8 @@
 #!/usr/bin/env perl
 
+## Exit codes:
+## 1: Missing arguments
+
 use strict;
 use warnings;
 

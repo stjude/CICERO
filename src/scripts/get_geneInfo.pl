@@ -1,5 +1,8 @@
 #!/usr/bin/env perl
 
+## Exit codes:
+## 30: Could not make output directory (mkdir)
+
 use warnings; 
 use strict;
 
@@ -93,7 +96,7 @@ $sample=$bam_file[0] unless (defined $sample);
 if ($?){
 	my $err = $!;
 	print STDERR "Error creating output directory: $err\n"; 
-	exit $err;
+	exit 30;
 }
 
 my %excluded = ();
