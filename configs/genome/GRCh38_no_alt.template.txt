@@ -2,8 +2,8 @@ TWOBIT	/Homo_sapiens/GRCh38_no_alt/2BIT/GRCh38_no_alt.2bit
 COMBINED_REFFLAT	/Homo_sapiens/GRCh38_no_alt/mRNA/RefSeq/refFlat.txt
 FASTA	/Homo_sapiens/GRCh38_no_alt/FASTA/GRCh38_no_alt.fa
 REFSEQ_REFFLAT	/Homo_sapiens/GRCh38_no_alt/mRNA/RefSeq/refFlat-sharp.txt
-BLACKLIST_GENES	/Homo_sapiens/GRCh38_no_alt/CICERO/blacklist.genes.txt
-BLACKLIST_FUSIONS	/Homo_sapiens/GRCh38_no_alt/CICERO/blacklist.fusions.txt
+EXCLUDED_GENES	/Homo_sapiens/GRCh38_no_alt/CICERO/excluded.genes.txt
+EXCLUDED_FUSIONS	/Homo_sapiens/GRCh38_no_alt/CICERO/excluded.fusions.txt
 EXCLD_CHR	chrM,chrY,_KI,_GL,chrEBV
 EXCLUDED_REGIONS	/Homo_sapiens/GRCh38_no_alt/CICERO/hg38.exclude
 REFGENE2PROTEIN	/Homo_sapiens/GRCh38_no_alt/CICERO/refgene2protein.tab

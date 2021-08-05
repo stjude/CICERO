@@ -1,7 +1,12 @@
 #!/usr/bin/env perl
 
+## Exit codes:
+## 1: Invalid arguments
+## 2: Failed to create fusion file (touch)
+## 3: Failed to create internal events file (touch)
+
 use strict;
-use warnings; 
+use warnings;
 
 use Carp;
 use Getopt::Long;
@@ -23,7 +28,7 @@ use Cwd;
 use TdtConfig;
 
 use CiceroSCValidator qw($min_percent_hq LEFT_CLIP RIGHT_CLIP);
-use CiceroUtil qw(print_out prepare_reads_file parse_range rev_comp is_PCR_dup 
+use CiceroUtil qw(print_out prepare_reads_file parse_range rev_comp is_PCR_dup
 	          read_fa_file get_discordant_reads get_sclip_reads normalizeChromosomeName);
 require CiceroExtTools;
 
@@ -45,24 +50,24 @@ my $cap3_options = " -o 25 -z 2 -h 60 -y 10 > /dev/null 2>&1";
 # 2 blat related variables, using blat server and blat standalone
 my $blat_client_exe = "gfClient";
 my $blat_client_options = '-out=psl -nohead > /dev/null 2>&1';
-my ($blat_server, $blat_port, $dir_2bit); 
+my ($blat_server, $blat_port, $dir_2bit);
 my ($paired, $rmtmp, $rmdup) = (1, 1, 1);
-# other options 
+# other options
 my ($read_len, $min_fusion_distance);
 my ($min_sclip_len, $min_hit_len) = (5, 25);
 my ($min_sclip_reads, $expression_ratio_cutoff, $max_num_hits) = (2, 0.01, 3);
-my $sc_shift = 3; 
+my $sc_shift = 3;
 
 if(@ARGV == 0){
 	#TODO: get the correct usage string
 	print STDERR "Usage: $0 -g <genome> -i <bam_file> -o <out_dir> -f <sclip_file>\n";
-	exit 1; 
+	exit 1;
 }
 
 # common help options
 my ( $help, $man, $version, $usage );
 my $optionOK = GetOptions(
-	# input/output 
+	# input/output
 	's|sample=s'	=> \$sample,
 	'i|input_bam=s'	=> \$input_bam,
 	'ratio=f'	=> \$expression_ratio_cutoff,
@@ -113,17 +118,17 @@ if(!$sclip_file) {
 $sclip_file = File::Spec->rel2abs($sclip_file);
 
 my $conf = &TdtConfig::readConfig("genome", $genome);
-$ref_genome = $conf->{'FASTA'} unless ($ref_genome && -e $ref_genome);  
-$blat_server = $conf->{'BLAT_HOST'} unless ($blat_server); 
-$blat_port = $conf->{'BLAT_PORT'} unless ($blat_port); 
-$gene_model_file = $conf->{'REFSEQ_REFFLAT'} unless ($gene_model_file && -e $gene_model_file); 
+$ref_genome = $conf->{'FASTA'} unless ($ref_genome && -e $ref_genome);
+$blat_server = $conf->{'BLAT_HOST'} unless ($blat_server);
+$blat_port = $conf->{'BLAT_PORT'} unless ($blat_port);
+$gene_model_file = $conf->{'REFSEQ_REFFLAT'} unless ($gene_model_file && -e $gene_model_file);
 $dir_2bit = '/';
 
 if(!$ref_genome) {
 	croak "You need to specify the reference genome";
 }
 
-$conf = &TdtConfig::readConfig('app', 'cicero'); 
+$conf = &TdtConfig::readConfig('app', 'cicero');
 $min_hit_len = $conf->{MIN_HIT_LEN} unless($min_hit_len);
 $max_num_hits = $conf->{MAX_NUM_HITS} unless($max_num_hits);
 $min_fusion_distance = $conf->{MIN_FUSION_DIST} unless($min_fusion_distance);
@@ -137,7 +142,7 @@ if($gene_model_file) {
 }
 # set up the external programs and validators
 # Those variable will be global
-my $assembler = Assembler->new( 
+my $assembler = Assembler->new(
 	-PRG => 'cap3',
 	-OPTIONS => $cap3_options
 );
@@ -161,23 +166,23 @@ $validator->remove_validator('strand_validator') if(!$paired);
 #setup output and working directory
 $out_dir = getcwd if(!$out_dir);
 mkdir $out_dir if(!-e $out_dir || ! -d $out_dir);
-my $tmp_dir = "$out_dir/tmp"; 
-mkdir $tmp_dir if(!-e $tmp_dir || ! -d $tmp_dir);  
+my $tmp_dir = "$out_dir/tmp";
+mkdir $tmp_dir if(!-e $tmp_dir || ! -d $tmp_dir);
 
 my $sam_d = Bio::DB::Sam->new( -bam => $input_bam, -fasta => $ref_genome);
 my @seq_ids = $sam_d->seq_ids;
 
-my $ret = system("touch $out_dir/unfiltered.fusion.txt"); 
+my $ret = system("touch $out_dir/unfiltered.fusion.txt");
 if ($ret){
 	my $err = $!;
-	print STDERR "Error sorting blat output: $err\n"; 
-	exit $err;
+	print STDERR "Error creating combined fusion file: $err\n";
+	exit 2;
 }
-$ret = system("touch $out_dir/unfiltered.internal.txt"); 
+$ret = system("touch $out_dir/unfiltered.internal.txt");
 if ($ret){
 	my $err = $!;
-	print STDERR "Error sorting blat output: $err\n"; 
-	exit $err;
+	print STDERR "Error creating combined internal file: $err\n";
+	exit 3;
 }
 # the softclip file is sorted, so no need to re-sort it
 open my $SCLIP, "<$sclip_file" or croak "can't open $sclip_file:$OS_ERROR";
@@ -185,7 +190,7 @@ while( my $line = <$SCLIP> ) {
 	chomp $line;
 	my ($chr, $pos, $ort, $sc_cnt, $sc_cutoff, $cover, $expression_ratio) = split /\t/, $line;
 	next if($sc_cnt < $min_sclip_reads);
-	if($sc_cutoff > 0){ 
+	if($sc_cutoff > 0){
 		#print STDERR "next if($expression_ratio < $expression_ratio_cutoff)\n";
 		#next if(defined $expression_ratio && $expression_ratio < $expression_ratio_cutoff);
 		#next if($sc_cnt<$sc_cutoff || $expression_ratio < $expression_ratio_cutoff);
@@ -226,16 +231,17 @@ sub detect_SV{
 	my $fixSC = 0;
 
 	# to fix the inaccurate soft-clipping
-	$fixSC = 1 if($sc_cover < 10 && abs($sc_cutoff) < 10); 
+	$fixSC = 1 if($sc_cover < 10 && abs($sc_cutoff) < 10);
 	my $fa_file = "$tmp_dir/". join(".", $chr, $sc_site, ($clip+1), "fa");
 	my $now_string = localtime;  # e.g., "Thu Oct 13 04:54:34 1994"
 
 	print STDERR "prepare_reads_file:", join("\n", $fa_file, $sam_d, $chr, $sc_site, $clip, $validator, $paired, $rmdup, $min_sclip_reads, $min_sclip_len, $unmapped_cutoff),"\n" if($debug);
-	prepare_reads_file(-OUT => $fa_file,
-		           -SAM => $sam_d,
-			   -CHR =>$chr, 
-			   -POS => $sc_site, 
-		   	-CLIP => $clip, 
+	prepare_reads_file(
+			-OUT => $fa_file,
+		        -SAM => $sam_d,
+			-CHR =>$chr,
+			-POS => $sc_site,
+			-CLIP => $clip,
 		   	-VALIDATOR => $validator,
 		   	-PAIRED => $paired,
 		   	-RMDUP => $rmdup,
@@ -248,8 +254,8 @@ sub detect_SV{
 
 	return unless(-f $fa_file && -s $fa_file);
 	print STDERR "start to assemble reads: at $fa_file", "\n" if($debug);
-	my($contig_file, $sclip_count, $contig_reads) = $assembler->run($fa_file); 
-	if(not -s $contig_file){ 
+	my($contig_file, $sclip_count, $contig_reads) = $assembler->run($fa_file);
+	if(not -s $contig_file){
 		unlink glob "$fa_file*" if($rmtmp && $fa_file =~ /fa/);
 		return; }
 
@@ -277,7 +283,7 @@ sub detect_SV{
 	open(my $UFF, ">>$unfiltered_fusion_file");
 	open(my $UIF, ">>$unfiltered_internal_events_file");
 
-		# If we make it this far, create the output files before exiting. 
+		# If we make it this far, create the output files before exiting.
 		# Nothing has failed at this point, there are simply no results.
 		return if($n_m == 0);
 		foreach my $sv (@mappings){
@@ -316,33 +322,33 @@ sub detect_SV{
 			my ($f_tree2, $r_tree2) = ($gm->sub_model($g2_chr, "+"), $gm->sub_model($g2_chr, "-"));
 			push @genes, $f_tree1->intersect([$g1_start, $g1_end]) if(defined($f_tree1));
 			push @genes, $r_tree1->intersect([$g1_start, $g1_end]) if(defined($r_tree1));
-			push @genes2, $f_tree2->intersect([$g2_start, $g2_end]) if(defined($f_tree2)); 
+			push @genes2, $f_tree2->intersect([$g2_start, $g2_end]) if(defined($f_tree2));
 			push @genes2, $r_tree2->intersect([$g2_start, $g2_end]) if(defined($r_tree2));
 
 			my $same_gene = 0;
-			$same_gene = 1 if((!@genes || !@genes2) && $g1_chr eq $g2_chr && 
+			$same_gene = 1 if((!@genes || !@genes2) && $g1_chr eq $g2_chr &&
 					  (abs($pos1-$g2_start) < 1000 || abs($pos1-$g2_end) < 1000 ||
 					   abs($pos2-$g1_start) < 1000 || abs($pos2-$g1_end) < 1000));
-			$same_gene = 1 if((!@genes && !@genes2) && $g1_chr eq $g2_chr && 
+			$same_gene = 1 if((!@genes && !@genes2) && $g1_chr eq $g2_chr &&
 					   (abs($pos1-$g2_start) < 5000 || abs($pos1-$g2_end) < 5000 ||
 					   abs($pos2-$g1_start) < 5000 || abs($pos2-$g1_end) < 5000 ||
 					   (abs($pos1-$pos2) < $min_fusion_distance/10 && $bp1->{qstrand} eq $bp2->{qstrand})));
 
-				if(!@genes){ 
-					push @genes, $f_tree1->intersect([$g1_start-5000, $g1_end+5000]) if(defined($f_tree1)); 
-					push @genes, $r_tree1->intersect([$g1_start-5000, $g1_end+5000]) if(defined($r_tree1)); 
+				if(!@genes){
+					push @genes, $f_tree1->intersect([$g1_start-5000, $g1_end+5000]) if(defined($f_tree1));
+					push @genes, $r_tree1->intersect([$g1_start-5000, $g1_end+5000]) if(defined($r_tree1));
 				}
-				if(!@genes2 && !$same_gene){ 
-					push @genes2, $f_tree2->intersect([$g2_start-5000, $g2_end+5000]) if(defined($f_tree2)); 
-					push @genes2, $r_tree2->intersect([$g2_start-5000, $g2_end+5000]) if(defined($r_tree2)); 
+				if(!@genes2 && !$same_gene){
+					push @genes2, $f_tree2->intersect([$g2_start-5000, $g2_end+5000]) if(defined($f_tree2));
+					push @genes2, $r_tree2->intersect([$g2_start-5000, $g2_end+5000]) if(defined($r_tree2));
 				}
-				if(!@genes){ 
-					push @genes, $f_tree1->intersect([$g1_start-10000, $g1_end+10000]) if(defined($f_tree1)); 
-					push @genes, $r_tree1->intersect([$g1_start-10000, $g1_end+10000]) if(defined($r_tree1)); 
+				if(!@genes){
+					push @genes, $f_tree1->intersect([$g1_start-10000, $g1_end+10000]) if(defined($f_tree1));
+					push @genes, $r_tree1->intersect([$g1_start-10000, $g1_end+10000]) if(defined($r_tree1));
 				}
-				if(!@genes2 && !$same_gene){ 
-					push @genes2, $f_tree2->intersect([$g2_start-10000, $g2_end+10000]) if(defined($f_tree2)); 
-					push @genes2, $r_tree2->intersect([$g2_start-10000, $g2_end+10000]) if(defined($r_tree2)); 
+				if(!@genes2 && !$same_gene){
+					push @genes2, $f_tree2->intersect([$g2_start-10000, $g2_end+10000]) if(defined($f_tree2));
+					push @genes2, $r_tree2->intersect([$g2_start-10000, $g2_end+10000]) if(defined($r_tree2));
 				}
 			if(!@genes){ $gene1="NA"; }
 			else{ $gene1=$genes[0]->val->name; }
@@ -365,11 +371,11 @@ sub detect_SV{
 			else{ $gene2=$genes2[0]->val->name; }
 			if(scalar @genes2 > 1){ for(my $i=1; $i<=$#genes2; $i++) {$gene2=$gene2.",".$genes2[$i]->val->name} }
 
-			my $out_string = join("\t", $bp1->{ort}, $g1_chr, $bp1->{tstart}, $bp1->{tend}, $bp1->{qstart}, $bp1->{qend}, 
-				$bp1->{qstrand}, $bp1->{matches}, $bp1->{percent}, $bp1->{repeat}, $qseq, $bp2->{ort}, $g2_chr, 
-				$bp2->{tstart}, $bp2->{tend}, $bp2->{qstart}, $bp2->{qend}, $bp2->{qstrand}, $bp2->{matches}, $bp2->{percent}, 
-				$bp2->{repeat}, $sv->{gap}, $same_gene); 
-			print STDERR join("\t", $sample, $gene1, $gene2, $sc_cover, $sc_cutoff, $pos1, $pos2, $out_string), "\n" if($debug); 
+			my $out_string = join("\t", $bp1->{ort}, $g1_chr, $bp1->{tstart}, $bp1->{tend}, $bp1->{qstart}, $bp1->{qend},
+				$bp1->{qstrand}, $bp1->{matches}, $bp1->{percent}, $bp1->{repeat}, $qseq, $bp2->{ort}, $g2_chr,
+				$bp2->{tstart}, $bp2->{tend}, $bp2->{qstart}, $bp2->{qend}, $bp2->{qstrand}, $bp2->{matches}, $bp2->{percent},
+				$bp2->{repeat}, $sv->{gap}, $same_gene);
+			print STDERR join("\t", $sample, $gene1, $gene2, $sc_cover, $sc_cutoff, $pos1, $pos2, $out_string), "\n" if($debug);
 			if($same_gene) {print $UIF join("\t", $sample, $gene1, $gene2, $sc_cover, $sc_cutoff, $pos1, $pos2, $out_string), "\n";}
  			else { print $UFF join("\t", $sample, $gene1, $gene2, $sc_cover, $sc_cutoff, $pos1, $pos2, $out_string), "\n"; }
 		}
@@ -396,13 +402,13 @@ This documentation refers to Cicero.pl version 0.1.8.
 =head1 USAGE
 	
 	This program depends on several things that need to be installed and/or
-	specified.  The program uses BioPerl and Bio::DB::Sam module to parse 
+	specified.  The program uses BioPerl and Bio::DB::Sam module to parse
 	the files and bam files.  Also it uses Blat software suites to do genome
 	mapping and alignment.  To make the program efficient, it also requires
 	a blat server setup.  And the program uses CAP3 assembler.
 
 =head1 AUTHOR
-Yongjin Li 
+Yongjin Li
 Liqing Tian (Liqing.Tian@STJUDE.ORG)
 
 =head1 LICENCE AND COPYRIGHT
@@ -414,7 +420,7 @@ Licensed under a modified version of the Apache License, Version 2.0
 file except in compliance with the License. To inquire about commercial
 use, please contact the St. Jude Office of Technology Licensing at
 scott.elmer@stjude.org.
-    
+
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.

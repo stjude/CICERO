@@ -335,7 +335,7 @@ echo "annotate.pl -i $BAMFILE -o $CICERO_DATADIR/$SAMPLE -genome $GENOME -l $LEN
 echo "annotate.pl -i $BAMFILE -o $CICERO_DATADIR/$SAMPLE -genome $GENOME -l $LEN -s $SAMPLE -f $CICERO_DATADIR/$SAMPLE/${SAMPLE}.gene_info.txt -internal $cluster_arg" >> cmds-04.sh
 parallel --joblog 04_Annotate.log $PARALLEL_ARG < cmds-04.sh
 
-mv $CICERO_DATADIR/$SAMPLE/blacklist.new.txt $CICERO_DATADIR/$SAMPLE/blacklist.new.fusions.txt
+mv $CICERO_DATADIR/$SAMPLE/excluded.new.txt $CICERO_DATADIR/$SAMPLE/excluded.new.fusions.txt
 cat $CICERO_DATADIR/$SAMPLE/annotated.fusion.txt $CICERO_DATADIR/$SAMPLE/annotated.internal.txt > $CICERO_DATADIR/$SAMPLE/annotated.all.txt
 } 1> 04_Annotate.out 2> 04_Annotate.err
 
@@ -352,6 +352,7 @@ echo "Step 05 - $(date +'%Y.%m.%d %H:%M:%S') - Filter"
 {
 cicero_filter.sh $CICERO_DATADIR $SAMPLE $GENOME
 cp $CICERO_DATADIR/$SAMPLE/final_fusions.txt $CICERO_DATADIR/$SAMPLE/final_fusions.report.html
+cp $CICERO_DATADIR/$SAMPLE/final_fusions.txt $CICERO_DATADIR/$SAMPLE/${SAMPLE}.final_fusions.txt
 } 1> 05_Filter.out 2> 05_Filter.err
 
 ## QC
@@ -364,7 +365,8 @@ fi
 ### STEP 06 - Rename output ###
 ###############################
 if [[ -n $FILENAME ]]; then
-    mv $OUTDIR/$CICERO_DATADIR/$SAMPLE/final_fusions.txt $OUTDIR/$CICERO_DATADIR/$SAMPLE/$FILENAME
+    echo "Renaming output file: $CICERO_DATADIR/$SAMPLE/final_fusions.txt $CICERO_DATADIR/$SAMPLE/$FILENAME" 2>&1
+    cp $CICERO_DATADIR/$SAMPLE/final_fusions.txt $CICERO_DATADIR/$SAMPLE/$FILENAME
 fi
 
 ############################

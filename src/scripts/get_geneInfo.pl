@@ -1,5 +1,8 @@
 #!/usr/bin/env perl
 
+## Exit codes:
+## 30: Could not make output directory (mkdir)
+
 use warnings; 
 use strict;
 
@@ -25,7 +28,7 @@ use constant FQ_BASE_NUMBER => 33;
 
 use GeneModel;
 use Gene;
-my ($blacklist_file, $excluded_chroms, $genome, $ref_genome, $gene_model_file);
+my ($excluded_file, $excluded_chroms, $genome, $ref_genome, $gene_model_file);
 my $rmdup = 0;
 my $out_dir;
 my $read_len;
@@ -70,7 +73,7 @@ if ($conf){
 	$conf = &TdtConfig::readConfig("genome", $genome); 	
 	$gene_model_file = $conf->{'REFSEQ_REFFLAT'} unless($gene_model_file);
 	$ref_genome = $conf->{'FASTA'}; 
-	$blacklist_file = $conf->{'BLACKLIST_GENES'}; 	
+	$excluded_file = $conf->{'EXCLUDED_GENES'}; 	
 	$excluded_chroms = $conf->{EXCLD_CHR} unless($excluded_chroms);
 }
 else{
@@ -93,18 +96,18 @@ $sample=$bam_file[0] unless (defined $sample);
 if ($?){
 	my $err = $!;
 	print STDERR "Error creating output directory: $err\n"; 
-	exit $err;
+	exit 30;
 }
 
-my %blacklist = ();
-if($blacklist_file && -s $blacklist_file){
-open(my $BLK, $blacklist_file);
-while(<$BLK>){
+my %excluded = ();
+if($excluded_file && -s $excluded_file){
+open(my $EXC, $excluded_file);
+while(<$EXC>){
 	my $line = $_;
 	chomp($line);
-	$blacklist{$line} = 1;
+	$excluded{$line} = 1;
 }
-close($BLK);
+close($EXC);
 }
 
 my @chroms = $sam->seq_ids;
@@ -132,7 +135,7 @@ foreach my $chr (@chroms){
 					my $a = shift;
 					return if( ($a->flag & 0x0400) || ($a->flag & 0x0004) ); #PCR duplicate or unmapped
 					$cnt++;
-				}) unless(exists($blacklist{$g->name}));
+				}) unless(exists($excluded{$g->name}));
 
 			my $sc_cutoff = ($read_len-20)*$cnt/(100*$mRNA_length);
 			my $tmp_gene = {

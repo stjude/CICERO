@@ -1,5 +1,8 @@
 #!/usr/bin/env perl 
 
+## Exit codes:
+## 1: Failed to combine cover files (ls, xargs, cat)
+
 use strict;
 use warnings; 
 
@@ -46,16 +49,16 @@ else{
 	croak "no config"; 
 }
 
-my $black_list_file = $conf->{'BLACKLIST_GENES'};
-open(my $BLK, "<", "$black_list_file");
-my %black_list = ();
-print STDERR "Parsing black list of genes $black_list_file\n"; 
-while(<$BLK>){
+my $excluded_list_file = $conf->{'EXCLUDED_GENES'};
+open(my $EXC, "<", "$excluded_list_file");
+my %excluded_list = ();
+print STDERR "Parsing excluded list of genes $excluded_list_file\n"; 
+while(<$EXC>){
 	my $line = $_;
 	chomp($line);
-	$black_list{$line} = 1;
+	$excluded_list{$line} = 1;
 }
-close($BLK);
+close($EXC);
 
 my $breakpoints_file = $conf->{'KNOWN_BREAKPOINTS'};
 open(my $BRK, "<", "$breakpoints_file");
@@ -87,7 +90,7 @@ my $SC_file = "$out_dir/$out_prefix.SC.txt";
 if ($?){
 	my $err = $!;
 	print STDERR "Error combining cover files: $err\n"; 
-	exit $err;
+	exit 1;
 }
 
 print STDERR $SC_file, "\n";
@@ -111,13 +114,13 @@ while(<$SCI>){
 		$intra = 1;
 		last if ($sc_cutoff < 0.01);
 
-		# to remove black list genes
-		my $blk = 0;
+		# to remove excluded list genes
+		my $exclude = 0;
 		my @g_names = split(/,|\|/,$gene_name);
 		foreach my $gname (@g_names){
-			$blk = 1 if(exists($black_list{$gname}));
+			$exclude = 1 if(exists($excluded_list{$gname}));
 		}
-		last if($blk==1);
+		last if($exclude==1);
 
 		# Compute an adjusted gene expression ratio
 		my $expression_ratio = ($cover/($read_len-20))/($r_cnt*$read_len/(2*$mRNA_length));

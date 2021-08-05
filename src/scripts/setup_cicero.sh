@@ -180,7 +180,7 @@ while read case_bam
  do
    bam="$DATA_DIR/\$case_bam/\$case_bam.bam"
    LEN=\`getReadLength.sh \$bam\` 
-   ln -s $BLACKLIST_GENES $DATA_DIR/\$case_bam
+   ln -s $EXCLUDED_GENES $DATA_DIR/\$case_bam
    echo "annotate.pl -c 10 -i \$bam -o $DATA_DIR/\$case_bam -l \$LEN -genome $GENOME -s \$case_bam -f $DATA_DIR/\$case_bam/\$case_bam.gene_info.txt -j $DATA_DIR/\$case_bam/\$case_bam.bam.junctions.tab.shifted.tab" >> `get_step_cmds_file`
    echo "annotate.pl -c 10 -i \$bam -o $DATA_DIR/\$case_bam -l \$LEN -genome $GENOME -s \$case_bam -f $DATA_DIR/\$case_bam/\$case_bam.gene_info.txt -internal" >> `get_step_cmds_file`
  done < $RUN_DIR/config.txt 
