@@ -29,7 +29,7 @@ use File::Temp qw/ tempdir /;
 
 use CiceroSCValidator qw($lowqual_cutoff LEFT_CLIP RIGHT_CLIP);
 use CiceroUtil qw(prepare_reads_file parse_range rev_comp
-	is_PCR_dup read_fa_file get_discordant_reads get_sclip_reads normalizeChromosomeName);
+	is_PCR_dup read_fa_file get_discordant_reads get_sclip_reads normalizeChromosomeName exist_multiplename_checking);
 
 require CiceroExtTools;
 
@@ -38,6 +38,8 @@ use TdtConfig;
 use Transcript;
 use Gene;
 use GeneModel;
+
+use constant BADFUSION_DISTANCE_CUTOFF => 200;
 
 my $debug = 0;
 
@@ -258,37 +260,27 @@ if($gold_gene_file && -e $gold_gene_file){
 }
 
 my %bad_fusions;
-if(!$internal){
-	my $df = new DelimitedFile(
-	       "-file" => $excluded_fusion_file,
-	       "-headers" => 1,
-	      );
+my $df = new DelimitedFile(
+	"-file" => $excluded_fusion_file,
+	"-headers" => 1,
+);
 
-	while (my $row = $df->get_hash()) {
-	      my @gene_a = split(",", $row->{geneA});
-	      my @gene_b = split(",", $row->{geneB});
-	      my ($chrA, $posA, $chrB, $posB) = ($row->{chrA}, $row->{posA}, $row->{chrB}, $row->{posB});
-	      foreach my $g1 (@gene_a){
-			$g1 = join(":", $chrA, $posA) if($g1 eq 'NA');
-		foreach my $g2 (@gene_b){
-			$g2 = join(":", $chrB, $posB) if($g2 eq 'NA');
-			my $gene_pair = ($g1 le $g2) ? join(":",$g1,$g2) : join(":",$g2,$g1);
-			$bad_fusions{$gene_pair} = [$chrA, $posA, $chrB, $posB];
-			}
-		}
-	}
+while (my $row = $df->get_hash()) {
+	my ($chrA, $posA, $chrB, $posB) = ($row->{chrA}, $row->{posA}, $row->{chrB}, $row->{posB});
+	$bad_fusions{$chrA.":".$posA.":".$chrB.":".$posB} = 1;	      
 }
 
 sub is_bad_fusion{
-
 	my ($chrA, $posA, $chrB, $posB) = @_;
 	$chrA = "chr".$chrA unless($chrA =~ /chr/);
 	$chrB = "chr".$chrB unless($chrB =~ /chr/);
-	foreach my $xx (values %bad_fusions) {
-		return 1 if($chrA eq @{$xx}[0] && $chrB eq @{$xx}[2] &&
-			    abs(@{$xx}[1] - $posA) < 10000 && abs(@{$xx}[3] - $posB) < 10000);
-		return 1 if($chrA eq @{$xx}[2] && $chrB eq @{$xx}[0] &&
-			    abs(@{$xx}[3] - $posA) < 10000 && abs(@{$xx}[1] - $posB) < 10000);
+	foreach my $xx (keys %bad_fusions) {
+		my ($chr1, $pos1, $chr2, $pos2) = split(":",$xx);
+		#print STDERR " badfusionlist |".$chr1.":".$pos1.":".$chr2.":".$pos2."\n";
+		return 1 if($chrA eq $chr1 && $chrB eq $chr2 &&
+			    abs($pos1 - $posA) < BADFUSION_DISTANCE_CUTOFF && abs($pos2 - $posB) < BADFUSION_DISTANCE_CUTOFF);# cutoff is based on the cutoff of merging GTEx false positive fusions from CICERO running
+		return 1 if($chrA eq $chr2 && $chrB eq $chr1 &&
+			    abs($pos2 - $posA) < BADFUSION_DISTANCE_CUTOFF && abs($pos1 - $posB) < BADFUSION_DISTANCE_CUTOFF);
 	}
 	return 0;
 }
@@ -358,16 +350,13 @@ while(my $line = <$UNF>){
 	my $bad_gene = 0;
 
 	# to remove genes with multiple potential partners.
-	my $bad_fusion = 0;
 	foreach my $g1 (@genes1) {
 		$bad_gene = 1 if(exists($excluded{$g1}));
 		foreach my $g2 (@genes2){
 			$bad_gene = 1 if(exists($excluded{$g2}));
 			next if ($g1 eq $g2);
 			my $gene_pair = ($g1 le $g2) ? join(":",$g1,$g2) : join(":",$g2,$g1);
-			$bad_fusion = 1 if(exists($bad_fusions{$gene_pair}));
-			last if($bad_fusion);
-			next if(exists($genepairs{$gene_pair}));
+			next if(exists($genepairs{$gene_pair})); 
 			$genepairs{$gene_pair} = 1;
 			if(exists($gene_recurrance{$g1})){$gene_recurrance{$g1}++;}
 			else{$gene_recurrance{$g1} = 1;}
@@ -375,7 +364,7 @@ while(my $line = <$UNF>){
 			else{$gene_recurrance{$g2} = 1;}
 		}
 	}
-	next if($bad_fusion || $bad_gene);
+	next if($bad_gene);
 
 	my $bad_evidence = 0;
 	my $first_bp = {
@@ -443,7 +432,7 @@ while(my $line = <$UNF>){
 	# If we're not processing combined results (-all) and this is an Internal event
 	if(!$all_output && $type =~ m/Internal/){
 		if(%gold_genes){
-			 next unless ($type eq 'Internal_dup' && exists($gold_genes{$first_bp->{gene}}));
+			 next unless ($type eq 'Internal_dup' && exist_multiplename_checking(\%gold_genes, $first_bp->{gene}));
 		}
 		else{
 			next unless ($type eq 'Internal_dup' && is_good_ITD($first_bp, $second_bp));
@@ -451,6 +440,8 @@ while(my $line = <$UNF>){
 		unless(is_good_ITD($first_bp, $second_bp)){
 			next if(!$DNA && ($first_bp->{reads_num} < 5*$cutoff || $first_bp->{reads_num} < 10));
 		}
+
+		next if($type eq 'Internal_dup' && is_bad_fusion($first_bp->{tname}, $first_bp->{tpos}, $second_bp->{tname}, $second_bp->{tpos}));
 	}
 
 	my $tmp_SV = {
@@ -501,7 +492,6 @@ if($junction_file){
 
 	my $cutoff = -1;
 	my ($gene1,$gene2)= ("NA", "NA");
-	my $bad_fusion = 0;
 
 	foreach("+", "-"){
 		my $gm_tree = $gm->sub_model($chr1, $_);
@@ -529,11 +519,7 @@ if($junction_file){
 			}
 		}
 		$cutoff = ($cutoffA + $cutoffB)/2  if($cutoffA + $cutoffB > 2*$cutoff);
-		my $gene_pair = ($gene1 le $gene2) ? join(":",$gene1,$gene2) : join(":",$gene2,$gene1);
-		$bad_fusion = 1 if(exists($bad_fusions{$gene_pair}));
-		last if($bad_fusion);
 	}
-	next if($bad_fusion);
 	next if($qc_perfect_reads < $cutoff);
 
 	# Ensure that the breakpoint chromosome names match
@@ -697,7 +683,7 @@ foreach my $sv (@raw_SVs){
 		my ($first_bp, $second_bp, $type) = ($annotated_SV->{first_bp}, $annotated_SV->{second_bp}, $annotated_SV->{type});
 		if(!$all_output && $type =~ m/Internal/){
 			if($type eq 'Internal_dup'){
-				next unless (is_good_ITD($first_bp, $second_bp) || exists($gold_genes{$first_bp->{gene}}));
+				next unless (is_good_ITD($first_bp, $second_bp) || exist_multiplename_checking(\%gold_genes, $first_bp->{gene}));
 			}
 			elsif(!$DNA){
 				next if($type eq 'Internal_splicing');
@@ -714,9 +700,9 @@ my @uniq_SVs;
 foreach my $sv (@annotated_SVs){
 	print STDERR "xxx\n" if(abs($sv->{second_bp}->{tpos} - 170818803)<10 || abs($sv->{first_bp}->{tpos} - 170818803)<10);
 	my ($bp1, $bp2, $qseq) = ($sv->{first_bp}, $sv->{second_bp}, $sv->{junc_seq});
-	if(exists($excluded{$bp1->{gene}}) || exists($excluded{$bp2->{gene}})){
+	if(exist_multiplename_checking(\%excluded, $bp1->{gene}) || exist_multiplename_checking(\%excluded, $bp2->{gene})){
 		# If the highly recurrent fusion doesn't involve known partners, remove it.
-		if ( !(exists($known_fusion_partners{$bp1->{gene}}{$bp2->{gene}}) || exists($known_fusion_partners{$bp2->{gene}}{$bp1->{gene}}))){
+		if(!(exist_multiplename_pair_checking(\%known_fusion_partners, $bp1->{gene}, $bp2->{gene}))){
 			print STDERR "Removing duplicate: gene1: ".$bp1->{gene}." gene2: ".$bp2->{gene}."\n";
 			next;
 		}
@@ -819,14 +805,34 @@ foreach my $sv (@uniq_SVs){
 close(hFo);
 rmtree(["$annotation_dir"]);
 
+sub exist_multiplename_pair_checking {
+	my %fusionpartner_list = %{(shift)};
+	my $targetgene1 = shift;#e.g. targetgene UBTF,MIR6782
+	my $targetgene2 = shift;#e.g. targetgene UBTF,MIR6782
+	my @genes1 = split(/,|\|/, $targetgene1);
+	my @genes2 = split(/,|\|/, $targetgene2);
+
+	foreach my $g1 (@genes1) {
+		foreach my $g2 (@genes2){
+			return 1 if(exists($known_fusion_partners{$g1}{$g2}));
+		}
+	}
+
+	return 0;
+}
+
 sub is_good_ITD {
 	my($bp1, $bp2) = @_;
-	my $gene = $bp1->{gene};
-	return 1 if(%known_ITDs && exists($known_ITDs{$gene}) &&
-	   	 $bp1->{tpos} > $known_ITDs{$gene}[0] &&
-	   	 $bp1->{tpos} < $known_ITDs{$gene}[1] &&
-	   	 $bp2->{tpos} > $known_ITDs{$gene}[0] &&
-	   	 $bp2->{tpos} < $known_ITDs{$gene}[1]);
+	my @genes = split(/,|\|/, $bp1->{gene});
+
+	foreach my $g1 (@genes) {
+		return 1 if(%known_ITDs && exists($known_ITDs{$g1}) &&
+                	$bp1->{tpos} > $known_ITDs{$g1}[0] &&
+                	$bp1->{tpos} < $known_ITDs{$g1}[1] &&
+                	$bp2->{tpos} > $known_ITDs{$g1}[0] &&
+                	$bp2->{tpos} < $known_ITDs{$g1}[1]);
+	}
+
 	return 0;
 }
 

@@ -21,7 +21,7 @@ use List::MoreUtils qw/ uniq /;
 use lib dirname($0);
 my $script_dir = dirname($0);
 #custom packages
-use CiceroUtil qw(parse_range is_PCR_dup);
+use CiceroUtil qw(parse_range is_PCR_dup exist_multiplename_checking);
 use TdtConfig; 
 
 use constant FQ_BASE_NUMBER => 33;
@@ -135,7 +135,7 @@ foreach my $chr (@chroms){
 					my $a = shift;
 					return if( ($a->flag & 0x0400) || ($a->flag & 0x0004) ); #PCR duplicate or unmapped
 					$cnt++;
-				}) unless(exists($excluded{$g->name}));
+				}) unless(exist_multiplename_checking(\%excluded, $g->name));
 
 			my $sc_cutoff = ($read_len-20)*$cnt/(100*$mRNA_length);
 			my $tmp_gene = {
@@ -174,7 +174,6 @@ sub is_bad_chrom{
 	}
 	return 0;
 }
-
 
 =head1 LICENCE AND COPYRIGHT
 Copyright 2019 St. Jude Children's Research Hospital 

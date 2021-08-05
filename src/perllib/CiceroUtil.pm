@@ -15,7 +15,8 @@ require Exporter;
 our @ISA = ('Exporter');
 our @EXPORT = qw(print_out is_new_pair prepare_reads_file parse_range
 	is_PCR_dup read_fa_file read_config_file
-	get_sclip_reads get_discordant_reads get_junction_reads rev_comp get_mate_reads normalizeChromosomeName);
+	get_sclip_reads get_discordant_reads get_junction_reads rev_comp get_mate_reads
+	normalizeChromosomeName exist_multiplename_checking exists_partners_checking);
 
 sub rev_comp {
     my $str = shift;
@@ -821,6 +822,35 @@ sub normalizeChromosomeName {
 		$query =~ s/^chr//;
 	}
 	return $query; 
+}
+
+sub exist_multiplename_checking {
+	my %genelist = %{(shift)};
+    	my $targetgene = shift;#e.g. targetgene UBTF,MIR6782
+	my @genes = split(/,|\|/, $targetgene);
+
+	foreach my $g1 (@genes) {
+                return 1 if(exists($genelist{$g1}));
+	}
+
+	return 0;
+}
+
+sub exists_partners_checking {
+	my %genelist = %{(shift)};
+	my $targetgene1 = shift;#e.g. targetgene UBTF,MIR6782
+	my $targetgene2 = shift;#e.g. targetgene UBTF,MIR6782
+	my @genes1 = split(/,|\|/, $targetgene1);
+	my @genes2 = split(/,|\|/, $targetgene2);
+
+	foreach my $g1 (@genes1) {
+		foreach my $g2 (@genes2){
+			return 1 if(exists($genelist{$g1.":".$g2}));
+			return 1 if(exists($genelist{$g2.":".$g1}));
+		}
+	}
+
+	return 0;
 }
 
 1;
