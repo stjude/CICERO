@@ -9,21 +9,21 @@ use English;
 use Pod::Usage;
 use Data::Dumper;
 use File::Basename;
-use TdtConfig; 
+use TdtConfig;
 use CiceroUtil qw(normalizeChromosomeName);
 
 if (@ARGV == 0){
-	pod2usage(1); 
-	exit 1; 
+	pod2usage(1);
+	exit 1;
 }
 
 my $sample;
-my $queue = $ENV{"AFC_DEFAULT_QUEUE"}; 
+my $queue = $ENV{"AFC_DEFAULT_QUEUE"};
 
 my ( $help, $man, $version, $usage );
 my $prefix = '';
 my $bam_file;
-my $genome; 
+my $genome;
 my $read_length = 100;
 my $sc_shift = 3;
 my $output_dir;
@@ -48,15 +48,14 @@ if( !$bam_file) {
 	croak "you must provide sample names or input bam files to run the program\n";
 }
 
-my ($genome_file, $gene_model_file, $excluded_chr, $chr_lengths);
+my ($genome_file, $excluded_chr, $chr_lengths);
 
-my $conf = &TdtConfig::findConfig("genome", $genome); 
+my $conf = &TdtConfig::findConfig("genome", $genome);
 if ($conf){
-	$conf = &TdtConfig::readConfig("genome", $genome); 	
-	$gene_model_file = $conf->{'REFSEQ_REFFLAT'};
-	$genome_file = $conf->{'FASTA'}; 
+	$conf = &TdtConfig::readConfig("genome", $genome);
+	$genome_file = $conf->{'FASTA'};
 	$excluded_chr = $conf->{'EXCLD_CHR'};
-	$excludes_file = $conf->{'EXCLUDED_REGIONS'}; 	
+	$excludes_file = $conf->{'EXCLUDED_REGIONS'};
 }
 else{
 	croak "Unknown genome name: $genome\n";
@@ -66,8 +65,8 @@ my $sam_d = Bio::DB::Sam->new( -bam => $bam_file, -fasta => $genome_file);
 my @seq_ids = $sam_d->seq_ids;
 
 
-my @chrs = split(/,/, $excluded_chr); 
-my %regions; 
+my @chrs = split(/,/, $excluded_chr);
+my %regions;
 if($excludes_file){
 	readRegions($excludes_file);
 }
@@ -76,13 +75,13 @@ if($excludes_file){
 open my $chrFile, "<", $conf->{'CHR_LENGTHS'};
 while (my $chr = <$chrFile>){
 	($chr, my $len) = split(/\s/, $chr);
-	$chr = normalizeChromosomeName($seq_ids[0], $chr); 
-	
-	my $skip = 0; 
+	$chr = normalizeChromosomeName($seq_ids[0], $chr);
+
+	my $skip = 0;
 	foreach my $bad (@chrs){
-		$skip = 1 if ($chr =~ /.*$bad.*/i); 
+		$skip = 1 if ($chr =~ /.*$bad.*/i);
 	}
-	next if ($skip);  
+	next if ($skip);
 	if($excludes_file && ! $disable_excludes){
 		my $s = 0; # Intialize to start of the chromosome to search for regions.
 		foreach my $start (sort {$a <=> $b} keys %{$regions{$chr}}){
@@ -91,14 +90,14 @@ while (my $chr = <$chrFile>){
 			if ($start == $end){
 				$s = $end;
 				next;
-			} 
-			# If the region start is equal to current start position, 
-			# we need to skip to the end of this region. 
+			}
+			# If the region start is equal to current start position,
+			# we need to skip to the end of this region.
 			if ($s == $start){
 				$s = $end + 1;
 			}
-			else{ 
-				# If the start of the region is not the current start,  
+			else{
+				# If the start of the region is not the current start,
 				# we need to create a region from the current start to the
 				# beginning of this region.
 				my $region_end = $start - 1;
@@ -107,15 +106,15 @@ while (my $chr = <$chrFile>){
 					print $cmd."\n";
 				}
 				# The new current start is the start of this region.
-				$s = $end + 1; 
+				$s = $end + 1;
 			}
 		}
 		# If our last excluded region didn't extend to the end
-		# of the chromosome, add a region. 
+		# of the chromosome, add a region.
 		if ($s < $len){
  			my $cmd = "extract_range.pl --ref_genome $genome_file -i $bam_file -o $output_dir -r $chr:$s-$len -l $read_length -m 2 -min_sc_len 3 -c $sc_shift";
 			print $cmd."\n";
-		} 
+		}
 	}
 	else{
 		my $cmd = "extract_range.pl --ref_genome $genome_file -i $bam_file -o $output_dir -r $chr -l $read_length -m 2 -min_sc_len 3 -c $sc_shift";
@@ -125,17 +124,17 @@ while (my $chr = <$chrFile>){
 
 sub readRegions{
 	my ($file) = @_;
-	open(my $fh, "<", $file); 
+	open(my $fh, "<", $file);
 	while(my $line = <$fh>){
-		chomp $line; 
+		chomp $line;
 		my ($chrom, $start, $end, $type) = split("\t", $line);
 		$chrom = normalizeChromosomeName($seq_ids[0], $chrom);
-		$regions{$chrom}{$start} = $end; 
+		$regions{$chrom}{$start} = $end;
 	}
 }
 
 =head1 LICENCE AND COPYRIGHT
-Copyright 2019 St. Jude Children's Research Hospital 
+Copyright 2019 St. Jude Children's Research Hospital
 
 Licensed under a modified version of the Apache License, Version 2.0
 (the "License") for academic research use only; you may not use this
