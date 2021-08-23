@@ -135,6 +135,7 @@
             }
         }
     ],
+    "doc": "To discover driver fusions beyond canonical exon-to-exon chimeric transcripts, we developed CICERO, a local assembly-based algorithm that integrates RNA-seq read support with extensive annotation for candidate ranking. CICERO outperforms commonly used methods, achieving a 95% detection rate for 184 independently validated driver fusions including internal tandem duplications and other non-canonical events in 170 pediatric cancer transcriptomes.",
     "label": "cicero",
     "arguments": [
         {
