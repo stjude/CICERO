@@ -31,7 +31,7 @@ my $optionOK = GetOptions(
 my $min_match_len = $read_len*0.5;
 my $min_coverage = $read_len*0.5;
 
-die "Input file not specified" unless defined($annotated_file) && $annotated_file != '';
+die "Input file not specified" unless defined($annotated_file) && $annotated_file ne '';
 die "Input file not found" unless -f $annotated_file;
 
 my $out_dir = dirname($annotated_file);
