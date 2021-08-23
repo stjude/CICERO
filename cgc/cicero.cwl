@@ -1,6 +1,9 @@
 {
     "class": "CommandLineTool",
     "cwlVersion": "v1.2",
+    "$namespaces": {
+        "sbg": "https://sevenbridges.com"
+    },
     "baseCommand": [],
     "inputs": [
         {
@@ -171,6 +174,20 @@
         {
             "class": "DockerRequirement",
             "dockerPull": "ghcr.io/stjude/cicero:latest"
+        }
+    ],
+    "sbg:categories": [
+        "RNA",
+        "Variant Calling"
+    ],
+    "sbg:links": [
+        {
+            "id": "https://github.com/stjude/CICERO",
+            "label": "Source Code"
+        },
+        {
+            "id": "https://doi.org/10.1186/s13059-020-02043-x",
+            "label": "Publication"
         }
     ]
 }
