@@ -106,7 +106,8 @@
                 "prefix": "-g",
                 "shellQuote": false,
                 "position": 3
-            }
+            },
+            "doc": "Reference to which the input BAM is aligned. Must specify the matching reference data."
         },
         {
             "loadListing": "deep_listing",
@@ -116,7 +117,8 @@
                 "prefix": "-r",
                 "shellQuote": false,
                 "position": 4
-            }
+            },
+            "doc": "Directory of reference files. Download and extract the reference archives available from https://doi.org/10.5281/zenodo.3817656 (GRCh37-lite) or https://doi.org/10.5281/zenodo.3894739 (GRCh38_no_alt)."
         },
         {
             "id": "disable_excluded",
