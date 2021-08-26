@@ -175,7 +175,7 @@
     "hints": [
         {
             "class": "DockerRequirement",
-            "dockerPull": "ghcr.io/stjude/cicero:latest"
+            "dockerPull": "cgc-images.sbgenomics.com/stjude/cicero:latest"
         }
     ],
     "sbg:categories": [
