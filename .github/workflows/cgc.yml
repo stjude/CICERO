@@ -8,6 +8,15 @@ jobs:
     name: "Deploy"
     steps:
       - uses: actions/checkout@v2
+      - name: Set the docker tag from Repo Tag
+        id: set_dockertag
+        env:
+          IMAGE: cgc-images.sbgenomics.com/stjude/cicero
+          VERSION_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          jq --arg image "${{ env.IMAGE }}:${{ env.VERSION_TAG }}" '(.requirements | .[] | select(.class == ("DockerRequirement")) | .dockerPull) |= $image' cgc/cicero.cwl > cgc/cicero.cwl.new
+          mv cgc/cicero.cwl.new cgc/cicero.cwl
+          cat cgc/cicero.cwl
       - id: cgcdeploy
         uses: jordan-rash/cgc-go@v0.1.4
         with:
