@@ -140,7 +140,7 @@
             }
         }
     ],
-    "doc": "# Description\n\nTo discover driver fusions beyond canonical exon-to-exon chimeric transcripts, we developed CICERO, a local assembly-based algorithm that integrates RNA-seq read support with extensive annotation for candidate ranking. CICERO outperforms commonly used methods, achieving a 95% detection rate for 184 independently validated driver fusions including internal tandem duplications and other non-canonical events in 170 pediatric cancer transcriptomes.\n\nThe first step is to search the BAM file for soft clipped reads. The soft clipped reads are then filtered, assembled, and annotated to find candidate structural variations. The candidate structural variations are then filtered to produce a final call set of structural variants.\n\n\n## Inputs:\n* **Tumor RNA-Seq BAM** - Indexed tumor sample BAM\n* **Reference directory** - Directory of reference files for the genome of interest. These can be acquired from: https://doi.org/10.5281/zenodo.3817656 (GRCh37-lite) or https://doi.org/10.5281/zenodo.3894739 (GRCh38_no_alt).\n* **Junction file** - Junction annotations from RNApeg\n* **Genome** - Human genome to use: [GRCh37-lite, GRCh38_no_alt]\n\n\n## Outputs:\n* **Final Fusions** - CICERO called fusion events",
+    "doc": "To discover driver fusions beyond canonical exon-to-exon chimeric transcripts, we developed CICERO, a local assembly-based algorithm that integrates RNA-seq read support with extensive annotation for candidate ranking. CICERO outperforms commonly used methods, achieving a 95% detection rate for 184 independently validated driver fusions including internal tandem duplications and other non-canonical events in 170 pediatric cancer transcriptomes.\n\nThe first step is to search the BAM file for soft clipped reads. The soft clipped reads are then filtered, assembled, and annotated to find candidate structural variations. The candidate structural variations are then filtered to produce a final call set of structural variants.\n\n\n## Inputs:\n* **Tumor RNA-Seq BAM** - Indexed tumor sample BAM\n* **Reference directory** - Directory of reference files for the genome of interest. These can be acquired from: https://doi.org/10.5281/zenodo.3817656 (GRCh37-lite) or https://doi.org/10.5281/zenodo.3894739 (GRCh38_no_alt).\n* **Junction file** - Junction annotations from RNApeg\n* **Genome** - Human genome to use: [GRCh37-lite, GRCh38_no_alt]\n\n\n## Outputs:\n* **Final Fusions** - CICERO called fusion events",
     "label": "cicero",
     "arguments": [
         {
@@ -191,5 +191,7 @@
             "id": "https://doi.org/10.1186/s13059-020-02043-x",
             "label": "Publication"
         }
-    ]
+    ],
+    "sbg:wrapperLicense": "Modified Apache 2.0 License",
+    "sbg:license": "Modified Apache 2.0 License"
 }
