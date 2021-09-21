@@ -133,14 +133,14 @@
     ],
     "outputs": [
         {
-            "id": "#output_file",
+            "id": "cicero_output_file",
             "type": "File?",
             "outputBinding": {
                 "glob": "$(inputs.bam_file.nameroot)/CICERO_DATADIR/$(inputs.bam_file.nameroot)/$(inputs.bam_file.nameroot).final_fusions.txt"
             }
         },
         {
-            "id": "data",
+            "id": "cicero_run_dir",
             "type": "File?",
             "outputBinding": {
                 "glob": "cicero_output.tar.gz"
