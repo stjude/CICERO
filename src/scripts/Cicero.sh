@@ -158,6 +158,7 @@ CICERO_ROOT=`readlink -f $(dirname ${BASH_SOURCE[0]})/../../`
 export SJ_CONFIGS=configs.${HOSTNAME}.$$.tmp
 echo "$CICERO_ROOT/configs"
 echo "$SJ_CONFIGS"
+echo "$OUTDIR"
 cp -rf $CICERO_ROOT/configs $SJ_CONFIGS
 echo "SJ_CONFIGS=$SJ_CONFIGS"
 
@@ -379,6 +380,14 @@ if [[ $BLAT_SERVER_PID ]]; then
     echo "Killing blat server with pid $BLAT_SERVER_PID" 2>&1
     kill $BLAT_SERVER_PID
 fi
+
+############################
+### Zip work directory   ###
+############################
+echo "Zipping working directory"
+echo "tar -zcvf cicero_output.tar.gz $OUTDIR/"
+cd ..
+tar -zcvf cicero_output.tar.gz $OUTDIR/
 
 #############################
 ### Blow away tmp configs ###

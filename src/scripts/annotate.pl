@@ -148,7 +148,7 @@ my @excluded_chroms = split(/,/,$excluded_chroms);
 # breakpoints are located within a "complex" region
 my @complex_regions;
 #if ($complex_region_file && -s $complex_region_file){
-	open (my $CRF, $complex_region_file);
+	open (my $CRF, $complex_region_file) or die "Cannot open $complex_region_file: $!";
 	while(<$CRF>){
 		chomp;
 		next if(/Start/);
@@ -240,7 +240,7 @@ my $validator = CiceroSCValidator->new();
 $validator->remove_validator('strand_validator') if(!$paired);
 
 my %excluded = ();
-open(my $EXC, "$excluded_gene_file");
+open(my $EXC, "$excluded_gene_file") or die "Cannot open $excluded_gene_file: $!";
 while(<$EXC>){
 	my $line = $_;
 	chomp($line);
@@ -286,7 +286,7 @@ sub is_bad_fusion{
 }
 
 my %known_ITDs = ();
-open(my $ITD_F, $known_itd_file);
+open(my $ITD_F, $known_itd_file) or die "Cannot open $known_itd_file: $!";
 while(<$ITD_F>){
 	chomp;
 	my ($gene, $chr, $start, $end) = split(/\t/,$_);
@@ -317,7 +317,7 @@ my %gene_recurrance = ();
 my %contig_recurrance = ();
 my %genepairs = ();
 my %breakpoint_sites = ();
-open(my $UNF, "$unfiltered_file");
+open(my $UNF, "$unfiltered_file") or die "Cannot open $unfiltered_file: $!";
 print STDERR "Reading unfiltered file\n";
 while(my $line = <$UNF>){
 	chomp($line);
