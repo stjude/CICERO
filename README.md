@@ -132,16 +132,12 @@ To visualize CICERO fusion output you can load the final fusion output file at h
 
 ## Running with Docker <a name="docker"></a>
 
-CICERO can be run with Docker. To begin, build the Docker image using the Dockerfile in this repository.
+CICERO can be run with Docker. Pre-built Docker images are provided for each release in GitHub Packages.
+
+Invoke the CICERO wrapper using the Docker image available in GitHub Packages. You will likely need to add an additional bind mount for the output and input (BAM + junctions) files. Note the following command pulls the `latest` tag for the Docker image. For reproducible results, it is advisable to specify the exact version to run.
 
 ```bash
-docker build -t stjude/cicero:1.4.0 .
-```
-
-Then invoke the CICERO wrapper using Docker.
-
-```bash
-docker run -v <path to reference directory>:/reference stjude/cicero:1.4.0 Cicero.sh [-n cores] -b <bam file path> -g <genome> -r /reference -o <output directory> [-j junctions file] [-p] [-s int] [-t int] [-c int]
+docker run -v <path to reference directory>:/reference ghcr.io/stjude/cicero:latest Cicero.sh [-n cores] -b <bam file path> -g <genome> -r /reference -o <output directory> [-j junctions file] [-p] [-s int] [-t int] [-c int]
 ```
 
 See [Running CICERO](#running) for details of the parameters.
@@ -207,7 +203,7 @@ Output is also written in UCSC .bed format, which can be used to visualize the j
 ### Running RNApeg via Docker
 
 ```bash
-docker run -v <outdir>:/results mnedmonson/public:rnapeg RNApeg.sh -b bamfile -f fasta -r refflat
+docker run -v <outdir>:/results ghcr.io/stjude/rnapeg:latest RNApeg.sh -b bamfile -f fasta -r refflat
 ```
 
 - `fasta` reference genome; i.e. "Homo_sapiens/GRCh38_no_alt/FASTA/GRCh38_no_alt.fa" or "Homo_sapiens/GRCh37-lite/FASTA/GRCh37-lite.fa" from [Reference Files](#reference).
@@ -216,7 +212,7 @@ docker run -v <outdir>:/results mnedmonson/public:rnapeg RNApeg.sh -b bamfile -f
 ### Running RNApeg via Singularity:
 
 ```bash
-singularity run --containall --bind <outdir>:/results docker://mnedmonson/public:rnapeg RNApeg.sh -b bamfile -f fasta -r refflat
+singularity run --containall --bind <outdir>:/results docker://ghcr.io/stjude/rnapeg:latest RNApeg.sh -b bamfile -f fasta -r refflat
 ```
 
 You will also need to add `--bind` arguments to mount the file paths for `bamfile`, `fasta`, and `refflat` into the container. 
