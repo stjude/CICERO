@@ -245,11 +245,9 @@
 </li>
 </ul>
 <h2 id="running-with-docker">Running with Docker <a name="docker"></a></h2>
-<p>CICERO can be run with Docker. To begin, build the Docker image using the Dockerfile in this repository.</p>
-<pre><code class="language-bash">docker build -t stjude/cicero:1.4.0 .
-</code></pre>
-<p>Then invoke the CICERO wrapper using Docker.</p>
-<pre><code class="language-bash">docker run -v &lt;path to reference directory&gt;:/reference stjude/cicero:1.4.0 Cicero.sh [-n cores] -b &lt;bam file path&gt; -g &lt;genome&gt; -r /reference -o &lt;output directory&gt; [-j junctions file] [-p] [-s int] [-t int] [-c int]
+<p>CICERO can be run with Docker. Pre-built Docker images are provided for each release in GitHub Packages.</p>
+<p>Invoke the CICERO wrapper using the Docker image available in GitHub Packages. You will likely need to add an additional bind mount for the output and input (BAM + junctions) files. Note the following command pulls the <code>latest</code> tag for the Docker image. For reproducible results, it is advisable to specify the exact version to run.</p>
+<pre><code class="language-bash">docker run -v &lt;path to reference directory&gt;:/reference ghcr.io/stjude/cicero:latest Cicero.sh [-n cores] -b &lt;bam file path&gt; -g &lt;genome&gt; -r /reference -o &lt;output directory&gt; [-j junctions file] [-p] [-s int] [-t int] [-c int]
 </code></pre>
 <p>See <a href="#running">Running CICERO</a> for details of the parameters.</p>
 <h2 id="running-with-st-jude-cloud">Running with St. Jude Cloud <a name="cloud"></a></h2>
@@ -286,14 +284,14 @@ for running and interpreting results is available in the <a href="https://univer
 <p>The primary output files are tab-delimited text.</p>
 <p>Output is also written in UCSC .bed format, which can be used to visualize the junctions and supporting read counts within the UCSC genome browser.</p>
 <h3 id="running-rnapeg-via-docker_1">Running RNApeg via Docker</h3>
-<pre><code class="language-bash">docker run -v &lt;outdir&gt;:/results mnedmonson/public:rnapeg RNApeg.sh -b bamfile -f fasta -r refflat
+<pre><code class="language-bash">docker run -v &lt;outdir&gt;:/results ghcr.io/stjude/rnapeg:latest RNApeg.sh -b bamfile -f fasta -r refflat
 </code></pre>
 <ul>
 <li><code>fasta</code> reference genome; i.e. "Homo_sapiens/GRCh38_no_alt/FASTA/GRCh38_no_alt.fa" or "Homo_sapiens/GRCh37-lite/FASTA/GRCh37-lite.fa" from <a href="#reference">Reference Files</a>.</li>
 <li><code>refflat</code> i.e. "Homo_sapiens/GRCh38_no_alt/mRNA/RefSeq/refFlat.txt" or "Homo_sapiens/GRCh37-lite/mRNA/Combined/all_refFlats.txt" from <a href="#reference">Reference Files</a>.</li>
 </ul>
 <h3 id="running-rnapeg-via-singularity">Running RNApeg via Singularity:</h3>
-<pre><code class="language-bash">singularity run --containall --bind &lt;outdir&gt;:/results docker://mnedmonson/public:rnapeg RNApeg.sh -b bamfile -f fasta -r refflat
+<pre><code class="language-bash">singularity run --containall --bind &lt;outdir&gt;:/results docker://ghcr.io/stjude/rnapeg:latest RNApeg.sh -b bamfile -f fasta -r refflat
 </code></pre>
 <p>You will also need to add <code>--bind</code> arguments to mount the file paths for <code>bamfile</code>, <code>fasta</code>, and <code>refflat</code> into the container. </p>
 <h2 id="downloading-reference-files">Downloading reference files <a name="reference"></a></h2>
@@ -402,5 +400,5 @@ limitations under the License.</p></div>
 
 <!--
 MkDocs version : 1.2.2
-Build Date UTC : 2021-09-17 19:10:14.659211+00:00
+Build Date UTC : 2021-10-05 13:23:23.786786+00:00
 -->
