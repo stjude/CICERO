@@ -34,6 +34,8 @@
    <br />
    <a href="https://stjude.github.io/CICERO/"><strong>Explore the docs »</strong></a>
    <br />
+   <a href="https://stjuderesearch.org/site/lab/zhang/cicero"><strong>Work with demo data »</strong></a>
+   <br />
    <a href="https://genomebiology.biomedcentral.com/articles/10.1186/s13059-020-02043-x"><strong>Read the paper »</strong></a>
    <br />
    <br />
