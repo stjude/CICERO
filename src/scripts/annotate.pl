@@ -148,7 +148,7 @@ my @excluded_chroms = split(/,/,$excluded_chroms);
 # breakpoints are located within a "complex" region
 my @complex_regions;
 #if ($complex_region_file && -s $complex_region_file){
-	open (my $CRF, $complex_region_file) or die "Cannot open $complex_region_file: $!";
+	open (my $CRF, $complex_region_file);
 	while(<$CRF>){
 		chomp;
 		next if(/Start/);
@@ -240,7 +240,7 @@ my $validator = CiceroSCValidator->new();
 $validator->remove_validator('strand_validator') if(!$paired);
 
 my %excluded = ();
-open(my $EXC, "$excluded_gene_file") or die "Cannot open $excluded_gene_file: $!";
+open(my $EXC, "$excluded_gene_file");
 while(<$EXC>){
 	my $line = $_;
 	chomp($line);
@@ -286,7 +286,7 @@ sub is_bad_fusion{
 }
 
 my %known_ITDs = ();
-open(my $ITD_F, $known_itd_file) or die "Cannot open $known_itd_file: $!";
+open(my $ITD_F, $known_itd_file);
 while(<$ITD_F>){
 	chomp;
 	my ($gene, $chr, $start, $end) = split(/\t/,$_);
@@ -317,7 +317,7 @@ my %gene_recurrance = ();
 my %contig_recurrance = ();
 my %genepairs = ();
 my %breakpoint_sites = ();
-open(my $UNF, "$unfiltered_file") or die "Cannot open $unfiltered_file: $!";
+open(my $UNF, "$unfiltered_file");
 print STDERR "Reading unfiltered file\n";
 while(my $line = <$UNF>){
 	chomp($line);
@@ -325,6 +325,7 @@ while(my $line = <$UNF>){
 	my ($gene1, $gene2) = ($fields[1], $fields[2]);
 	my $cutoff = $fields[4];
 	my $qseq = $fields[17];
+	print STDERR "SC_site: ",$fields[30],"\n";
 
 	if($gene1 eq "NA"){
 			my $crA = in_complex_region($fields[8], $fields[5]);
@@ -1333,11 +1334,11 @@ sub quantification {
 	print STDERR "start mapping ... $contig_file\n" if($debug && -s $contig_file);
 	print STDERR join("\t", $chr1, $pos1, $clip1, $read_len), "\n" if($debug);
 	my $ref_chr1 = normalizeChromosomeName($seq_ids[0], $chr1);
-	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr1, -scSite=>$pos1, -CLIP=>$clip1, -READ_LEN => $read_len) if(-s $contig_file);
+	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr1, -scSite=>$pos1, -CLIP=>$clip1, -READ_LEN => $read_len, "-blat-adjust-sc" => $gm) if(-s $contig_file);
 	print STDERR "number of mapping: ", scalar @mappings, "\n" if($debug);
 	my $ref_chr2 = normalizeChromosomeName($seq_ids[0], $chr2);
-	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr2, -scSite=>$pos2, -CLIP=>$clip2, -READ_LEN => $read_len) if(-s $contig_file);
-	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr2, -scSite=>$pos2, -CLIP=>$clip2, -READ_LEN => $read_len) if(($SV->{type} eq 'Internal_dup' || !@mappings) && -s $contig_file);
+	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr2, -scSite=>$pos2, -CLIP=>$clip2, -READ_LEN => $read_len, "-blat-adjust-sc" => $gm) if(-s $contig_file);
+	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr2, -scSite=>$pos2, -CLIP=>$clip2, -READ_LEN => $read_len, "-blat-adjust-sc" => $gm) if(($SV->{type} eq 'Internal_dup' || !@mappings) && -s $contig_file);
 
 	my @qSVs;
 	foreach my $sv (@mappings){
@@ -1368,10 +1369,10 @@ sub quantification {
 		print STDERR "bp1: ", join("\t", $bp1->{ort}, $bp1->{tname}, $bp1->{tpos}, $bp1->{qstrand}), "\n" if($debug);
 		print STDERR "bp2: ", join("\t", $bp2->{ort}, $bp2->{tname}, $bp2->{tpos}, $bp2->{qstrand}), "\n" if($debug);
 	
-		next unless(($chrA eq $bp1->{tname} && abs($bp1->{tpos} - $tposA)<50 &&
-			    $bp2->{tname} eq $chrB && abs($bp2->{tpos} - $tposB)<50) ||
-			    ($bp2->{tname} eq $chrA && abs($bp2->{tpos} - $tposA)<50 &&
-                            $bp1->{tname} eq $chrB && abs($bp1->{tpos} - $tposB)<50));
+		#next unless(($chrA eq $bp1->{tname} && abs($bp1->{tpos} - $tposA)<50 &&
+		#	    $bp2->{tname} eq $chrB && abs($bp2->{tpos} - $tposB)<50) ||
+		#	    ($bp2->{tname} eq $chrA && abs($bp2->{tpos} - $tposA)<50 &&
+                #            $bp1->{tname} eq $chrB && abs($bp1->{tpos} - $tposB)<50));
 		# to do alignment
 		my $tmp_ctg_file = "$anno_dir/reads.$chr1.$pos1.$chr2.$pos2.fa.tmp.contig";
 		open(my $CTG, ">$tmp_ctg_file");
@@ -1403,18 +1404,39 @@ sub quantification {
 		my $shift_bases = 5;
 		if($chrA eq $bp1->{tname} && abs($bp1->{tpos} - $tposA)<50 &&
 		   $bp2->{tname} eq $chrB && abs($bp2->{tpos} - $tposB)<50){
-				$tposA = $bp1->{tpos};
-				$tposB = $bp2->{tpos};
+				#$tposA = $bp1->{tpos};
+				#$tposB = $bp2->{tpos};
 				($readsA, $areaA) = get_junc_reads($psl_file1, $qposA, $ortA, $shift_bases) if(-f $psl_file1);
 				($readsB, $areaB) = get_junc_reads($psl_file2, $qposB, $ortB, $shift_bases) if(-f $psl_file2);
 		}
 		elsif($bp2->{tname} eq $chrA && abs($bp2->{tpos} - $tposA)<50 &&
                    $bp1->{tname} eq $chrB && abs($bp1->{tpos} - $tposB)<50){
-				$tposA = $bp2->{tpos};
-				$tposB = $bp1->{tpos};
+				#$tposA = $bp2->{tpos};
+				#$tposB = $bp1->{tpos};
 				($readsA, $areaA) = get_junc_reads($psl_file2, $qposA, $ortA, $shift_bases) if(-f $psl_file2);
 				($readsB, $areaB) = get_junc_reads($psl_file1, $qposB, $ortB, $shift_bases) if(-f $psl_file1);
 		}
+		#intron size usually <100kb
+		elsif($chrA eq $bp1->{tname} && abs($bp1->{tpos} - $tposA)<100000 &&
+                   $bp2->{tname} eq $chrB && abs($bp2->{tpos} - $tposB)<50){
+                                ($readsA, $areaA) = get_junc_reads($psl_file1, $qposA, $ortA, $shift_bases) if(-f $psl_file1);
+                                ($readsB, $areaB) = get_junc_reads($psl_file2, $qposB, $ortB, $shift_bases) if(-f $psl_file2);
+                }
+		elsif($chrA eq $bp1->{tname} && abs($bp1->{tpos} - $tposA)<50 &&
+                   $bp2->{tname} eq $chrB && abs($bp2->{tpos} - $tposB)<100000){
+                                ($readsA, $areaA) = get_junc_reads($psl_file1, $qposA, $ortA, $shift_bases) if(-f $psl_file1);
+                                ($readsB, $areaB) = get_junc_reads($psl_file2, $qposB, $ortB, $shift_bases) if(-f $psl_file2);
+                }
+                elsif($bp2->{tname} eq $chrA && abs($bp2->{tpos} - $tposA)<100000 &&
+                   $bp1->{tname} eq $chrB && abs($bp1->{tpos} - $tposB)<50){
+                                ($readsA, $areaA) = get_junc_reads($psl_file2, $qposA, $ortA, $shift_bases) if(-f $psl_file2);
+                                ($readsB, $areaB) = get_junc_reads($psl_file1, $qposB, $ortB, $shift_bases) if(-f $psl_file1);
+                }
+		elsif($bp2->{tname} eq $chrA && abs($bp2->{tpos} - $tposA)<50 &&
+                   $bp1->{tname} eq $chrB && abs($bp1->{tpos} - $tposB)<100000){
+                                ($readsA, $areaA) = get_junc_reads($psl_file2, $qposA, $ortA, $shift_bases) if(-f $psl_file2);
+                                ($readsB, $areaB) = get_junc_reads($psl_file1, $qposB, $ortB, $shift_bases) if(-f $psl_file1);
+                }
 
 	my $selected_bp1 = {
 		clip => $clipA,

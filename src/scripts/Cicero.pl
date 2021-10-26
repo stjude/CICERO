@@ -379,6 +379,18 @@ sub detect_SV{
 			print STDERR join("\t", $sample, $gene1, $gene2, $sc_cover, $sc_cutoff, $pos1, $pos2, $out_string), "\n" if($debug);
 			if($same_gene) {print $UIF join("\t", $sample, $gene1, $gene2, $sc_cover, $sc_cutoff, $pos1, $pos2, $out_string), "\n";}
  			else { print $UFF join("\t", $sample, $gene1, $gene2, $sc_cover, $sc_cutoff, $pos1, $pos2, $out_string), "\n"; }
+			
+			#when sc_site was updated (>50bp), put raw sc_site as a possible fusion in unfiltered file; which would be justified in annotate.pl step 
+			if(abs($sc_site-$pos1)>50 && ($ref_chr eq $g1_chr))
+			{
+				if($same_gene) {print $UIF join("\t", $sample, $gene1, $gene2, $sc_cover, $sc_cutoff, $sc_site, $pos2, $out_string), "\n";}
+                        	else { print $UFF join("\t", $sample, $gene1, $gene2, $sc_cover, $sc_cutoff, $sc_site, $pos2, $out_string), "\n"; }
+			}
+			if(abs($sc_site-$pos2)>50 && ($ref_chr eq $g2_chr))
+                        {
+                                if($same_gene) {print $UIF join("\t", $sample, $gene1, $gene2, $sc_cover, $sc_cutoff, $pos1, $sc_site, $out_string), "\n";}
+                                else { print $UFF join("\t", $sample, $gene1, $gene2, $sc_cover, $sc_cutoff, $pos1, $sc_site, $out_string), "\n"; }
+                        }
 		}
 		close($UFF);
 		close($UIF);
