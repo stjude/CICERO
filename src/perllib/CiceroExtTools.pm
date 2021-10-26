@@ -110,6 +110,12 @@ use Bio::SeqIO;
 use CiceroSCValidator qw(LEFT_CLIP RIGHT_CLIP);
 use base qw(CiceroExtToolsI);
 
+use Transcript;
+use Gene;
+use GeneModel;
+use Tree::Interval;
+use Tree::DAG_Node;
+
 sub new {
 	my ($class, @args) = @_;
 	my $self = $class->SUPER::new(@args);
@@ -182,6 +188,12 @@ sub run {
 	# mapped with BLAT 
 	my $contig_seqs = read_fa_file($contig_file);
 	# Check if the contig is fully mapped to somewhere other than the SC site
+
+	if (my $gm = $param{"-blat-adjust-sc"}) {
+	    # optionally adjust soft-clip site based on BLAT results
+	    $sc_site = Adjust_SCsite($sc_chr, $sc_site, $psl_file, $gm);
+	}
+
 	my ($bad_contigs,$SC_mapped_contigs, $best_matches) = $self->remove_artificial_contigs( -QUERY => $contig_file, -scChr => $sc_chr, -scSite=>$sc_site, -CLIP=>$clip, -READ_LEN => $read_len, -RESULT => \@results);
 	# Count the contigs in each bucket: total contigs, "bad" contigs, and contigs mapped to SC site.
 	my ($n_ctg, $n_bad_ctg, $n_SC_ctg) = (scalar (keys %{$contig_seqs}), scalar (keys %{$bad_contigs}), scalar (keys %{$SC_mapped_contigs}));
@@ -1635,6 +1647,130 @@ sub select_target {
 	}
 	return \%targets;
 }
+
+sub Adjust_SCsite {
+  my ($sc_chr_raw, $sc_site, $blat_results, $gm) = @_;
+
+  my $sc_chr = ucsc_chr($sc_chr_raw);
+  # BLAT results use UCSC-style "chr" prefix
+
+  my @usable_hits;
+
+  my $pos_adjusted = $sc_site;
+
+  my $parser = Bio::SearchIO->new("-file" => $blat_results, -format => "psl");
+  my $verbose = 0;
+
+  while (my $result = $parser->next_result()) {
+    # Bio::Search::Result::GenericResult
+    # one object per query sequence (contig)
+    my $query_name = $result->query_name;
+    printf STDERR "result for query: %s\n", $query_name if $verbose;
+
+    my $hsp_count = 0;
+
+    my %chrom2hsp;
+
+    while (my $hit = $result->next_hit) {
+      # one object per hit sequence (chromosome)
+      my $chrom = $hit->name();
+      printf STDERR "  hit to %s\n", $chrom if $verbose;
+      while (my $hsp = $hit->next_hsp) {
+	# may be multiple HSPs
+	$hsp_count++;
+	push @{$chrom2hsp{$chrom}}, $hsp;
+
+	printf STDERR "      score:%s strandQ:%s strandH:%s q:%d-%d subj:%d-%d num_identical:%d frac_identical_query:%s query_span:%d ref_span:%d total_span=%d\n",
+	  $hsp->score,
+	    $hsp->strand("query"),
+	    $hsp->strand("hit"),
+	      $hsp->range("query"),
+		$hsp->range("hit"),
+		  $hsp->num_identical(),
+		    $hsp->frac_identical("query"),
+		      $hsp->length("query"),
+			$hsp->length("hit"),
+			  $hsp->length("total") if $verbose;
+      }
+    }
+
+    push @usable_hits, \%chrom2hsp if $hsp_count == 2 and $chrom2hsp{$sc_chr};
+    # this code is intended only for simple fusions, represented by
+    # exactly 2 HSPs.  Also require a match to the chrom containing
+    # the target SC site.
+  }
+
+  if (@usable_hits == 1) {
+    # exactly one contig has usable matches
+    my $chrom2hsp = $usable_hits[0];
+
+    my %all_genes;
+    foreach my $chr (keys %{$chrom2hsp}) {
+      foreach my $hsp (@{$chrom2hsp->{$chr}}) {
+	my ($start, $end) = $hsp->range("hit");
+	my $genes = find_genes($gm, $chr, $start, $end);
+	$all_genes{$genes} = 1;
+#	printf STDERR "%s:%d-%d: %s\n", $chr, $start, $end, $genes;
+      }
+    }
+
+    if (scalar keys %all_genes > 1) {
+      # don't attempt correction in intragenic events, e.g. ITDs
+      my $hsps = $chrom2hsp->{$sc_chr} || die;
+
+      my @sites = map {$_->range("hit")} @{$hsps};
+      my %distance = map {$_, abs($_ - $sc_site)} @sites;
+
+      my @sorted = sort {$distance{$a} <=> $distance{$b}} keys %distance;
+
+      my $pos_alt = $sorted[0];
+
+      my $genes_raw = find_genes($gm, $sc_chr, $sc_site);
+      my $genes_alt = find_genes($gm, $sc_chr, $pos_alt);
+
+      if ($genes_raw and $genes_alt and $genes_raw eq $genes_alt) {
+	# both the given SC site and the proposed edge from blat
+	# are in the same gene model
+	$pos_adjusted = $pos_alt;
+
+	my $distance = abs($sc_site - $pos_adjusted);
+
+	printf STDERR "adjusted soft-clip site for %s.%d (%s) to %d (distance: %d)\n", $sc_chr, $sc_site, $genes_raw, $pos_adjusted, $distance;
+
+	# TO DO: debug message if site is not very close, include distance
+	# TO DO: max distance to alter site?
+      }
+    }
+  }
+
+  return $pos_adjusted;
+
+}
+
+sub ucsc_chr {
+  # STATIC
+  my ($chr) = @_;
+  $chr = "chr" . $chr unless $chr =~ /^chr/;
+  return $chr;
+}
+
+sub find_genes {
+  # STATIC
+  my ($gm, $chr, $start, $end) = @_;
+  $end = $start unless $end;
+  $chr = ucsc_chr($chr);
+  # refFlat file uses UCSC-style "chr" prefix
+  my @genes;
+  unless ($chr =~ /M/) {
+    foreach my $strand (qw(+ -)) {
+      my $tree = $gm->sub_model($chr, $strand);
+      push @genes, $tree->intersect([$start, $end]) if defined $tree;
+    }
+  }
+  my %genes = map {$_->val->name(), 1} @genes;
+  return join ",", sort keys %genes;
+}
+
 
 package Aligner;
 use strict;
