@@ -36,6 +36,7 @@ use constant REPORT_HEADERS => qw(
 				   gene
 				   protein
 				   transcript_variant
+				   accession_versioned
 				);
 
 my @GBFF;
@@ -55,6 +56,12 @@ GetOptions(\%FLAGS,
 
 	   "-debug-eu=s",
 	   "-preprocess-only",
+
+	   "-generate-fasta",
+	   "-cds-only",
+	   # FASTA option
+
+	   "-nm-only",
 	  );
 
 #push @GBFF, glob("*.gbff.*") if $FLAGS{"glob-gbff"};
@@ -63,20 +70,30 @@ push @GBFF, $FLAGS{"single-gbff"} if $FLAGS{"single-gbff"};
 # include suffix so outfile is excluded if present
 
 if (@GBFF) {
+  my $fasta_mode = $FLAGS{"generate-fasta"};
+
   my $of;
   if ($of = $FLAGS{out}) {
   } else {
+    my $suffix = $fasta_mode ? ".fa" : ".refgene2protein.tab";
     if (@GBFF == 1) {
-      $of = basename($GBFF[0]) . ".refgene2protein.tab";
+      $of = basename($GBFF[0]) . $suffix;
+    } elsif ($fasta_mode) {
+      $of = "refseq.fa";
     } else {
       $of = "refgene2protein.tab";
     }
   }
 
-  generate_refgene2protein(
-			   "-in" => \@GBFF,
-			   "-out" => $of,
-			  );
+  if ($FLAGS{"generate-fasta"}) {
+    generate_fasta("-in" => \@GBFF,
+		   "-out" => $of);
+  } else {
+    generate_refgene2protein(
+			     "-in" => \@GBFF,
+			     "-out" => $of,
+			    );
+  }
 } elsif (my $fn = $FLAGS{"fetch-old-genbank"}) {
   fetch_old_genbank($fn);
 } else {
@@ -117,6 +134,8 @@ sub generate_refgene2protein {
       my $nm_count = 0;
       my $chunk_size = 1000;
 
+      my $nm_only = $FLAGS{"nm-only"};
+
       foreach my $infile (@infiles) {
 	printf STDERR "preprocessing %s...\n", $infile;
 	my $fh = universal_open($infile);
@@ -124,7 +143,11 @@ sub generate_refgene2protein {
 	while (<$fh>) {
 	  if (/^LOCUS\s+(\w+)/) {
 #	    $usable = $1 =~ /^NM_/;
-	    $usable = $1 =~ /^N[MR]_/;
+	    if ($nm_only) {
+	      $usable = $1 =~ /^NM_/;
+	    } else {
+	      $usable = $1 =~ /^N[MR]_/;
+	    }
 	    # 12/2019: also include NR_ as these can have transcript
 	    # variant numbers, which may be used by VEP+ to assist
 	    # isoform filtering
@@ -333,11 +356,19 @@ sub parse_one_genbank {
   my $desc = $record->desc() || die "no desc for $accession";
 
   my $cds_count = 0;
-  my $transcript_variant = $desc =~ /transcript variant (\d+)/ ? $1 : 0;
+#  my $transcript_variant = $desc =~ /transcript variant (\d+)/ ? $1 : 0;
+#  my $transcript_variant = $desc =~ /transcript variant ([\w\-]+)/ ? $1 : 0;
+  my $transcript_variant = $desc =~ /transcript variant ([^,]+)/ ? $1 : "";
+  # - some genes e.g. KRAS use letters instead of numbers.
+  # - sometimes these can be names, e.g. EGFRvIII
+  # - may contain dashes, e.g. NM_001323302: transcript variant JNK1-a1
+  # - or quote characters: ... (PTCH1), transcript variant 1a', mRNA
 
   my %r;
   $r{accession} = $accession;
   $r{version} = $version;
+  $r{accession_versioned} = join ".", $accession, $version;
+
 #  $r{gi} = $record->primary_id;
   # fail: this is the GI of the refSeq record, not the protein gi
   $r{gi} = "";
@@ -383,6 +414,124 @@ sub parse_one_genbank {
 
   return \%r;
 }
+
+sub generate_fasta {
+  my %options = @_;
+  my @infiles;
+  my $in = $options{"-in"} || die "-in";
+  my $outfile = $options{"-out"} || die "-out";
+  my $cds_only = $FLAGS{"cds-only"};
+
+  if (-f $in) {
+    @infiles = $in;
+  } elsif (ref $in) {
+    @infiles = @{$in};
+  } else {
+    die;
+  }
+  die unless @infiles;
+
+  my $wf = new WorkingFile($outfile);
+  my $fh_out = $wf->output_filehandle();
+
+  my $records = 0;
+  my $ping = 1000;
+  my $wrote = 0;
+  foreach my $blob (@infiles) {
+    log_message("parsing $blob...");
+    my $fh = universal_open($blob);
+    my $stream = Bio::SeqIO->new("-fh" => $fh,
+				 -format => 'GenBank');
+    while (my $record = $stream->next_seq()) {
+      # Bio::SeqIO::genbank
+
+      my $info = parse_genbank_for_fasta($record);
+      my $acc = $info->{accession} || die;
+      my $gene = $info->{gene} || die;
+      my $map = $info->{map};
+      # some records don't have this, e.g. NR_037872.1
+
+#      printf $fh_out ">%s %s %s\n%s\n", $acc, $gene, $info->{desc}, ($info->{seq} || die);
+      # what was the problem with this format?  Maybe BLAST requires
+      # a certain defline format, etc.?
+#      printf $fh_out ">%s %s\n%s\n", $acc, $info->{desc}, ($info->{seq} || die);
+
+      my $sequence = $info->{seq} || die "no sequence";
+      if ($cds_only) {
+	# extract coding region only
+	my @cds = split /,/, $info->{CDS};
+	die "multi CDS" if @cds > 1;
+	my ($start, $end) = split /\-/, $cds[0];
+	my $len = ($end - $start) + 1;
+	my $cds = substr($sequence, $start - 1, $len);
+	$sequence = $cds;
+      }
+
+      printf $fh_out ">%s %s /gene=%s",
+	$acc, $info->{desc}, $gene;
+      printf $fh_out " /map=%s", $map if $map;
+      printf $fh_out "\n%s\n", $sequence;
+      $wrote++;
+
+      if (++$records % $ping == 0) {
+	log_message(sprintf "raw:%d wrote:%d at:%s", $records, $wrote, $info->{accession});
+      }
+    }
+  }
+  $wf->finish;
+
+}
+
+sub parse_genbank_for_fasta {
+  # Bio::SeqIO::genbank
+  my ($record) = @_;
+  my $verbose = 0;
+
+  my $accession = $record->accession_number();
+  my $version = $record->version();
+  my $desc = $record->desc() || die "no desc for $accession";
+
+  my %r;
+  $r{accession} = join ".", $accession, $version;
+  $r{seq} = $record->seq();
+  $r{desc} = $desc;
+
+  print STDERR "\n" if $verbose > 1;
+  printf STDERR "starting %s.%d...\n", $accession, $version if $verbose;
+
+  my %genes;
+  my %map;
+  my %cds;
+  foreach my $feature ($record->get_SeqFeatures()) {
+    printf STDERR "  %s\n", $feature->primary_tag() if $verbose > 1;
+    my $ptag = $feature->primary_tag();
+    if ($ptag eq "gene") {
+      my @values = $feature->get_tag_values($ptag);
+      die "multiple gene tag values" if @values > 1;
+      $genes{$values[0]} = 1;
+    } elsif ($ptag eq "source") {
+      if ($feature->has_tag("map")) {
+	my @values = $feature->get_tag_values("map");
+	foreach my $v (@values) {
+	  $map{$v} = 1;
+	}
+      }
+    } elsif ($ptag eq "CDS") {
+      my $range = join "-", $feature->start(), $feature->end();
+      $cds{$range} = 1;
+    }
+  }
+  $r{gene} = join ",", sort keys %genes;
+  # horrible hack, are multiple symbols ever an issue for these records?
+  $r{map} = join ",", sort keys %map;
+  # similarly for mapping
+  $r{CDS} = join ",", sort keys %cds;
+
+  die "no info!" unless %r;
+#  die sprintf "CDS count %d for %s", $cds_count, $accession if $cds_count != 1;
+  return \%r;
+}
+
 
 __DATA__
 
