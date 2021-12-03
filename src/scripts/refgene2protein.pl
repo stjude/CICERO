@@ -29,6 +29,15 @@ my @FEATURES;
 use constant MIN_AA_MISMATCH_FREQUENCY_FOR_MAJOR_MISMATCH => .04;
 # copied from RefFlat2Genome.pm
 
+use constant TRANSCRIPT_VARIANT_NUMBER_NON_NUMERIC => 9999;
+# if transcipt number is not available, or alphanumeric
+
+my $NUMERIC_TV_CONVERT_ALPHA = 1;
+# for "transcript_variant_numeric", convert single-letter identifiers
+# like a, b, c to coresponding 1, 2, 3, to preserve sortability.
+# e.g. KRAS,
+# https://www.ncbi.nlm.nih.gov/nuccore/NM_001369786.1
+
 use constant REPORT_HEADERS => qw(
 				   accession
 				   version
@@ -36,6 +45,7 @@ use constant REPORT_HEADERS => qw(
 				   gene
 				   protein
 				   transcript_variant
+				   transcript_variant_numeric
 				   accession_versioned
 				);
 
@@ -364,6 +374,18 @@ sub parse_one_genbank {
   # - may contain dashes, e.g. NM_001323302: transcript variant JNK1-a1
   # - or quote characters: ... (PTCH1), transcript variant 1a', mRNA
 
+  my $transcript_variant_numeric;
+  if ($transcript_variant =~ /^\d+$/) {
+    # natively a number
+    $transcript_variant_numeric = $transcript_variant;
+  } elsif ($NUMERIC_TV_CONVERT_ALPHA and $transcript_variant =~ /^[A-Z]$/i) {
+    # convert single letter ID to numeric equivalent starting at 1,
+    # to preserve sortability of the set
+    $transcript_variant_numeric = 1 + ord(uc($transcript_variant)) - ord("A");
+  } else {
+    $transcript_variant_numeric = TRANSCRIPT_VARIANT_NUMBER_NON_NUMERIC;
+  }
+
   my %r;
   $r{accession} = $accession;
   $r{version} = $version;
@@ -374,6 +396,7 @@ sub parse_one_genbank {
   $r{gi} = "";
   # protein gi might not be present
   $r{transcript_variant} = $transcript_variant;
+  $r{transcript_variant_numeric} = $transcript_variant_numeric;
 
   print STDERR "\n" if $verbose > 1;
   printf STDERR "starting %s.%d...\n", $accession, $version if $verbose;
