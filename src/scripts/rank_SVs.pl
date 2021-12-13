@@ -1,7 +1,7 @@
-#!/usr/bin/env perl 
+#!/usr/bin/env perl
 
 use strict;
-use warnings; 
+use warnings;
 
 use Getopt::Std;
 use Getopt::Long;
@@ -9,12 +9,20 @@ use File::Basename;
 use File::Path;
 use Cwd qw[abs_path getcwd];
 use List::Util qw[min max];
-use TdtConfig; 
+use TdtConfig;
 
 use CiceroUtil qw(exist_multiplename_checking exists_partners_checking);
 
 use DelimitedFile;
 use File::Temp qw/ tempdir /;
+
+sub help {
+	print STDERR "Usage: $0 -o <output file> -i <annotated file> -genome <genome> -l <read length> [-mr <minimum ratio>]\n";
+	exit;
+}
+if (@ARGV == 0){
+	help();
+}
 
 my ($annotated_file, $out_file);
 my ($min_reads_cnt, $max_repeat_score, $min_ratio) = (2,0.7,0.01);
@@ -28,24 +36,32 @@ my $optionOK = GetOptions(
 	'genome=s'  => \$genome,
 );
 
+die "Read length not specified" unless defined($read_len) && $read_len ne '';
+
 my $min_match_len = $read_len*0.5;
 my $min_coverage = $read_len*0.5;
+
+die "Input file not specified" unless defined($annotated_file) && $annotated_file ne '';
+die "Input file not found" unless -f $annotated_file;
 
 my $out_dir = dirname($annotated_file);
 $out_file = "$out_dir/final_fusions.txt" unless($out_file);
 
 my ($known_fusion_file, $known_itd_file);
-my $conf; 
+my $conf;
 if (&TdtConfig::findConfig("genome", $genome)){
-	$conf = &TdtConfig::readConfig("genome", $genome); 
+	$conf = &TdtConfig::readConfig("genome", $genome);
 }
 else{
 	croak("no config");
 }
 
 $known_fusion_file = $conf->{KNOWN_FUSIONS} unless($known_fusion_file);
-print STDERR "known_fusion_file: $known_fusion_file\n";
+die "KNOWN_FUSIONS not defined" unless defined($known_fusion_file) && $known_fusion_file ne '';
 $known_itd_file = $conf->{KNOWN_ITD_FILE} unless($known_itd_file);
+die "KNOWN_ITD_FILE not defined" unless defined($known_itd_file)&& $known_itd_file ne '';
+
+print STDERR "known_fusion_file: $known_fusion_file\n";
 
 my %known_fusions=();
 my %known_fusion_partners=();
@@ -55,7 +71,7 @@ my $df = new DelimitedFile(
 	       "-headers" => 1,
 	      );
 
-open(my $KF, "$known_fusion_file");
+open(my $KF, "$known_fusion_file") || die "Failed to open known fusions file ($known_fusion_file): $!";
 while(<$KF>){
 
 	chomp;
@@ -85,7 +101,7 @@ while(<$KF>){
 close($KF);
 
 my %known_ITDs = ();
-open(my $ITD_F, $known_itd_file);
+open(my $ITD_F, $known_itd_file) || die "Failed to open known ITD file ($known_itd_file): $!";
 while(<$ITD_F>){
 	chomp;
 	my ($gene, $chr, $start, $end) = split(/\t/,$_);
@@ -128,7 +144,7 @@ while (my $row = $df->get_hash()) {
 		$first_bp->{$k} = '' unless(defined($first_bp->{$k}));
 	}
 
-	
+
 	my $second_bp = {
 		reads_num => $row->{readsB},
 		gene => $row->{geneB},
@@ -195,28 +211,28 @@ while (my $row = $df->get_hash()) {
 	push @uniq_SVs, scoring($tmp_SV) unless(is_dup_SV(\@uniq_SVs, $tmp_SV));
 }
 
-my @sorted_SVs = sort{   $a->{rating} cmp $b->{rating} || 
+my @sorted_SVs = sort{   $a->{rating} cmp $b->{rating} ||
 			$b->{score} <=> $a->{score}
 		}@uniq_SVs;
 print STDERR "number of SVs: ", scalar @uniq_SVs, "\n";
 
-my $out_header = join("\t", "sample", "geneA", "chrA", "posA", "ortA", "featureA", "geneB", "chrB", "posB", "ortB", 
-			"featureB", "sv_ort", "readsA", "readsB", "matchA", "matchB", "repeatA", "repeatB","coverageA", 
+my $out_header = join("\t", "sample", "geneA", "chrA", "posA", "ortA", "featureA", "geneB", "chrB", "posB", "ortB",
+			"featureB", "sv_ort", "readsA", "readsB", "matchA", "matchB", "repeatA", "repeatB","coverageA",
 			"coverageB", "ratioA", "ratioB", "qposA", "qposB", "total_readsA", "total_readsB", "contig", "type");
 $out_header .="\tscore\trating\tmedal\tfunctional effect";
-$out_header = join("\t", $out_header, "frame", "sv_refseqA", "sv_refseqA_codon", "sv_refseqA_exon", "sv_refseqA_anchor_type", "sv_refseqA_coding_base_number", "sv_refseqA_last_coding_base_number", "sv_refseqA_AA_index", "sv_refseqA_contig_index"); 
-$out_header = join("\t", $out_header, "sv_refseqB", "sv_refseqB_codon", "sv_refseqB_exon", "sv_refseqB_anchor_type", "sv_refseqB_coding_base_number", "sv_refseqB_last_coding_base_number", "sv_refseqB_AA_index", "sv_refseqB_contig_index"); 
-$out_header = join("\t", $out_header, "sv_AA", "sv_desc", "sv_processing_exception", "sv_general_info", "sv_interstitial_AA","sv_frame_index"); 
+$out_header = join("\t", $out_header, "frame", "sv_refseqA", "sv_refseqA_codon", "sv_refseqA_exon", "sv_refseqA_anchor_type", "sv_refseqA_coding_base_number", "sv_refseqA_last_coding_base_number", "sv_refseqA_AA_index", "sv_refseqA_contig_index");
+$out_header = join("\t", $out_header, "sv_refseqB", "sv_refseqB_codon", "sv_refseqB_exon", "sv_refseqB_anchor_type", "sv_refseqB_coding_base_number", "sv_refseqB_last_coding_base_number", "sv_refseqB_AA_index", "sv_refseqB_contig_index");
+$out_header = join("\t", $out_header, "sv_AA", "sv_desc", "sv_processing_exception", "sv_general_info", "sv_interstitial_AA","sv_frame_index");
 my $k=0;
 my @HQ_SVs;
 my %HQ_genes=();
 foreach my $sv (@sorted_SVs){
 
-	my ($sample, $bp1, $bp2, $qseq, $type, $score) = 
+	my ($sample, $bp1, $bp2, $qseq, $type, $score) =
 	($sv->{sample}, $sv->{first_bp}, $sv->{second_bp}, $sv->{junc_seq}, $sv->{type}, $sv->{score});
 
 	if($sv->{rating} eq 'HQ'){
-		push @HQ_SVs, $sv; 
+		push @HQ_SVs, $sv;
 		$k++;
 		next;
 	}
@@ -246,15 +262,15 @@ foreach my $sv (@sorted_SVs){
 }
 print STDERR "number of remaining SVs: ", scalar @HQ_SVs, "\n";
 
-my @final_SVs = sort{   $a->{rating} cmp $b->{rating} || 
+my @final_SVs = sort{   $a->{rating} cmp $b->{rating} ||
 			$b->{score} <=> $a->{score}
 		}@HQ_SVs;
 
-open(my $hFo, ">$out_file");
+open(my $hFo, ">$out_file") || die "Failed to open output file ($out_file): $!";
 print $hFo $out_header, "\n";
 foreach my $sv (@final_SVs){
 
-	my ($sample, $bp1, $bp2, $qseq, $type, $score) = 
+	my ($sample, $bp1, $bp2, $qseq, $type, $score) =
 	($sv->{sample}, $sv->{first_bp}, $sv->{second_bp}, $sv->{junc_seq}, $sv->{type}, $sv->{score});
 
 	my $type2 = 'other';
@@ -274,24 +290,24 @@ foreach my $sv (@final_SVs){
 		$type2 = 'Fusion' if ($bp1->{feature} eq 'coding' && $bp2->{feature} eq 'coding');
 	}
 
-	my $out_string = join("\t", $sample, $bp1->{gene}, $bp1->{tname}, $bp1->{tpos}, $bp1->{qstrand}, $bp1->{feature}, 
-	   $bp2->{gene}, $bp2->{tname}, $bp2->{tpos}, $bp2->{qstrand}, $bp2->{feature}, $sv->{ort}, $bp1->{reads_num}, $bp2->{reads_num}, 
+	my $out_string = join("\t", $sample, $bp1->{gene}, $bp1->{tname}, $bp1->{tpos}, $bp1->{qstrand}, $bp1->{feature},
+	   $bp2->{gene}, $bp2->{tname}, $bp2->{tpos}, $bp2->{qstrand}, $bp2->{feature}, $sv->{ort}, $bp1->{reads_num}, $bp2->{reads_num},
 	   $bp1->{matches}, $bp2->{matches}, sprintf("%.3f", $bp1->{repeat}), sprintf("%.3f", $bp2->{repeat}), $bp1->{area}, $bp2->{area},
 	   sprintf("%.3f",$bp1->{maf}), sprintf("%.3f", $bp2->{maf}), $bp1->{qpos}, $bp2->{qpos}, $bp1->{total_reads}, $bp2->{total_reads}, $qseq, $type);
 
 	$out_string .= "\t".join("\t", sprintf("%.2f", $sv->{score}), $sv->{rating}, $sv->{medal}, $type2);
 	$out_string = join("\t", $out_string, $sv->{frame}, $bp1->{sv_refseq}, $bp1->{sv_refseq_codon},$bp1->{sv_refseq_exon},$bp1->{sv_refseq_anchor_type},
-			$bp1->{sv_refseq_coding_base_number},$bp1->{sv_refseq_last_coding_base_number}, $bp1->{sv_refseq_AA_index}, $bp1->{sv_refseq_contig_index}); 
+			$bp1->{sv_refseq_coding_base_number},$bp1->{sv_refseq_last_coding_base_number}, $bp1->{sv_refseq_AA_index}, $bp1->{sv_refseq_contig_index});
 	$out_string = join("\t", $out_string, $bp2->{sv_refseq}, $bp2->{sv_refseq_codon},$bp2->{sv_refseq_exon},$bp2->{sv_refseq_anchor_type},
-			$bp2->{sv_refseq_coding_base_number},$bp2->{sv_refseq_last_coding_base_number}, $bp2->{sv_refseq_AA_index}, $bp2->{sv_refseq_contig_index}); 
-	$out_string = join("\t", $out_string, $sv->{sv_AA}, $sv->{sv_desc}, $sv->{sv_processing_exception}, $sv->{sv_general_info}, $sv->{sv_interstitial_AA}, $sv->{sv_frame_index}); 
+			$bp2->{sv_refseq_coding_base_number},$bp2->{sv_refseq_last_coding_base_number}, $bp2->{sv_refseq_AA_index}, $bp2->{sv_refseq_contig_index});
+	$out_string = join("\t", $out_string, $sv->{sv_AA}, $sv->{sv_desc}, $sv->{sv_processing_exception}, $sv->{sv_general_info}, $sv->{sv_interstitial_AA}, $sv->{sv_frame_index});
 	print $hFo "$out_string\n";
 }
 close($hFo);
 
 sub scoring {
 	my $sv = shift;
-	my ($sample, $bp1, $bp2, $qseq, $type) = 
+	my ($sample, $bp1, $bp2, $qseq, $type) =
 	($sv->{sample}, $sv->{first_bp}, $sv->{second_bp}, $sv->{junc_seq}, $sv->{type});
 
 	my($fg1, $fg2) = ($bp1->{gene}, $bp2->{gene});
@@ -328,9 +344,9 @@ sub scoring {
 	$featureA = 0.9 if($bp1->{feature} =~ m/utr/); $featureA = 1 if($bp1->{feature} =~ m/coding/);
 	my $featureB = 0.5; $featureB = 0.8 if($bp2->{feature} =~ m/intron/);
 	$featureB = 0.9 if($bp2->{feature} =~ m/utr/); $featureB = 1 if($bp2->{feature} =~ m/coding/);
-	my $ort = 1; 
+	my $ort = 1;
 	$ort = 2 if($sv->{ort} eq ">");
-	my $frame = 1; 
+	my $frame = 1;
 	$frame = 2 if($sv->{frame} && $sv->{frame} =~ m/1|2/);
 
 	my $scoreA = $bp1->{area}*$ratioA*$matchB*(1-$bp2->{repeat});
@@ -353,7 +369,7 @@ sub scoring {
 	$sv->{medal} = $medal;
 	print STDERR "fusion is $fusion\tscore = $score\trating is $rating\tmedal is $medal\n" if($debug);
 	return $sv;
-}	
+}
 
 sub is_dup_SV {
 	my($r_SVs, $sv) = @_;
@@ -384,7 +400,7 @@ sub match_known_ITD {
 }
 
 =head1 LICENCE AND COPYRIGHT
-Copyright 2019 St. Jude Children's Research Hospital 
+Copyright 2019 St. Jude Children's Research Hospital
 
 Licensed under a modified version of the Apache License, Version 2.0
 (the "License") for academic research use only; you may not use this

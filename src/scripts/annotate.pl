@@ -74,7 +74,7 @@ if(@ARGV == 0){
 
 my $optionOK = GetOptions(
 	'i|in|input=s'	=> \$input_bam,	
-	'c|config_file=s'	=> \$config_file,
+	'config_file=s'	=> \$config_file,
 	'o|out_dir=s'	=> \$out_dir,
 	'genome=s'  => \$genome,
 	'header'    => \$header,
