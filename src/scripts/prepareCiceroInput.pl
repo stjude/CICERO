@@ -15,6 +15,14 @@ use Pod::Usage;
 
 use TdtConfig;
 
+sub help {
+	print STDERR "Usage: $0 -o <output directory> -genome <genome> -p <output prefix> -l <read length> -f <gene info file> [-s <split every N events>] [-m <minimum softclip reads>] [-ratio <expression ratio cutoff>]\n";
+	exit;
+}
+if (@ARGV == 0){
+	help();
+}
+
 my ($genome, $out_prefix, $gene_info_file, $out_dir, $read_len);
 my $expression_ratio_cutoff = 0.01;
 my $split_every_n = 5000;
@@ -37,8 +45,8 @@ my $optionOK = GetOptions(
 );
 
 ## Perhaps someday someone will come back and finish the pod
-pod2usage(-verbose=>2) if($man or $usage);
-pod2usage(1) if($help or $version );
+help() if($man or $usage);
+help() if($help or $version );
 
 die "out_dir is not specified" unless defined($out_dir) && $out_dir ne '';
 mkdir $out_dir if(!-d $out_dir);
