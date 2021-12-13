@@ -71,7 +71,7 @@ my $df = new DelimitedFile(
 	       "-headers" => 1,
 	      );
 
-open(my $KF, "$known_fusion_file") || die $!;
+open(my $KF, "$known_fusion_file") || die "Failed to open known fusions file ($known_fusion_file): $!";
 while(<$KF>){
 
 	chomp;
@@ -101,7 +101,7 @@ while(<$KF>){
 close($KF);
 
 my %known_ITDs = ();
-open(my $ITD_F, $known_itd_file) || die $!;
+open(my $ITD_F, $known_itd_file) || die "Failed to open known ITD file ($known_itd_file): $!";
 while(<$ITD_F>){
 	chomp;
 	my ($gene, $chr, $start, $end) = split(/\t/,$_);
@@ -266,7 +266,7 @@ my @final_SVs = sort{   $a->{rating} cmp $b->{rating} ||
 			$b->{score} <=> $a->{score}
 		}@HQ_SVs;
 
-open(my $hFo, ">$out_file") || die $!;
+open(my $hFo, ">$out_file") || die "Failed to open output file ($out_file): $!";
 print $hFo $out_header, "\n";
 foreach my $sv (@final_SVs){
 
