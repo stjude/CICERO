@@ -16,6 +16,14 @@ use CiceroUtil qw(exist_multiplename_checking exists_partners_checking);
 use DelimitedFile;
 use File::Temp qw/ tempdir /;
 
+sub help {
+	print STDERR "Usage: $0 -o <output file> -i <annotated file> -genome <genome> -l <read length> [-mr <minimum ratio>]\n";
+	exit;
+}
+if (@ARGV == 0){
+	help();
+}
+
 my ($annotated_file, $out_file);
 my ($min_reads_cnt, $max_repeat_score, $min_ratio) = (2,0.7,0.01);
 my $read_len;
@@ -27,6 +35,8 @@ my $optionOK = GetOptions(
 	'mr|min_ratio=s'	=> \$min_ratio,
 	'genome=s'  => \$genome,
 );
+
+die "Read length not specified" unless defined($read_len) && $read_len ne '';
 
 my $min_match_len = $read_len*0.5;
 my $min_coverage = $read_len*0.5;
