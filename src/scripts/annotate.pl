@@ -41,6 +41,11 @@ use GeneModel;
 
 use constant BADFUSION_DISTANCE_CUTOFF => 200;
 
+use constant POSITION_RESCUE_MAX_EXON_DISTANCE => 15;
+# maximum distance from rescue position to an exon/splice boundary
+use constant POSITION_RESCUE_MAX_INTRON_DISTANCE => 100000;
+# maximum adjusted position distance, should be approximate max intron size
+
 my $debug = 0;
 
 my $out_header = join("\t", "sample", "geneA", "chrA", "posA", "ortA", "featureA", "geneB", "chrB", "posB", "ortB", "featureB",
@@ -80,6 +85,9 @@ my $optionOK = GetOptions(
 	'header'    => \$header,
 	'ref_genome=s'  => \$ref_genome,
 	'genemodel=s'		=> \$gene_model_file,
+	'excluded-genes=s'	=> \$excluded_gene_file,
+	'excluded-fusions=s'	=> \$excluded_fusion_file,
+
 	'blatserver' =>	\$blat_server,
 	'blatport=s'		=> \$blat_port,
 	'min_hit_len=i'		=> \$min_hit_len,
@@ -148,7 +156,7 @@ my @excluded_chroms = split(/,/,$excluded_chroms);
 # breakpoints are located within a "complex" region
 my @complex_regions;
 #if ($complex_region_file && -s $complex_region_file){
-	open (my $CRF, $complex_region_file);
+	open (my $CRF, $complex_region_file) or die "Cannot open $complex_region_file: $!";
 	while(<$CRF>){
 		chomp;
 		next if(/Start/);
@@ -240,7 +248,7 @@ my $validator = CiceroSCValidator->new();
 $validator->remove_validator('strand_validator') if(!$paired);
 
 my %excluded = ();
-open(my $EXC, "$excluded_gene_file");
+open(my $EXC, "$excluded_gene_file") or die "Cannot open $excluded_gene_file: $!";
 while(<$EXC>){
 	my $line = $_;
 	chomp($line);
@@ -286,7 +294,7 @@ sub is_bad_fusion{
 }
 
 my %known_ITDs = ();
-open(my $ITD_F, $known_itd_file);
+open(my $ITD_F, $known_itd_file) or die "Cannot open $known_itd_file: $!";
 while(<$ITD_F>){
 	chomp;
 	my ($gene, $chr, $start, $end) = split(/\t/,$_);
@@ -317,7 +325,7 @@ my %gene_recurrance = ();
 my %contig_recurrance = ();
 my %genepairs = ();
 my %breakpoint_sites = ();
-open(my $UNF, "$unfiltered_file");
+open(my $UNF, "$unfiltered_file") or die "Cannot open $unfiltered_file: $!";
 print STDERR "Reading unfiltered file\n";
 while(my $line = <$UNF>){
 	chomp($line);
@@ -1374,6 +1382,24 @@ sub quantification {
 		#	    ($bp2->{tname} eq $chrA && abs($bp2->{tpos} - $tposA)<50 &&
                 #            $bp1->{tname} eq $chrB && abs($bp1->{tpos} - $tposB)<50));
 		# to do alignment
+
+		my $usable;
+		if (($chrA eq $bp1->{tname} && abs($bp1->{tpos} - $tposA)<50 &&
+			     $bp2->{tname} eq $chrB && abs($bp2->{tpos} - $tposB)<50) ||
+			    ($bp2->{tname} eq $chrA && abs($bp2->{tpos} - $tposA)<50 &&
+			     $bp1->{tname} eq $chrB && abs($bp1->{tpos} - $tposB)<50)) {
+		  # passes original requirement, OK
+		  $usable = 1;
+		} else {
+		  #
+		  # rescue site if both ends are near a splice site
+		  #
+		  # - chrA/tposA/chrB/tposB are the blat align-adjusted
+		  #   positions
+		  $usable = breakpoint_annotation_qc($chrA, $tposA, $chrB, $tposB, $bp1, $bp2);
+		};
+		next unless $usable;
+
 		my $tmp_ctg_file = "$anno_dir/reads.$chr1.$pos1.$chr2.$pos2.fa.tmp.contig";
 		open(my $CTG, ">$tmp_ctg_file");
 		print $CTG ">ctg\n$qseq\n";
@@ -1616,6 +1642,82 @@ sub same_gene{
 		}
 	}
 	return 0;
+}
+
+sub breakpoint_annotation_qc {
+  my ($chrA, $tposA, $chrB, $tposB, $bp1, $bp2) = @_;
+
+  my $pass_max_distance = (
+			   ($chrA eq $bp1->{tname} && abs($bp1->{tpos} - $tposA) < POSITION_RESCUE_MAX_INTRON_DISTANCE &&
+			    $bp2->{tname} eq $chrB && abs($bp2->{tpos} - $tposB) < POSITION_RESCUE_MAX_INTRON_DISTANCE) ||
+			   ($bp2->{tname} eq $chrA && abs($bp2->{tpos} - $tposA) < POSITION_RESCUE_MAX_INTRON_DISTANCE &&
+			    $bp1->{tname} eq $chrB && abs($bp1->{tpos} - $tposB) < POSITION_RESCUE_MAX_INTRON_DISTANCE)
+			  );
+
+  my $usable_count = 0;
+  my @status;
+
+  if ($pass_max_distance) {
+    #
+    #  only perform gene checks if shift distance is acceptable
+    #
+    foreach my $set (
+		     [$chrA, $tposA],
+		     [$chrB, $tposB]
+		    ) {
+      my ($chr, $pos) = @{$set};
+
+      $chr = "chr" . $chr unless $chr =~ /^chr/;
+      # ensure UCSC-style prefix is present to match refFlat
+
+      my $usable_reason;
+      my $usable_transcript;
+
+      unless ($chr =~ /M/) {
+      SEARCH:
+	foreach my $strand (qw(+ -)) {
+	  my $tree = $gm->sub_model($chr, $strand);
+	  if (defined $tree) {
+	    foreach my $model ($tree->intersect([$pos, $pos])) {
+	      my $gene_ref = $model->val();
+	      foreach my $transcript (@{$gene_ref->transcripts}) {
+		foreach my $er (@{$transcript->exons}) {
+		  my ($start, $end) = @{$er};
+		  $start++;
+		  # convert UCSC interbase to 1-based start/end
+		  foreach my $edge ($start, $end) {
+		    my $distance = abs($pos - $edge);
+		    if ($distance <= POSITION_RESCUE_MAX_EXON_DISTANCE) {
+		      $usable_transcript = $transcript;
+		      $usable_reason = "near_exon_edge";
+		      last SEARCH;
+		    }
+		  }
+		}
+	      }
+	    }
+	  }
+	}
+      }
+
+      my @info;
+      if ($usable_reason) {
+	push @info, $usable_reason, $usable_transcript->name(), $usable_transcript->refseq_id();
+	$usable_count++;
+      } else {
+	push @info, "far_from_splice";
+      }
+
+      push @status, join ".", @info, $chr, $pos;
+    }
+  } else {
+    push @status, join ".", "shift_beyond_max_intron_distance", $chrA, $tposA, $chrB, $tposB, $bp1->{tname}, $bp1->{tpos}, $bp2->{tname}, $bp2->{tpos};
+  }
+
+  my $final_call = $usable_count == 2 ? 1 : 0;
+  printf STDERR "rescue:%d %s\n", $final_call, join " ", @status;
+
+  return $final_call;
 }
 
 =head1 LICENCE AND COPYRIGHT
