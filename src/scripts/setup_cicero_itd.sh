@@ -69,10 +69,10 @@ cat > `get_step_local_work_script` <<EOF
 #!/bin/bash
 
 # Make the temporary gene model
-# NOTE: this used to be KNOWN_ITD_FILE instead of CLINCLS_GOLD_GENE_LIST_FILE
+# NOTE: this used to be KNOWN_ITD_FILE instead of CICERO_GOLD_GENE_LIST_FILE
 mkdir -p $GENE_MODEL_DIR
-cp $CLINCLS_GOLD_GENE_LIST_FILE $GENE_MODEL_DIR/genes.lst
-cat $REFSEQ_REFFLAT | grep -w -f $CLINCLS_GOLD_GENE_LIST_FILE > $GENE_MODEL_DIR/tmp_gene_model
+cp $CICERO_GOLD_GENE_LIST_FILE $GENE_MODEL_DIR/genes.lst
+cat $REFSEQ_REFFLAT | grep -w -f $CICERO_GOLD_GENE_LIST_FILE > $GENE_MODEL_DIR/tmp_gene_model
 
 exit 0
 EOF

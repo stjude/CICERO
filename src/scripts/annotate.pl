@@ -128,8 +128,8 @@ print STDERR "excluded_fusion_file: $excluded_fusion_file\n";
 $known_itd_file = $conf->{KNOWN_ITD_FILE} unless($known_itd_file);
 print STDERR "KNOWN_ITD_FILE: ", $known_itd_file, "\n";
 $known_fusion_file = $conf->{KNOWN_FUSIONS} unless($known_fusion_file);
-$gold_gene_file = $conf->{CLINCLS_GOLD_GENE_LIST_FILE};
-print STDERR "CLINCLS_GOLD_GENE_LIST_FILE:", $gold_gene_file, "\n";
+$gold_gene_file = $conf->{CICERO_GOLD_GENE_LIST_FILE};
+print STDERR "CICERO_GOLD_GENE_LIST_FILE:", $gold_gene_file, "\n";
 $excluded_chroms = $conf->{EXCLD_CHR} unless($excluded_chroms);
 $complex_region_file = $conf->{COMPLEX_REGIONS} unless($complex_region_file);
 
