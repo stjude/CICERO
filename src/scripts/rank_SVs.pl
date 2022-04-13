@@ -57,11 +57,13 @@ else{
 }
 
 $known_fusion_file = $conf->{KNOWN_FUSIONS} unless($known_fusion_file);
-die "KNOWN_FUSIONS not defined" unless defined($known_fusion_file) && $known_fusion_file ne '';
+warn "KNOWN_FUSIONS not defined" unless defined($known_fusion_file) && $known_fusion_file ne '';
 $known_itd_file = $conf->{KNOWN_ITD_FILE} unless($known_itd_file);
 die "KNOWN_ITD_FILE not defined" unless defined($known_itd_file)&& $known_itd_file ne '';
 
-print STDERR "known_fusion_file: $known_fusion_file\n";
+if (defined $known_fusion_file) {
+    print STDERR "known_fusion_file: $known_fusion_file\n";
+}
 
 my %known_fusions=();
 my %known_fusion_partners=();
@@ -71,34 +73,36 @@ my $df = new DelimitedFile(
 	       "-headers" => 1,
 	      );
 
-open(my $KF, "$known_fusion_file") || die "Failed to open known fusions file ($known_fusion_file): $!";
-while(<$KF>){
+if (defined $known_fusion_file) {
+    open(my $KF, "$known_fusion_file") || die "Failed to open known fusions file ($known_fusion_file): $!";
+    while(<$KF>){
 
 	chomp;
 	my ($fg1, $fg2) = split(/\t/, $_);
 	if($fg1 gt $fg2){
-		my $tmp = $fg1;
-		$fg1 = $fg2;
-		$fg2 = $tmp;
+	    my $tmp = $fg1;
+	    $fg1 = $fg2;
+	    $fg2 = $tmp;
 	}
 	my $fusion = $fg1.":".$fg2;
 	next if(exists($known_fusions{$fusion}));
 	$known_fusions{$fusion} = 1;
 	if(exists($known_fusion_partners{$fg1})){
-		$known_fusion_partners{$fg1} ++;
+	    $known_fusion_partners{$fg1} ++;
 	}
 	else {
-		$known_fusion_partners{$fg1} = 1;
+	    $known_fusion_partners{$fg1} = 1;
 	}
 
 	if(exists($known_fusion_partners{$fg2})){
-		$known_fusion_partners{$fg2} ++;
+	    $known_fusion_partners{$fg2} ++;
 	}
 	else {
-		$known_fusion_partners{$fg2} = 1;
+	    $known_fusion_partners{$fg2} = 1;
 	}
+    }
+    close($KF);
 }
-close($KF);
 
 my %known_ITDs = ();
 open(my $ITD_F, $known_itd_file) || die "Failed to open known ITD file ($known_itd_file): $!";
