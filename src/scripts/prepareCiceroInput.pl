@@ -72,15 +72,17 @@ close($EXC);
 
 my $breakpoints_file = $conf->{'KNOWN_BREAKPOINTS'};
 my %breakpoints = ();
-open(my $BRK, "<", "$breakpoints_file") || die "Open error on breakpoints file: $!";
-print STDERR "Parsing known break points $breakpoints_file\n";
-while(<$BRK>){
-  my $line = $_;
-  chomp($line);
-  my ($chr, $pos) = split(/\t/, $line);
-  $breakpoints{$chr}{$pos} = 1;
+if (defined $breakpoints_file && $breakpoints_file ne '') {
+    open(my $BRK, "<", "$breakpoints_file") || die "Open error on breakpoints file: $!";
+    print STDERR "Parsing known break points $breakpoints_file\n";
+    while(<$BRK>){
+	my $line = $_;
+	chomp($line);
+	my ($chr, $pos) = split(/\t/, $line);
+	$breakpoints{$chr}{$pos} = 1;
+    }
+    close($BRK);
 }
-close($BRK);
 
 print STDERR "Parsing gene info file\n";
 print "\ngene_info_file: $gene_info_file\n";
