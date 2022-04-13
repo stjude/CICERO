@@ -168,7 +168,7 @@ foreach my $sc (@intra_SCs){
 			$n_SC_reads += $cnt;
 		}
 } #end for chr
-close $IN;
+close $IN if defined $IN;
 
 =head1 LICENCE AND COPYRIGHT
 Copyright 2019 St. Jude Children's Research Hospital
