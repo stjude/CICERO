@@ -205,7 +205,7 @@ Output is also written in UCSC .bed format, which can be used to visualize the j
 ### Running RNApeg via Docker
 
 ```bash
-docker run -v <outdir>:/results ghcr.io/stjude/rnapeg:latest RNApeg.sh -b bamfile -f fasta -r refflat
+docker run -v <outdir>:/results ghcr.io/stjude/rnapeg:latest -b bamfile -f fasta -r refflat
 ```
 
 - `fasta` reference genome; i.e. "Homo_sapiens/GRCh38_no_alt/FASTA/GRCh38_no_alt.fa" or "Homo_sapiens/GRCh37-lite/FASTA/GRCh37-lite.fa" from [Reference Files](#reference).
