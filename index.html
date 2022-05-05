@@ -249,7 +249,7 @@
 <h2 id="running-with-docker">Running with Docker <a name="docker"></a></h2>
 <p>CICERO can be run with Docker. Pre-built Docker images are provided for each release in GitHub Packages.</p>
 <p>Invoke the CICERO wrapper using the Docker image available in GitHub Packages. You will likely need to add an additional bind mount for the output and input (BAM + junctions) files. Note the following command pulls the <code>latest</code> tag for the Docker image. For reproducible results, it is advisable to specify the exact version to run.</p>
-<pre><code class="language-bash">docker run -v &lt;path to reference directory&gt;:/reference ghcr.io/stjude/cicero:latest Cicero.sh [-n cores] -b &lt;bam file path&gt; -g &lt;genome&gt; -r /reference -o &lt;output directory&gt; [-j junctions file] [-p] [-s int] [-t int] [-c int]
+<pre><code class="language-bash">docker run -v &lt;path to reference directory&gt;:/reference ghcr.io/stjude/cicero:latest [-n cores] -b &lt;bam file path&gt; -g &lt;genome&gt; -r /reference -o &lt;output directory&gt; [-j junctions file] [-p] [-s int] [-t int] [-c int]
 </code></pre>
 <p>See <a href="#running">Running CICERO</a> for details of the parameters.</p>
 <h2 id="running-with-st-jude-cloud">Running with St. Jude Cloud <a name="cloud"></a></h2>
@@ -402,5 +402,5 @@ limitations under the License.</p></div>
 
 <!--
 MkDocs version : 1.3.0
-Build Date UTC : 2022-05-05 15:05:58.871495+00:00
+Build Date UTC : 2022-05-05 15:10:00.070517+00:00
 -->
