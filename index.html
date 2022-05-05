@@ -286,14 +286,14 @@ for running and interpreting results is available in the <a href="https://univer
 <p>The primary output files are tab-delimited text.</p>
 <p>Output is also written in UCSC .bed format, which can be used to visualize the junctions and supporting read counts within the UCSC genome browser.</p>
 <h3 id="running-rnapeg-via-docker_1">Running RNApeg via Docker</h3>
-<pre><code class="language-bash">docker run -v &lt;outdir&gt;:/results ghcr.io/stjude/rnapeg:latest RNApeg.sh -b bamfile -f fasta -r refflat
+<pre><code class="language-bash">docker run -v &lt;outdir&gt;:/results ghcr.io/stjude/rnapeg:latest -b bamfile -f fasta -r refflat
 </code></pre>
 <ul>
 <li><code>fasta</code> reference genome; i.e. "Homo_sapiens/GRCh38_no_alt/FASTA/GRCh38_no_alt.fa" or "Homo_sapiens/GRCh37-lite/FASTA/GRCh37-lite.fa" from <a href="#reference">Reference Files</a>.</li>
 <li><code>refflat</code> i.e. "Homo_sapiens/GRCh38_no_alt/mRNA/RefSeq/refFlat.txt" or "Homo_sapiens/GRCh37-lite/mRNA/Combined/all_refFlats.txt" from <a href="#reference">Reference Files</a>.</li>
 </ul>
 <h3 id="running-rnapeg-via-singularity">Running RNApeg via Singularity:</h3>
-<pre><code class="language-bash">singularity run --containall --bind &lt;outdir&gt;:/results docker://ghcr.io/stjude/rnapeg:latest RNApeg.sh -b bamfile -f fasta -r refflat
+<pre><code class="language-bash">singularity run --containall --bind &lt;outdir&gt;:/results docker://ghcr.io/stjude/rnapeg:latest -b bamfile -f fasta -r refflat
 </code></pre>
 <p>You will also need to add <code>--bind</code> arguments to mount the file paths for <code>bamfile</code>, <code>fasta</code>, and <code>refflat</code> into the container. </p>
 <h2 id="downloading-reference-files">Downloading reference files <a name="reference"></a></h2>
@@ -401,6 +401,6 @@ limitations under the License.</p></div>
 </html>
 
 <!--
-MkDocs version : 1.2.3
-Build Date UTC : 2021-12-13 16:16:04.831266+00:00
+MkDocs version : 1.3.0
+Build Date UTC : 2022-05-05 15:05:58.871495+00:00
 -->
