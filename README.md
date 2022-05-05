@@ -139,7 +139,7 @@ CICERO can be run with Docker. Pre-built Docker images are provided for each rel
 Invoke the CICERO wrapper using the Docker image available in GitHub Packages. You will likely need to add an additional bind mount for the output and input (BAM + junctions) files. Note the following command pulls the `latest` tag for the Docker image. For reproducible results, it is advisable to specify the exact version to run.
 
 ```bash
-docker run -v <path to reference directory>:/reference ghcr.io/stjude/cicero:latest Cicero.sh [-n cores] -b <bam file path> -g <genome> -r /reference -o <output directory> [-j junctions file] [-p] [-s int] [-t int] [-c int]
+docker run -v <path to reference directory>:/reference ghcr.io/stjude/cicero:latest [-n cores] -b <bam file path> -g <genome> -r /reference -o <output directory> [-j junctions file] [-p] [-s int] [-t int] [-c int]
 ```
 
 See [Running CICERO](#running) for details of the parameters.
