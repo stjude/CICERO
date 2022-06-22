@@ -18,7 +18,7 @@ jobs:
           mv cgc/cicero.cwl.new cgc/cicero.cwl
           cat cgc/cicero.cwl
       - id: cgcdeploy
-        uses: jordan-rash/cgc-go@v0.1.4
+        uses: stjudecloud/cgc-go@v0.1.4
         with:
           file_location: "cgc/cicero.cwl"
           shortid: "stjude/cicero/cicero"
