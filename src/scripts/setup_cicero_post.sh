@@ -150,16 +150,16 @@ init_step final_qa
 cat > `get_step_qc_script` <<EOF
 #!/bin/bash
 # QC:
-echo -n "" > final_qa.txt
+echo -n "" > $RUN_DIR/final_qa.txt
 anyfail=no
 while read case_bam 
 do
   if ! qcquiet.sh `get_step_failed_qc_dir`/\$case_bam qc_classification.sh $DATA_DIR/\$case_bam final_fusions final_fusions 
   then 
     anyfail=yes
-    echo "FAIL \$case_bam" >> final_qa.txt
+    echo "FAIL \$case_bam" >> $RUN_DIR/final_qa.txt
   else
-    echo "PASS \$case_bam" >> final_qa.txt 
+    echo "PASS \$case_bam" >> $RUN_DIR/final_qa.txt 
   fi
 done < $ANLS_CONFIG
 if [ "\$anyfail" == "yes" ]
