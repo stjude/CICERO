@@ -163,6 +163,7 @@ sub run {
 	croak "Please check BLAT server is correctly configured or running.\n" if($test != 0);
 	print STDERR "\ntest=$test\t", join(" ", ($self->{PRG}, $self->{BIT2_DIR}, $param{-QUERY}, $unsorted_psl, $options)), "\n" if($debug);
 	# Sort the output PSL file from BLAT.
+        # Sort by query sequenec, score, chromosome
 	`sort -k 11,11nr -k 10,10d -k 1,1nr -k 14,14d $unsorted_psl -o $psl_file`;
 	if ($?){
 		my $err = $!;
@@ -968,6 +969,7 @@ sub overhang_remapping {
 	print STDERR "test=$test\t", join(" ", ($blat_prefix, $contig_file, $unsorted_psl, $options)), "\n" if($debug);
 
 	return unless(-s $unsorted_psl);
+	# Sort by query sequenec, score, chromosome
 	`sort -k 10,10d -k 1,1nr -k 14,14d $unsorted_psl -o $psl_file`;
 	if ($?){
 		my $err = $!;
