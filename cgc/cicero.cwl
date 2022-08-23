@@ -186,7 +186,7 @@
         }
     ],
     "sbg:categories": [
-        "RNA",
+        "RNA-Seq",
         "Variant Calling"
     ],
     "sbg:links": [
