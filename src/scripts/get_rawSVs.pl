@@ -43,26 +43,12 @@ use constant BADFUSION_DISTANCE_CUTOFF => 200;
 
 my $debug = 0;
 
-my $out_header = join("\t", "sample", "geneA", "chrA", "posA", "ortA", "featureA", "geneB", "chrB", "posB", "ortB", "featureB",
-		 	"sv_ort", "readsA", "readsB", "matchA", "matchB", "repeatA", "repeatB", , "coverageA", "coverageB",
-			 "ratioA", "ratioB", "qposA", "qposB", "total_readsA", "total_readsB", "contig", "type");
-
-
-my ($blat_server, $blat_port, $dir_2bit);
-my $blat_client_options = ' -out=psl -nohead > /dev/null 2>&1';
-my $cap3_options = " -o 25 -z 2 -h 60 > /dev/null";
-
-my $rmdup = 0;
-my $paired = 1;
-
 # input/output
-my ($genome, $ref_genome, $gene_model_file, $header);
-my ($config_file, $out_dir, $gene_info_file, $junction_file, $known_itd_file, $known_fusion_file);
-my ($input_bam, $read_len, $sample);
+my ($genome, $ref_genome, $gene_model_file);
+my ($out_dir, $gene_info_file, $junction_file, $known_itd_file);
+my ($input_bam, $sample);
 my ($all_output, $internal, $DNA) = (0, 0, 0);
-my ($min_hit_len, $max_num_hits, $min_fusion_distance);
-$min_hit_len = 25;
-my $sc_shift = 10;
+my ($max_num_hits);
 my ($excluded_gene_file, $excluded_fusion_file, $complex_region_file, $excluded_chroms, $gold_gene_file);
 my ( $help, $man, $version, $usage );
 
@@ -74,26 +60,16 @@ if(@ARGV == 0){
 
 my $optionOK = GetOptions(
 	'i|in|input=s'	=> \$input_bam,	
-	'config_file=s'	=> \$config_file,
 	'o|out_dir=s'	=> \$out_dir,
 	'genome=s'  => \$genome,
-	'header'    => \$header,
 	'ref_genome=s'  => \$ref_genome,
 	'genemodel=s'		=> \$gene_model_file,
-	'blatserver' =>	\$blat_server,
-	'blatport=s'		=> \$blat_port,
-	'min_hit_len=i'		=> \$min_hit_len,
 	'max_num_hits=i'	=> \$max_num_hits,
-	'c|cluster=i'   => \$sc_shift,
-	'paired!'		=> \$paired,
-	'rmdup!'		=> \$rmdup,
-	'l|read_len=i'	=> \$read_len,
 	'internal!' => \$internal,
 	'all!' => \$all_output,
 	'DNA!' => \$DNA,
 	'f|gene_info_file=s' => \$gene_info_file,
 	'known_itd_file=s'	=> \$known_itd_file,
-	'known_fusion_file=s'	=> \$known_fusion_file,
 	'j|junction_file=s' => \$junction_file,
 	's|sample=s'		=> \$sample,
 	'h|help|?'		=> \$help,
@@ -101,11 +77,6 @@ my $optionOK = GetOptions(
 	'usage'			=> \$usage,
 	'v|version'		=> \$version,
 );
-
-if ($header){
-	print STDOUT $out_header;
-	exit;
-}
 
 my $conf;
 # Load configuration values for the genome build
@@ -117,9 +88,6 @@ else{
 }
 
 $ref_genome = $conf->{FASTA} unless($ref_genome && -f $ref_genome);
-$blat_server = $conf->{BLAT_HOST} unless($blat_server);
-$blat_port = $conf->{BLAT_PORT} unless($blat_port);
-$dir_2bit = '/';
 $gene_model_file = $conf->{'REFSEQ_REFFLAT'} unless($gene_model_file);
 print STDERR "gene_model_file: $gene_model_file\n";
 $excluded_gene_file = $conf->{EXCLUDED_GENES} unless($excluded_gene_file);
@@ -127,7 +95,6 @@ $excluded_fusion_file = $conf->{EXCLUDED_FUSIONS} unless($excluded_fusion_file);
 print STDERR "excluded_fusion_file: $excluded_fusion_file\n";
 $known_itd_file = $conf->{KNOWN_ITD_FILE} unless($known_itd_file);
 print STDERR "KNOWN_ITD_FILE: ", $known_itd_file, "\n";
-$known_fusion_file = $conf->{KNOWN_FUSIONS} unless($known_fusion_file);
 $gold_gene_file = $conf->{CICERO_GOLD_GENE_LIST_FILE};
 print STDERR "CICERO_GOLD_GENE_LIST_FILE:", $gold_gene_file, "\n";
 $excluded_chroms = $conf->{EXCLD_CHR} unless($excluded_chroms);
@@ -135,9 +102,7 @@ $complex_region_file = $conf->{COMPLEX_REGIONS} unless($complex_region_file);
 
 # Load Cicero-specific configuration settings
 $conf = &TdtConfig::readConfig('app', 'cicero');
-$min_hit_len = $conf->{MIN_HIT_LEN} unless($min_hit_len);
 $max_num_hits = $conf->{MAX_NUM_HITS} unless($max_num_hits);
-$min_fusion_distance = $conf->{MIN_FUSION_DIST} unless($min_fusion_distance);
 
 # Assume sample name is the bam prefix
 $sample = basename($input_bam, ".bam") unless($sample);
@@ -196,9 +161,6 @@ if (! $gene_info_file || ! -e $gene_info_file){
 	$gene_info_file = "$out_prefix.gene_info.txt";
 	$gene_info_file = File::Spec->catfile($out_dir, $gene_info_file);
 }
-my $out_file = $unfiltered_file;
-$out_file =~ s/unfiltered/annotated/;
-print STDERR "unfiltered results: $unfiltered_file\n" if($debug);
 
 my %gene_info = ();
 print STDERR "\ngene_info_file: $gene_info_file\n" if($debug);
@@ -210,21 +172,6 @@ while(<$GI>){
 }
 close $GI;
 
-# Intialize CAP3 and BLAT utilities
-# These variables will be global
-my $assembler = Assembler->new(
-	-PRG => "cap3",
-	-OPTIONS => $cap3_options
-);
-
-my $mapper = Mapper->new(
-	-PRG => join(' ', ("gfClient", $blat_server, $blat_port)),
-	-OPTIONS => $blat_client_options,
-	-BIT2_DIR => $dir_2bit,
-	-MIN_HIT_LEN => $min_hit_len,
-	-MAX_NUM_HITS => $max_num_hits,
-	-MIN_FS_DIST => $min_fusion_distance
-);
 
 # Read the gene model from a refflat file
 my $gm_format = "REFFLAT";
@@ -236,8 +183,6 @@ croak "Specify a genome: $ref_genome" unless (-f $ref_genome);
 # Load the BAM file
 my $sam_d = Bio::DB::Sam->new( -bam => $input_bam, -fasta => $ref_genome);
 my @seq_ids = $sam_d->seq_ids;
-my $validator = CiceroSCValidator->new();
-$validator->remove_validator('strand_validator') if(!$paired);
 
 my %excluded = ();
 open(my $EXC, "$excluded_gene_file") or die "Cannot open $excluded_gene_file: $!";
@@ -293,30 +238,11 @@ while(<$ITD_F>){
 	$known_ITDs{$gene} = [$start, $end];
 }
 
-# Load gene pairs that are enhancer activated
-# involving T-cell receptors and immunoglobulin loci
-my %enhancer_activated_genes = ();
-my %known_fusion_partners = ();
-if($known_fusion_file && -e $known_fusion_file){
-   open(my $KFF, $known_fusion_file);
-   while(<$KFF>){
-	chomp;
-	my ($gene1, $gene2) = split(/\t/,$_);
-	next if exists($enhancer_activated_genes{$gene1});
-	next if exists($enhancer_activated_genes{$gene2});
-	$enhancer_activated_genes{$gene2} = $gene1 if($gene1 =~ m/^IG.$/ || $gene1 =~ m/^TR.$/);
-	$enhancer_activated_genes{$gene1} = $gene2 if($gene2 =~ m/^IG.$/ || $gene2 =~ m/^TR.$/);
-	$known_fusion_partners{$gene1}{$gene2} = 1;
-	$known_fusion_partners{$gene2}{$gene1} = 1;
-   }
-   close($KFF);
-}
 
 my @raw_SVs = ();
 my %gene_recurrance = ();
 my %contig_recurrance = ();
 my %genepairs = ();
-my %breakpoint_sites = ();
 
 ### end of annotate.pl head
 
@@ -633,22 +559,6 @@ close(hFo);
 
 ### start of annotate.pl tail
 
-sub exist_multiplename_pair_checking {
-	my %fusionpartner_list = %{(shift)};
-	my $targetgene1 = shift;#e.g. targetgene UBTF,MIR6782
-	my $targetgene2 = shift;#e.g. targetgene UBTF,MIR6782
-	my @genes1 = split(/,|\|/, $targetgene1);
-	my @genes2 = split(/,|\|/, $targetgene2);
-
-	foreach my $g1 (@genes1) {
-		foreach my $g2 (@genes2){
-			return 1 if(exists($known_fusion_partners{$g1}{$g2}));
-		}
-	}
-
-	return 0;
-}
-
 sub is_good_ITD {
 	my($bp1, $bp2) = @_;
 	my @genes = split(/,|\|/, $bp1->{gene});
@@ -699,20 +609,6 @@ sub count_coverage {
 	return $n;
 }
 
-sub is_dup_SV {
-	my($r_SVs, $sv) = @_;
-	foreach my $s (@{$r_SVs}) {
-		my $more_reads = ($s->{first_bp}->{reads_num} + $s->{second_bp}->{reads_num} >= $sv->{first_bp}->{reads_num} + $sv->{second_bp}->{reads_num}) ? 1 : 0;
-		my $longer_contig = ($s->{first_bp}->{matches} + $s->{second_bp}->{matches} >= $sv->{first_bp}->{matches} + $sv->{second_bp}->{matches}) ? 1 : 0;
-		return 1
-		if( 	($more_reads || $longer_contig) &&
-			abs($s->{first_bp}->{tpos} - $sv->{first_bp}->{tpos}) < 10 &&
-			abs($s->{second_bp}->{tpos} - $sv->{second_bp}->{tpos}) < 10 &&
-			$s->{first_bp}->{tname} eq $sv->{first_bp}->{tname} &&
-			$s->{second_bp}->{tname} eq $sv->{second_bp}->{tname});
-	}
-	return 0;
-}
 
 sub in_complex_region{
 	my ($chr, $pos) = @_;
@@ -731,44 +627,6 @@ sub is_bad_chrom{
 	return 0;
 }
 
-sub count_genes {
-	my ($chr,$start,$end, $transcript_strand) = @_;
-	my $cnt = 0;
-	my $debug = 0;
-	$transcript_strand = $transcript_strand > 0 ? "+" : "-" if($transcript_strand);
-	foreach my $strand( "+", "-" ) {
-		next if($transcript_strand && $strand ne $transcript_strand);
-		my $full_chr = ($chr=~/chr/) ? $chr : "chr".$chr;
-		my $tree = $gm->sub_model($full_chr, $strand);
-		next if(!$tree);
-		print STDERR "my \@tmp = $tree->intersect([$start, $end])\n" if($debug);
-		if($start > $end) {my $tmp = $start; $start = $end; $end = $tmp;}
-		my @tmp = $tree->intersect([$start, $end]);
-		print STDERR $strand, "\tnumber of genes: ", scalar @tmp, "\n" if($debug);
-		foreach my $tnode (@tmp) {
-			my $g=$tnode->val;
-			my $gRange = $chr.":".$g->start."-".$g->end;
-			print STDERR $g->name, "\tgRange = $gRange\tstart:$start\tend:$end\n" if($debug);
-			return 0 if($g->start <= $start + 10000 && $g->end >= $end - 10000);
-			if($g->start > $start && $g->end < $end && $g->get_cds_length > 300){
-				# to solve the overlapping gene problem.
-				my $overlap = 0;
-				foreach my $t (@tmp){
-					my $tg = $t->val;
-					next if($tg->name eq $g->name);
-					$overlap = 1 if($tg->start < $g->start && $tg->end > $g->end);
-				}
-				$cnt++ unless($overlap);
-			}
-		}
-	}
-	return $cnt;
-}
-
-sub uniq {
-    return keys %{{ map { $_ => 1 } @_ }};
-}
-
 sub low_complexity{
 	my $sequence = shift;
 	my $max_run_nt = 20;
@@ -784,604 +642,6 @@ sub low_complexity{
 		return 1 if($n>20);
 	}
 	return 0;
-}
-
-sub annotate {
-	my %args = @_;
-	my ($gm, $SV) = @_;
-	my $debug = 0;
-	print "\n=== annotate SV ===\n" if($debug);
-	my ($first_bp, $second_bp, $qseq) = ($SV->{first_bp}, $SV->{second_bp}, $SV->{junc_seq});
-	my($annotated_first_bp, $annotated_second_bp) = ($first_bp, $second_bp);
-	my($crA, $crB) = (in_complex_region($first_bp->{tname}, $first_bp->{tpos}), in_complex_region($second_bp->{tname}, $second_bp->{tpos}));
-	if($crA){
-		$annotated_first_bp->{gene} = $crA;
-		$annotated_first_bp->{feature} = '5utr';
-		$annotated_first_bp->{annotate_score} = 0.5;
-		$annotated_second_bp = annotate_enhancer_gene_bp($second_bp) unless($crB);
-	}
-
-	if($crB){
-		$annotated_second_bp->{gene} = $crB;
-		$annotated_second_bp->{feature} = '5utr';
-		$annotated_second_bp->{annotate_score} = 0.5;
-		$annotated_first_bp = annotate_enhancer_gene_bp($first_bp) unless($crA);
-	}
-
-	print STDERR "\nannotation... --- junc_seq ", $qseq, "\n" if($debug);
-	print STDERR "clip info: ", $first_bp->{clip}, "\t", $second_bp->{clip}, "\n" if($debug);
-	print STDERR "\nstart bp1 annotation .....\n" if($debug);
-	$annotated_first_bp = annotate_bp($first_bp) unless($annotated_first_bp->{feature});
-	print STDERR "bp1 annotation: ", join("\t", $annotated_first_bp->{feature}, $annotated_first_bp->{annotate_score},
-		$annotated_first_bp->{gene}), "\n" if($debug);
-
-	print STDERR "\nstart bp2 annotation .....\n" if($debug);
-	$annotated_second_bp = annotate_bp($second_bp) unless($annotated_second_bp->{feature});
-	print STDERR "bp2 annotation: ", join("\t", $annotated_second_bp->{feature}, $annotated_second_bp->{annotate_score},
-		$annotated_second_bp->{gene}), "\n" if($debug);
-
-	my $qseq_ort = sign($annotated_first_bp->{annotate_score} + $annotated_second_bp->{annotate_score}, 'd');
-	if($qseq_ort < 0){
-		$qseq = rev_comp($qseq);
-		$annotated_first_bp->{qstrand} = -1*$annotated_first_bp->{qstrand};
-		$annotated_first_bp->{ort} = -1*$annotated_first_bp->{ort};
-		$annotated_second_bp->{qstrand} = -1*$annotated_second_bp->{qstrand};
-		$annotated_second_bp->{ort} = -1*$annotated_second_bp->{ort};
-		$annotated_first_bp->{qpos} = length($qseq) - $annotated_first_bp->{qpos} + 1;
-		$annotated_second_bp->{qpos} = length($qseq) - $annotated_second_bp->{qpos} + 1;
-	}
-	print STDERR "\nfirst bp ort -- ", $first_bp->{ort}, "\n" if($debug);
-
-	my $annotated_SV;
-	print STDERR "\njunc_seq ", $qseq, "\nfinished annotation\n\n" if($debug);
-	if($first_bp->{ort} < 0){
-
-		$annotated_SV = {
-			junc_seq => $qseq,
-			first_bp => $annotated_second_bp,
-			second_bp => $annotated_first_bp,
-			ort => '>',
-			};
-	}
-	else {
-		$annotated_SV = {
-			junc_seq => $qseq,
-			first_bp => $annotated_first_bp,
-			second_bp => $annotated_second_bp,
-			ort => '>',
-			};
-	}
-	my $same_gene = same_gene($annotated_first_bp->{gene}, $annotated_second_bp->{gene});
-
-	my $type = ($qseq_ort ==0) ? get_type($annotated_first_bp, $annotated_second_bp, $same_gene) : get_type($annotated_first_bp, $annotated_second_bp, $same_gene, $annotated_first_bp->{qstrand});
-	return if($type eq "Internal_splicing");
-	print STDERR "type = $type\n" if($debug);
-
-	if($qseq_ort == 0){
-		$annotated_SV->{ort} = '?';
-	}
-	$annotated_SV->{type} = $type;
-	return $annotated_SV;
-} #end of annotate
-
-sub sign{
-
-	my $a = shift;
-	my $b = shift;
-
-	if($b eq 'c'){
-		return '+' if($a > 0);	
-		return '-' if($a < 0);	
-		return '=' if($a == 0);	
-	}
-
-	if($b eq 'd'){
-		return 1 if($a > 0);	
-		return -1 if($a < 0);	
-		return 0 if($a == 0);	
-	}
-}
-
-sub annotate_enhancer_gene_bp{
-
-	my $bp = shift;
-	my $debug = 0;
-	my $chr = ($bp->{tname} =~ m/chr/) ? $bp->{tname} : "chr".$bp->{tname};
-	my $tpos = $bp->{tpos};
-	my $strand = ($bp->{qstrand} > 0) ? '+' : '-';
-	print STDERR "\n=== annotating bp at ", $chr, ":", $tpos, "\t$strand ===\n" if($debug);
-	my $qseq_ort = ($bp->{ort} > 0) ? '+' : '-';
-	my $rev_strand = ($bp->{qstrand} > 0) ? '-' : '+';
-
-	my $extend_size = 1000000;
-	
-		my ($start, $end) = ($tpos - $extend_size, $tpos + $extend_size);
-		my $gm_tree = $gm->sub_model($chr, $strand);
-		return if(!defined($gm_tree));
-		my @tmp = $gm_tree->intersect([$start, $end]);
-		foreach my $g (@tmp){
-			$g=$g->val;
-			next unless(exists($enhancer_activated_genes{$g->name}));
-			my ($tmp_feature, $tmp_score);
-			print STDERR "gene at $strand is: ", join("\t", $g->name, $g->start, $g->end),"\n" if($debug);
-			my $check_point = ($qseq_ort eq $strand) ? ($tpos - 10) : ($tpos + 10);
-			$tmp_feature = $g->get_feature($chr, $check_point, $strand);
-			print STDERR "$tmp_feature = g->get_feature($chr, $check_point, $strand)\n" if($debug);
-			$tmp_score = 1 if($tmp_feature eq 'coding');
-			$tmp_score = 0.8 if($tmp_feature =~ m/utr/);
-			$tmp_score = 0.5 if($tmp_feature eq 'intron');
-			$tmp_score = 0.1 if($tmp_feature eq 'intergenic');
-	
-			$bp->{annotate_score} = $tmp_score;
-			$bp->{feature} = $tmp_feature;
-			$bp->{ts_strand} = $bp->{qstrand};
-			$bp->{gene} = $g->name;
-			return $bp if($bp->{annotate_score} == 1);
-		}
-
-		print STDERR "gm_tree = gm->sub_model($chr, $rev_strand)\n" if($debug);
-		$gm_tree = $gm->sub_model($chr, $rev_strand);
-		@tmp = $gm_tree->intersect([$start, $end]);
-		# return gene orientation, qseq_ort, annotation ...
-		foreach my $g (@tmp){
-			$g=$g->val;
-			next unless(exists($enhancer_activated_genes{$g->name}));
-			my ($tmp_feature, $tmp_score);
-			print STDERR "gene at $rev_strand is: ", join("\t", $g->name, $g->start, $g->end),"\n" if($debug);
-			my $check_point = ($qseq_ort eq $strand) ? ($tpos - 10) : ($tpos + 10);
-			$tmp_feature = $g->get_feature($chr, $check_point, $rev_strand);
-			print STDERR "$tmp_feature = g->get_feature($chr, $check_point, $rev_strand)\n" if($debug);
-			$tmp_score = -1 if($tmp_feature eq 'coding');
-			$tmp_score = -0.8 if($tmp_feature =~ m/utr/);
-			$tmp_score = -0.5 if($tmp_feature eq 'intron');
-			$tmp_score = -0.1 if($tmp_feature eq 'intergenic');
-			$bp->{annotate_score} = $tmp_score;
-			$bp->{feature} = $tmp_feature;
-			$bp->{ts_strand} = -1*$bp->{qstrand};
-			$bp->{gene} = $g->name;
-			return $bp if(abs($bp->{annotate_score}) == 1);
-		}
-	return $bp;
-}
-
-sub annotate_bp{
-
-	my $bp = shift;
-	my $debug = 0;
-	my $chr = ($bp->{tname} =~ m/chr/) ? $bp->{tname} : "chr".$bp->{tname};
-	my $tpos = $bp->{tpos};
-	print STDERR "\n=== annotating bp at ", $chr, ":", $tpos, " ===\n" if($debug);
-	my $strand = ($bp->{qstrand} > 0) ? '+' : '-';
-	my $qseq_ort = ($bp->{ort} > 0) ? '+' : '-';
-	my $rev_strand = ($bp->{qstrand} > 0) ? '-' : '+';
-	$bp->{annotate_score} = 0;
-	$bp->{feature} = 'intergenic';
-	$bp->{ts_strand} = 0;
-	$bp->{gene} = 'NA';
-	my $dist = 40000;
-
-	#priority order: same_direction exon > diff_direction exon > same_direction utr > diff_direction utr
-	#   > same_direction intron > diff_direction intron > min_distance intergenic (for all same/diff direction intergenic genes)
-	foreach my $extend_size (10, 5000, 10000, 40000){
-	
-		my ($start, $end) = ($tpos - $extend_size, $tpos + $extend_size);
-		my $gm_tree = $gm->sub_model($chr, $strand);
-		return if(!defined($gm_tree));
-		my @tmp = $gm_tree->intersect([$start, $end]);
-		foreach my $g (@tmp){
-			$g=$g->val;
-			my ($tmp_feature, $tmp_score);
-			print STDERR "gene at $strand is: ", join("\t", $g->name, $g->start, $g->end),"\n" if($debug);
-			my $check_point = ($qseq_ort eq $strand) ? ($tpos - 10) : ($tpos + 10);
-			$tmp_feature = $g->get_feature($chr, $check_point, $strand);
-			print STDERR "$tmp_feature = g->get_feature($chr, $check_point, $strand)\n" if($debug);
-			$tmp_score = 1 if($tmp_feature eq 'coding');
-			$tmp_score = 0.8 if($tmp_feature =~ m/utr/);
-			$tmp_score = 0.5 if($tmp_feature eq 'intron');
-			$tmp_score = 0.1 if($tmp_feature eq 'intergenic');
-			my $tmp_dist = (abs($g->start - $tpos) < abs($g->end - $tpos)) ? abs($g->start - $tpos) : abs($g->end - $tpos);
-	
-			return $bp if($bp->{annotate_score} == 1);
-
-                        if($tmp_feature eq 'intergenic')
-                        {
-                                if($tmp_dist < $dist && abs($bp->{annotate_score}) < 0.11){#Tian if saved feature is +/- intergenic, update the annotation if dist is smaller
-                                        $bp->{annotate_score} = $tmp_score;
-                                        $bp->{feature} = $tmp_feature;
-                                        $bp->{ts_strand} = $bp->{qstrand};
-                                        $bp->{gene} = $g->name;
-                                        $dist = $tmp_dist;
-                                        #print STDERR "update1 ", $tmp_score, " ", $tmp_feature, " ", $bp->{ts_strand}, " ", $bp->{gene}, " ", $dist, "\n";
-                                }
-                        }
-                        else{
-                                if($tmp_score > abs($bp->{annotate_score})){
-                                        $bp->{annotate_score} = $tmp_score;
-                                        $bp->{feature} = $tmp_feature;
-                                        $bp->{ts_strand} = $bp->{qstrand};
-                                        $bp->{gene} = $g->name;
-                                        #print STDERR "update1 ", $tmp_score, " ", $tmp_feature, " ", $bp->{ts_strand}, " ", $bp->{gene}, " ", $dist, "\n";
-                                }
-                        }
-		}
-
-		print STDERR "gm_tree = gm->sub_model($chr, $rev_strand)\n" if($debug);
-		$gm_tree = $gm->sub_model($chr, $rev_strand);
-		@tmp = $gm_tree->intersect([$start, $end]);
-		# return gene orientation, qseq_ort, annotation ...
-		foreach my $g (@tmp){
-			$g=$g->val;
-			my ($tmp_feature, $tmp_score);
-			print STDERR "gene at $rev_strand is: ", join("\t", $g->name, $g->start, $g->end),"\n" if($debug);
-			my $check_point = ($qseq_ort eq $strand) ? ($tpos - 10) : ($tpos + 10);
-			$tmp_feature = $g->get_feature($chr, $check_point, $rev_strand);
-			print STDERR "$tmp_feature = g->get_feature($chr, $check_point, $rev_strand)\n" if($debug);
-			$tmp_score = -1 if($tmp_feature eq 'coding');
-			$tmp_score = -0.8 if($tmp_feature =~ m/utr/);
-			$tmp_score = -0.5 if($tmp_feature eq 'intron');
-			$tmp_score = -0.1 if($tmp_feature eq 'intergenic');
-			my $tmp_dist = (abs($g->start - $tpos) < abs($g->end - $tpos)) ? abs($g->start - $tpos) : abs($g->end - $tpos);
-			
-			return $bp if($bp->{annotate_score} == -1);
-
-                        if($tmp_feature eq 'intergenic')
-                        {
-                                if($tmp_dist < $dist && abs($bp->{annotate_score}) < 0.11){#Tian if saved feature is +/- intergenic, update the annotation if dist is smaller
-                                        $bp->{annotate_score} = $tmp_score;
-                                        $bp->{feature} = $tmp_feature;
-                                        $bp->{ts_strand} = -1*$bp->{qstrand};
-                                        $bp->{gene} = $g->name;
-                                        $dist = $tmp_dist;
-                                        #print STDERR "update2 ", $tmp_score, " ", $tmp_feature, " ", $bp->{ts_strand}, " ", $bp->{gene}, " ", $dist, "\n";
-                                }
-                        }
-                        else{
-                                if(abs($tmp_score) > abs($bp->{annotate_score})){
-                                        $bp->{annotate_score} = $tmp_score;
-                                        $bp->{feature} = $tmp_feature;
-                                        $bp->{ts_strand} = -1*$bp->{qstrand};
-                                        $bp->{gene} = $g->name;
-                                        #print STDERR "update2 ", $tmp_score, " ", $tmp_feature, " ", $bp->{ts_strand}, " ", $bp->{gene}, " ", $dist, "\n";
-                                }
-                        }
-		}
-	}
-	return $bp;
-}
-
-sub quantification {
-	my $debug = 0;
-	my %args = @_;
-	my ($gm, $sam, $validator, $paired, $SV, $anno_dir) =
-		($args{-GeneModel}, $args{-SAM}, $args{-VALIDATOR}, $args{-PAIRED}, $args{-SV}, $args{-ANNO_DIR});
-	my ($bp1, $bp2) = ($SV->{first_bp}, $SV->{second_bp});
-	my ($chr1, $pos1, $start1, $end1) = ($bp1->{tname}, $bp1->{tpos}, $bp1->{ort}, $bp1->{tstart}, $bp1->{tend});
-	my ($chr2, $pos2, $start2, $end2) = ($bp2->{tname}, $bp2->{tpos}, $bp2->{ort}, $bp2->{tstart}, $bp2->{tend});
-	$debug = 0 if(abs($pos1 - 170818803)<10 || abs($pos2 - 170818803)<10);
-	print STDERR "xxx\n" if(abs($pos1 - 170818803)<10 || abs($pos2 - 170818803)<10);
-	my $fixSC1 = $bp1->{reads_num} < 10 ? 1 : 0;
-	my $fixSC2 = $bp2->{reads_num} < 10 ? 1 : 0;
-
-	# right clip or left clip?
-	my $clip1;
-	if($bp1->{ort} != 1 && $bp1->{ort} != -1){
-		print STDERR "bp1->ort ", $bp1->{ort}, " error!\n";
-		exit 6;
-	}
-	$clip1 = $bp1->{ort}*$bp1->{qstrand};
-
-	# right clip or left clip?
-	my $clip2;
-	if($bp2->{ort} != 1 && $bp2->{ort} != -1){
-		print STDERR "bp2->ort ", $bp2->{ort}, " error!\n";
-		exit 7;
-	}
-	$clip2 = $bp2->{ort}*$bp2->{qstrand};
-
-	my $gap_size = 0;
-	if($chr1 eq $chr2){
-		$gap_size = abs($pos2-$pos1) if(($pos1 < $pos2 && $clip1 == RIGHT_CLIP && $clip2 == LEFT_CLIP) ||
-		  ($pos1 > $pos2 && $clip2 == RIGHT_CLIP && $clip1 == LEFT_CLIP));
-	}
-
-	my $rmdup=1;
-	my $clip1x = $clip1 + 1;
-	my $fa_file1 = "$anno_dir/".join(".", $chr1,$pos1, ($clip1+1), "fa");
-	my $output_mate = 1;
-	$output_mate = 0 if($SV->{type} eq "Internal_dup");	
-	prepare_reads_file(
-			-OUT => $fa_file1,
-		        -SAM => $sam,
-			-CHR =>$chr1,
-			-POS => $pos1,
-			-CLIP => $clip1,
-			-VALIDATOR => $validator,
-			-PAIRED => $paired,
-			-RMDUP => $rmdup,
-			-MIN_SC => 1,
-			-SC_SHIFT => $sc_shift,
-			-MIN_SC_LEN => 3,
-			-GAP_SIZE => $gap_size,
-			-FIXSC => $fixSC1,
-			-UNMAPPED_CUTOFF => 1000,
-			-MATE => $output_mate
-	        	) unless(-s $fa_file1);
-	print STDERR "fa_file1: *$fa_file1*\n" if($debug);
-
-	my $fa_file2 = "$anno_dir/".join(".", $chr2, $pos2, ($clip2+1), "fa");
-	prepare_reads_file(
-			-OUT => $fa_file2,
-		        -SAM => $sam,
-			-CHR =>$chr2,
-			-POS => $pos2,
-			-CLIP => $clip2,
-			-VALIDATOR => $validator,
-			-PAIRED => $paired,
-			-RMDUP => $rmdup,
-			-MIN_SC => 1,
-			-SC_SHIFT => $sc_shift,
-			-MIN_SC_LEN => 3,
-			-GAP_SIZE => $gap_size,
-			-FIXSC => $fixSC2,
-			-UNMAPPED_CUTOFF => 1000,
-			-MATE => $output_mate
-	        	) unless(-s $fa_file2);
-	print STDERR "fa_file2: *$fa_file2*\n" if($debug);
-	return unless((-f $fa_file1 && -s $fa_file1) || (-f $fa_file2 && -s $fa_file2));
-
-	my $fa_file = "$anno_dir/reads.$chr1.$pos1.$chr2.$pos2.fa";
-	if($fa_file1 eq $fa_file2){
-		#`cat $fa_file1 > $fa_file`;
-		$fa_file = $fa_file1;
-		#`cat $fa_file1.qual > $fa_file.qual` if(-s "$fa_file1.qual");
-	}
-	else {
-		unlink $fa_file if(-s $fa_file);
-		#unlink "$fa_file.qual" if(-s "$fa_file.qual");
-		my $arg = "";
-		$arg .= " $fa_file1 " if (-f $fa_file1 && -s $fa_file1);
-		$arg .= " $fa_file2 " if (-f $fa_file2 && -s $fa_file2);
-		if ($arg ne ""){
-			`cat $arg >> $fa_file`;
-			if ($?){
-				my $err = $!;
-				print STDERR "Error creating fasta file: $err\n";
-				exit 8;
-			}
-		}
-		#`cat $fa_file1 >> $fa_file` if(-f $fa_file1 && -s $fa_file1);
-		#`cat $fa_file2 >> $fa_file` if(-f $fa_file2 && -s $fa_file2);
-		#`cat $fa_file1.qual >> $fa_file.qual` if(-f "$fa_file1.qual" && -s "$fa_file1.qual");
-		#`cat $fa_file2.qual >> $fa_file.qual` if(-f "$fa_file2.qual" && -s "$fa_file2.qual");
-	}
-	print STDERR "to do assembly ...\n" if($debug);
-	my($contig_file, $sclip_count, $contig_reads) = $assembler->run($fa_file);
-
-	my @mappings;
-	print STDERR "start mapping ... $contig_file\n" if($debug && -s $contig_file);
-	print STDERR join("\t", $chr1, $pos1, $clip1, $read_len), "\n" if($debug);
-	my $ref_chr1 = normalizeChromosomeName($seq_ids[0], $chr1);
-	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr1, -scSite=>$pos1, -CLIP=>$clip1, -READ_LEN => $read_len) if(-s $contig_file);
-	print STDERR "number of mapping: ", scalar @mappings, "\n" if($debug);
-	my $ref_chr2 = normalizeChromosomeName($seq_ids[0], $chr2);
-	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr2, -scSite=>$pos2, -CLIP=>$clip2, -READ_LEN => $read_len) if(-s $contig_file);
-	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr2, -scSite=>$pos2, -CLIP=>$clip2, -READ_LEN => $read_len) if(($SV->{type} eq 'Internal_dup' || !@mappings) && -s $contig_file);
-
-	my @qSVs;
-	foreach my $sv (@mappings){
-		print STDERR "\n***mapping of new contig: ", $sv->{junc_seq}, "\n" if($debug);
-
-		my ($first_bp, $second_bp, $qseq) = ($sv->{first_bp}, $sv->{second_bp}, $sv->{junc_seq});
-		my ($ortA, $chrA, $tstartA, $tendA, $qstartA, $qendA, $qstrandA, $matchesA, $percentA, $repeatA) =
-		   ($first_bp->{ort}, $first_bp->{tname}, $first_bp->{tstart}, $first_bp->{tend}, $first_bp->{qstart}, $first_bp->{qend}, $first_bp->{qstrand}, $first_bp->{matches}, $first_bp->{percent}, $first_bp->{repeat});
-		my ($ortB ,$chrB, $tstartB, $tendB, $qstartB, $qendB, $qstrandB, $matchesB, $percentB, $repeatB) =
-		   ($second_bp->{ort}, $second_bp->{tname}, $second_bp->{tstart}, $second_bp->{tend}, $second_bp->{qstart}, $second_bp->{qend}, $second_bp->{qstrand}, $second_bp->{matches}, $second_bp->{percent}, $second_bp->{repeat});
-		if($bp1->{tname} =~ m/chr/) {
-			if ($chrA !~ m/^chr/){
-			  $chrA = "chr".$chrA;
-			}
-			if ($chrB !~ m/^chr/){
-			  $chrB = "chr".$chrB;
-			}
-		}	
-		print STDERR "first_bp: ",  join("\t", $ortA, $chrA, $tstartA, $tendA, $qstartA, $qendA, $qstrandA, $matchesA, $repeatA), "\n" if($debug);
-		print STDERR "second_bp: ", join("\t", $ortB, $chrB, $tstartB, $tendB, $qstartB, $qendB, $qstrandB, $matchesB, $repeatB), "\n" if($debug);
-		my ($qposA, $qposB) = ($ortA > 0) ? ($qendA, $qstartB) : ($qstartA, $qendB);
-		my ($clipA, $clipB) = ($ortA*$qstrandA, $ortB*$qstrandB);
-		my $tposA = ($clipA > 0) ? $tendA : $tstartA;
-		my $tposB = ($clipB > 0) ? $tendB : $tstartB;
-
-		print STDERR "first_bp: ", join("\t", $ortA, $chrA, $tposA, $qstrandA), "\n" if($debug);
-		print STDERR "second_bp: ", join("\t", $ortB, $chrB, $tposB, $qstrandB), "\n" if($debug);
-		print STDERR "bp1: ", join("\t", $bp1->{ort}, $bp1->{tname}, $bp1->{tpos}, $bp1->{qstrand}), "\n" if($debug);
-		print STDERR "bp2: ", join("\t", $bp2->{ort}, $bp2->{tname}, $bp2->{tpos}, $bp2->{qstrand}), "\n" if($debug);
-	
-		next unless(($chrA eq $bp1->{tname} && abs($bp1->{tpos} - $tposA)<50 &&
-			    $bp2->{tname} eq $chrB && abs($bp2->{tpos} - $tposB)<50) ||
-			    ($bp2->{tname} eq $chrA && abs($bp2->{tpos} - $tposA)<50 &&
-                            $bp1->{tname} eq $chrB && abs($bp1->{tpos} - $tposB)<50));
-		# to do alignment
-		my $tmp_ctg_file = "$anno_dir/reads.$chr1.$pos1.$chr2.$pos2.fa.tmp.contig";
-		open(my $CTG, ">$tmp_ctg_file");
-		print $CTG ">ctg\n$qseq\n";
-		close($CTG);
-
-		my ($psl_file1, $psl_file2) = ("$anno_dir/bp1.psl", "$anno_dir/bp2.psl",);
-		
-		unlink $psl_file1 if(-f $psl_file1); unlink $psl_file2 if(-f $psl_file2);
-		if (-s $fa_file1){
-			`blat -noHead -maxIntron=5 $tmp_ctg_file $fa_file1 $psl_file1`;
-			if ($?){
-				my $err = $!;
-				print STDERR "Error running blat: $err\n";
-				print STDERR "File: $fa_file1\n";
-				exit 9;
-			}
-		}
-		if (-s $fa_file2){
-			`blat -noHead -maxIntron=5 $tmp_ctg_file $fa_file2 $psl_file2`;
-			if ($?){
-				my $err = $!;
-				print STDERR "Error running blat: $err\n";
-				print STDERR "File: $fa_file2\n";
-				exit 10;
-			}
-		}
-		my ($readsA, $areaA, $readsB, $areaB) = (0,1,0,1);
-		my $shift_bases = 5;
-		if($chrA eq $bp1->{tname} && abs($bp1->{tpos} - $tposA)<50 &&
-		   $bp2->{tname} eq $chrB && abs($bp2->{tpos} - $tposB)<50){
-				$tposA = $bp1->{tpos};
-				$tposB = $bp2->{tpos};
-				($readsA, $areaA) = get_junc_reads($psl_file1, $qposA, $ortA, $shift_bases) if(-f $psl_file1);
-				($readsB, $areaB) = get_junc_reads($psl_file2, $qposB, $ortB, $shift_bases) if(-f $psl_file2);
-		}
-		elsif($bp2->{tname} eq $chrA && abs($bp2->{tpos} - $tposA)<50 &&
-                   $bp1->{tname} eq $chrB && abs($bp1->{tpos} - $tposB)<50){
-				$tposA = $bp2->{tpos};
-				$tposB = $bp1->{tpos};
-				($readsA, $areaA) = get_junc_reads($psl_file2, $qposA, $ortA, $shift_bases) if(-f $psl_file2);
-				($readsB, $areaB) = get_junc_reads($psl_file1, $qposB, $ortB, $shift_bases) if(-f $psl_file1);
-		}
-
-	my $selected_bp1 = {
-		clip => $clipA,
-		ort => $ortA,
-		tname => $chrA,
-		tpos => $tposA,
-		tstart => $tstartA,
-		tend => $tendA,
-		qpos => $qposA,
-		qstart => $qstartA,
-		qend => $qendA,
-		qstrand => $qstrandA,
-		matches => $matchesA,
-		percent => $percentA,
-		repeat => $repeatA,
-		reads_num => $readsA,
-		area => $areaA
-	};
-
-	my $selected_bp2 = {
-		clip => $clipB,
-		ort => $ortB,
-		tname => $chrB,
-		tpos => $tposB,
-		tstart => $tstartB,
-		tend => $tendB,
-		qpos => $qposB,
-		qstart => $qstartB,
-		qend => $qendB,
-		qstrand => $qstrandB,
-		matches => $matchesB,
-		percent => $percentB,
-		repeat => $repeatB,
-		reads_num => $readsB,
-		area => $areaB,
-	};
-
-		my $tmp_SV = {
-			junc_seq => $qseq,
-			first_bp => $selected_bp1,
-			second_bp => $selected_bp2
-			};
-		
-		push @qSVs, $tmp_SV if($selected_bp1->{tpos} && $selected_bp2->{tpos});
-	}
-	return @qSVs;
-}
-
-sub get_junc_reads{
-
-	my ($psl_file, $bp, $ort, $cutoff) = @_;
-	my %junc_reads = ();
-	my $coverage = 0;
-	my $debug = 0;#Tiam
-	open(hFi, $psl_file);
-	my %supports = ();
-	while(<hFi>){
-		my $line = $_;
-		chomp($line);
-		my @fields = split(/\t/, $line);
-		my ($matches, $qstrand, $qname, $qstart, $qend, $tstart, $tend) = ($fields[0], $fields[8], $fields[9], $fields[11], $fields[12], $fields[15], $fields[16]);
-		next unless($matches > $min_hit_len);
-		my $percent = $matches/($qend - $qstart);
-		next if($percent <= 0.95);
-		next unless($tend > $bp + $cutoff && $tstart < $bp - $cutoff);
-		$junc_reads{$qname} = 1;
-		$qstrand = ($qstrand eq '+') ? 1 : -1;
-		my $support_len = ($ort > 0) ? ($tend - $bp) : ($bp - $tstart);
-		print STDERR "$qname: support_len = ($ort > 0) ? ($tend - $bp) : ($bp - $tstart)\n" if($debug);
-		print STDERR "coverage = $coverage + $support_len\n" if($debug);
-		if(! exists($supports{$support_len})){
-			$supports{$support_len} = 1;
-		}
-		else{
-			next if($supports{$support_len} == 2);
-			$supports{$support_len}++;
-		}
-		$coverage = $coverage + $support_len;
-	}
-	close(hFi);
-	my @rtn = (scalar (keys %junc_reads), $coverage);
-	return @rtn;
-}
-
-sub get_genes {
-
-	my ($gm, $chr, $start, $end) = @_;
-	my ($f_tree, $r_tree) = ($gm->sub_model($chr, "+"), $gm->sub_model($chr, "-"));
-	my (%genes, @f_genes, @r_genes);
-	push @f_genes, $f_tree->intersect([$start, $end]);
-	push @r_genes, $r_tree->intersect([$start, $end]);
-	if(!@f_genes && !@r_genes){
-		push @f_genes, $f_tree->intersect([$start-5000, $end+5000]);
-		push @r_genes, $r_tree->intersect([$start-5000, $end+5000]);
-	}
-	if(!@f_genes && !@r_genes){
-		push @f_genes, $f_tree->intersect([$start-10000, $end+10000]);
-		push @r_genes, $r_tree->intersect([$start-10000, $end+10000]);
-	}
-	return (\@f_genes, \@r_genes);
-}
-
-sub get_gene_name {
-	my ($gm, $chr, $start, $end) = @_;
-	my ($f_tree, $r_tree) = ($gm->sub_model($chr, "+"), $gm->sub_model($chr, "-"));
-	my (%genes, @f_genes, @r_genes);
-	push @f_genes, $f_tree->intersect([$start, $end]);
-	push @r_genes, $r_tree->intersect([$start, $end]);
-	if(!@f_genes && !@r_genes){
-		push @f_genes, $f_tree->intersect([$start-5000, $end+5000]);
-		push @r_genes, $r_tree->intersect([$start-5000, $end+5000]);
-	}
-	if(!@f_genes && !@r_genes){
-		push @f_genes, $f_tree->intersect([$start-10000, $end+10000]);
-		push @r_genes, $r_tree->intersect([$start-10000, $end+10000]);
-	}
-	if(!@f_genes && !@r_genes){
-		push @f_genes, $f_tree->intersect([$start-40000, $end+40000]);
-		push @r_genes, $r_tree->intersect([$start-40000, $end+40000]);
-	}
-	if(!@f_genes && !@r_genes) {
-		$genes{'NA'} = 0;
-		return \%genes;
-	};
-
-	foreach my $g (@f_genes){
-		my @gene_names = split(/,|\|/,$g->val->name);
-		foreach my $g1 (@gene_names){
-			$genes{$g1} = 1;
-		}
-	}	
-
-	foreach my $g (@r_genes){
-		my @gene_names = split(/,|\|/,$g->val->name);
-		foreach my $g1 (@gene_names){
-			$genes{$g1} = -1;
-		}
-	}	
-	return \%genes;
 }
 
 sub get_type {

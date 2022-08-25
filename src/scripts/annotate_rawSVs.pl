@@ -43,11 +43,6 @@ use constant BADFUSION_DISTANCE_CUTOFF => 200;
 
 my $debug = 0;
 
-my $out_header = join("\t", "sample", "geneA", "chrA", "posA", "ortA", "featureA", "geneB", "chrB", "posB", "ortB", "featureB",
-		 	"sv_ort", "readsA", "readsB", "matchA", "matchB", "repeatA", "repeatB", , "coverageA", "coverageB",
-			 "ratioA", "ratioB", "qposA", "qposB", "total_readsA", "total_readsB", "contig", "type");
-
-
 my ($blat_server, $blat_port, $dir_2bit);
 my $blat_client_options = ' -out=psl -nohead > /dev/null 2>&1';
 my $cap3_options = " -o 25 -z 2 -h 60 > /dev/null";
@@ -56,15 +51,15 @@ my $rmdup = 0;
 my $paired = 1;
 
 # input/output
-my ($genome, $ref_genome, $gene_model_file, $header);
-my ($config_file, $out_dir, $gene_info_file, $junction_file, $known_itd_file, $known_fusion_file);
-my ($input_bam, $raw_file, $read_len, $sample);
+my ($genome, $ref_genome, $gene_model_file);
+my ($out_dir, $known_itd_file, $known_fusion_file);
+my ($input_bam, $raw_file, $read_len);
 my ($all_output, $internal, $DNA) = (0, 0, 0);
 my ($min_hit_len, $max_num_hits, $min_fusion_distance);
 $min_hit_len = 25;
 my $sc_shift = 10;
-my ($excluded_gene_file, $excluded_fusion_file, $complex_region_file, $excluded_chroms, $gold_gene_file);
-my ( $help, $man, $version, $usage );
+my ($excluded_gene_file, $complex_region_file, $gold_gene_file);
+my ($help, $man, $version, $usage );
 
 if(@ARGV == 0){
 	#TODO: get the correct usage string
@@ -73,12 +68,10 @@ if(@ARGV == 0){
 }
 
 my $optionOK = GetOptions(
-	'i|in|input=s'	=> \$input_bam,	
+	'i|in|input=s'	=> \$input_bam,
 	'r|raw_file=s'	=> \$raw_file,
-	'config_file=s'	=> \$config_file,
 	'o|out_dir=s'	=> \$out_dir,
 	'genome=s'  => \$genome,
-	'header'    => \$header,
 	'ref_genome=s'  => \$ref_genome,
 	'genemodel=s'		=> \$gene_model_file,
 	'blatserver' =>	\$blat_server,
@@ -92,21 +85,13 @@ my $optionOK = GetOptions(
 	'internal!' => \$internal,
 	'all!' => \$all_output,
 	'DNA!' => \$DNA,
-	'f|gene_info_file=s' => \$gene_info_file,
 	'known_itd_file=s'	=> \$known_itd_file,
 	'known_fusion_file=s'	=> \$known_fusion_file,
-	'j|junction_file=s' => \$junction_file,
-	's|sample=s'		=> \$sample,
 	'h|help|?'		=> \$help,
 	'man'			=> \$man,
 	'usage'			=> \$usage,
 	'v|version'		=> \$version,
 );
-
-if ($header){
-	print STDOUT $out_header;
-	exit;
-}
 
 my $conf;
 # Load configuration values for the genome build
@@ -124,14 +109,11 @@ $dir_2bit = '/';
 $gene_model_file = $conf->{'REFSEQ_REFFLAT'} unless($gene_model_file);
 print STDERR "gene_model_file: $gene_model_file\n";
 $excluded_gene_file = $conf->{EXCLUDED_GENES} unless($excluded_gene_file);
-$excluded_fusion_file = $conf->{EXCLUDED_FUSIONS} unless($excluded_fusion_file);
-print STDERR "excluded_fusion_file: $excluded_fusion_file\n";
 $known_itd_file = $conf->{KNOWN_ITD_FILE} unless($known_itd_file);
 print STDERR "KNOWN_ITD_FILE: ", $known_itd_file, "\n";
 $known_fusion_file = $conf->{KNOWN_FUSIONS} unless($known_fusion_file);
 $gold_gene_file = $conf->{CICERO_GOLD_GENE_LIST_FILE};
 print STDERR "CICERO_GOLD_GENE_LIST_FILE:", $gold_gene_file, "\n";
-$excluded_chroms = $conf->{EXCLD_CHR} unless($excluded_chroms);
 $complex_region_file = $conf->{COMPLEX_REGIONS} unless($complex_region_file);
 
 # Load Cicero-specific configuration settings
@@ -139,11 +121,6 @@ $conf = &TdtConfig::readConfig('app', 'cicero');
 $min_hit_len = $conf->{MIN_HIT_LEN} unless($min_hit_len);
 $max_num_hits = $conf->{MAX_NUM_HITS} unless($max_num_hits);
 $min_fusion_distance = $conf->{MIN_FUSION_DIST} unless($min_fusion_distance);
-
-# Assume sample name is the bam prefix
-$sample = basename($input_bam, ".bam") unless($sample);
-
-my @excluded_chroms = split(/,/,$excluded_chroms);
 
 # Load list of complex regions to be used later to determine if
 # breakpoints are located within a "complex" region
@@ -165,51 +142,6 @@ my @complex_regions;
 	close($CRF);
 	my %cr_hash = map { $_->{name} => 1 } @complex_regions;
 #}
-
-
-# Combine all of the individual results from Cicero.pl
-my $unfiltered_file = "$out_dir/unfiltered.fusion.txt";
-if($internal) {
-	$unfiltered_file = "$out_dir/unfiltered.internal.txt";
-	unless (-s $unfiltered_file){
-		`cat $out_dir/*/unfiltered.internal.txt > $unfiltered_file`;
-		if ($?){
-			my $err = $!;
-			print STDERR "Error combining internal events: $err\n";
-			exit 2;
-		}		
-	}
-}
-else{
-	unless (-s $unfiltered_file){
-		`cat $out_dir/*/unfiltered.fusion.txt > $unfiltered_file`;
-		if ($?){
-			my $err = $!;
-			print STDERR "Error combining fusion events: $err\n";
-			exit 3;
-		}
-	}
-}
-print "Unfiltered fusions file: $unfiltered_file\n";
-
-if (! $gene_info_file || ! -e $gene_info_file){
-	my $out_prefix = basename($input_bam, ".bam");
-	$gene_info_file = "$out_prefix.gene_info.txt";
-	$gene_info_file = File::Spec->catfile($out_dir, $gene_info_file);
-}
-my $out_file = $unfiltered_file;
-$out_file =~ s/unfiltered/annotated/;
-print STDERR "unfiltered results: $unfiltered_file\n" if($debug);
-
-my %gene_info = ();
-print STDERR "\ngene_info_file: $gene_info_file\n" if($debug);
-open my $GI, "$gene_info_file" or die "cannot open < $gene_info_file: $!";
-while(<$GI>){
-	chomp;
-	my ($name, $gRange, $strand, $mRNA_length, $cnt, $sc_cutoff) = split(/\t/);
-	$gene_info{$name} = $sc_cutoff;
-}
-close $GI;
 
 # Intialize CAP3 and BLAT utilities
 # These variables will be global
@@ -260,32 +192,6 @@ if($gold_gene_file && -e $gold_gene_file){
 	close($GGF);
 }
 
-my %bad_fusions;
-my $df = new DelimitedFile(
-	"-file" => $excluded_fusion_file,
-	"-headers" => 1,
-);
-
-while (my $row = $df->get_hash()) {
-	my ($chrA, $posA, $chrB, $posB) = ($row->{chrA}, $row->{posA}, $row->{chrB}, $row->{posB});
-	$bad_fusions{$chrA.":".$posA.":".$chrB.":".$posB} = 1;	      
-}
-
-sub is_bad_fusion{
-	my ($chrA, $posA, $chrB, $posB) = @_;
-	$chrA = "chr".$chrA unless($chrA =~ /chr/);
-	$chrB = "chr".$chrB unless($chrB =~ /chr/);
-	foreach my $xx (keys %bad_fusions) {
-		my ($chr1, $pos1, $chr2, $pos2) = split(":",$xx);
-		#print STDERR " badfusionlist |".$chr1.":".$pos1.":".$chr2.":".$pos2."\n";
-		return 1 if($chrA eq $chr1 && $chrB eq $chr2 &&
-			    abs($pos1 - $posA) < BADFUSION_DISTANCE_CUTOFF && abs($pos2 - $posB) < BADFUSION_DISTANCE_CUTOFF);# cutoff is based on the cutoff of merging GTEx false positive fusions from CICERO running
-		return 1 if($chrA eq $chr2 && $chrB eq $chr1 &&
-			    abs($pos2 - $posA) < BADFUSION_DISTANCE_CUTOFF && abs($pos1 - $posB) < BADFUSION_DISTANCE_CUTOFF);
-	}
-	return 0;
-}
-
 my %known_ITDs = ();
 open(my $ITD_F, $known_itd_file) or die "Cannot open $known_itd_file: $!";
 while(<$ITD_F>){
@@ -314,10 +220,6 @@ if($known_fusion_file && -e $known_fusion_file){
 }
 
 my @raw_SVs = ();
-my %gene_recurrance = ();
-my %contig_recurrance = ();
-my %genepairs = ();
-my %breakpoint_sites = ();
 
 ### end of annotate.pl head
 
@@ -420,7 +322,7 @@ foreach my $sv (@raw_SVs){
 		if(exists($excluded{$g2})) {$bad_gene = 1; last;}
 	}
 	next if($bad_gene);
-	print STDERR "next if($contigSeq && ", $contig_recurrance{$contigSeq}," > $max_num_hits)\n" if(abs($sv->{second_bp}->{tpos} - 170818803)<10 || abs($sv->{first_bp}->{tpos} - 170818803)<10);
+	print STDERR "next if($contigSeq &&  > $max_num_hits)\n" if(abs($sv->{second_bp}->{tpos} - 170818803)<10 || abs($sv->{first_bp}->{tpos} - 170818803)<10);
 
 	my $bp1_site = join("_", $first_bp->{tname}, $first_bp->{tpos}, $first_bp->{clip});
 	my $bp2_site = join("_", $second_bp->{tname}, $second_bp->{tpos}, $second_bp->{clip});
@@ -464,7 +366,7 @@ foreach my $sv (@raw_SVs){
 ### write SVs to file 
 
 my $annotated_file = $raw_file;
-$annotated_file =~ s/raw/annotated/;
+$annotated_file =~ s/raw/quantified/;
 
 open(hFo, ">$annotated_file");
 foreach my $annotated_SV (@annotated_SVs){
@@ -492,22 +394,6 @@ print "annotated_SVs: ", scalar @annotated_SVs, "\n";
 
 ### start of annotate.pl tail
 
-sub exist_multiplename_pair_checking {
-	my %fusionpartner_list = %{(shift)};
-	my $targetgene1 = shift;#e.g. targetgene UBTF,MIR6782
-	my $targetgene2 = shift;#e.g. targetgene UBTF,MIR6782
-	my @genes1 = split(/,|\|/, $targetgene1);
-	my @genes2 = split(/,|\|/, $targetgene2);
-
-	foreach my $g1 (@genes1) {
-		foreach my $g2 (@genes2){
-			return 1 if(exists($known_fusion_partners{$g1}{$g2}));
-		}
-	}
-
-	return 0;
-}
-
 sub is_good_ITD {
 	my($bp1, $bp2) = @_;
 	my @genes = split(/,|\|/, $bp1->{gene});
@@ -523,124 +409,11 @@ sub is_good_ITD {
 	return 0;
 }
 
-sub is_dup_raw_SV {
-	my($r_SVs, $sv) = @_;
-	foreach my $s (@{$r_SVs}) {
-		return 1
-		if( abs($s->{first_bp}->{tpos} - $sv->{first_bp}->{tpos}) < 10 &&
-		    abs($s->{second_bp}->{tpos} - $sv->{second_bp}->{tpos}) < 10 &&
-			$s->{first_bp}->{tname} eq $sv->{first_bp}->{tname} &&
-			$s->{second_bp}->{tname} eq $sv->{second_bp}->{tname}
-		);
-
-		if( abs($s->{first_bp}->{tpos} - $sv->{second_bp}->{tpos}) < 10 &&
-		    abs($s->{second_bp}->{tpos} - $sv->{first_bp}->{tpos}) < 10 &&
-			$s->{first_bp}->{tname} eq $sv->{second_bp}->{tname} &&
-			$s->{second_bp}->{tname} eq $sv->{first_bp}->{tname}
-		){
-			$s->{second_bp} = $sv->{first_bp};
-			return 1;
-		}
-	}
-	return 0;
-}
-
-sub count_coverage {
-	my ($sam, $chr, $pos) = @_;
-	my $seg = $sam->segment(-seq_id => $chr, -start => $pos, -end => $pos);
-	return 0 unless $seg;
-	my $n = 0;
-	my $itr = $seg->features(-iterator => 1);
-	while( my $a = $itr->next_seq) {
-		next unless($a->start && $a->end); #why unmapped reads here?
-		$n++;
-	}
-	return $n;
-}
-
-sub is_dup_SV {
-	my($r_SVs, $sv) = @_;
-	foreach my $s (@{$r_SVs}) {
-		my $more_reads = ($s->{first_bp}->{reads_num} + $s->{second_bp}->{reads_num} >= $sv->{first_bp}->{reads_num} + $sv->{second_bp}->{reads_num}) ? 1 : 0;
-		my $longer_contig = ($s->{first_bp}->{matches} + $s->{second_bp}->{matches} >= $sv->{first_bp}->{matches} + $sv->{second_bp}->{matches}) ? 1 : 0;
-		return 1
-		if( 	($more_reads || $longer_contig) &&
-			abs($s->{first_bp}->{tpos} - $sv->{first_bp}->{tpos}) < 10 &&
-			abs($s->{second_bp}->{tpos} - $sv->{second_bp}->{tpos}) < 10 &&
-			$s->{first_bp}->{tname} eq $sv->{first_bp}->{tname} &&
-			$s->{second_bp}->{tname} eq $sv->{second_bp}->{tname});
-	}
-	return 0;
-}
-
 sub in_complex_region{
 	my ($chr, $pos) = @_;
 	my $full_chr = ($chr =~ m/chr/) ? $chr : "chr$chr";
 	foreach my $cr (@complex_regions){
 		return $cr->{name} if($cr->{chr} eq $full_chr && $pos > $cr->{start} && $pos < $cr->{end});
-	}
-	return 0;
-}
-
-sub is_bad_chrom{
-	my $chr = shift;
-	foreach my $bad_chr (@excluded_chroms){
-		return 1 if($chr =~ /$bad_chr/i);
-	}
-	return 0;
-}
-
-sub count_genes {
-	my ($chr,$start,$end, $transcript_strand) = @_;
-	my $cnt = 0;
-	my $debug = 0;
-	$transcript_strand = $transcript_strand > 0 ? "+" : "-" if($transcript_strand);
-	foreach my $strand( "+", "-" ) {
-		next if($transcript_strand && $strand ne $transcript_strand);
-		my $full_chr = ($chr=~/chr/) ? $chr : "chr".$chr;
-		my $tree = $gm->sub_model($full_chr, $strand);
-		next if(!$tree);
-		print STDERR "my \@tmp = $tree->intersect([$start, $end])\n" if($debug);
-		if($start > $end) {my $tmp = $start; $start = $end; $end = $tmp;}
-		my @tmp = $tree->intersect([$start, $end]);
-		print STDERR $strand, "\tnumber of genes: ", scalar @tmp, "\n" if($debug);
-		foreach my $tnode (@tmp) {
-			my $g=$tnode->val;
-			my $gRange = $chr.":".$g->start."-".$g->end;
-			print STDERR $g->name, "\tgRange = $gRange\tstart:$start\tend:$end\n" if($debug);
-			return 0 if($g->start <= $start + 10000 && $g->end >= $end - 10000);
-			if($g->start > $start && $g->end < $end && $g->get_cds_length > 300){
-				# to solve the overlapping gene problem.
-				my $overlap = 0;
-				foreach my $t (@tmp){
-					my $tg = $t->val;
-					next if($tg->name eq $g->name);
-					$overlap = 1 if($tg->start < $g->start && $tg->end > $g->end);
-				}
-				$cnt++ unless($overlap);
-			}
-		}
-	}
-	return $cnt;
-}
-
-sub uniq {
-    return keys %{{ map { $_ => 1 } @_ }};
-}
-
-sub low_complexity{
-	my $sequence = shift;
-	my $max_run_nt = 20;
-	my $mask_seq = $sequence;
-	$mask_seq =~ s/((.+)\2{9,})/'N' x length $1/eg;
-	return 1 if $mask_seq =~ /(N{$max_run_nt,})/;
-
-	my $len= length($mask_seq);
-	my $seg_len = 25;
-	for (my $i=0; $i<$len-$seg_len; $i++){
-		my $sub_seq = substr $mask_seq, $i, $seg_len;
-		my $n = @{[$sub_seq =~ /(N)/g]};
-		return 1 if($n>20);
 	}
 	return 0;
 }
@@ -1186,63 +959,6 @@ sub get_junc_reads{
 	return @rtn;
 }
 
-sub get_genes {
-
-	my ($gm, $chr, $start, $end) = @_;
-	my ($f_tree, $r_tree) = ($gm->sub_model($chr, "+"), $gm->sub_model($chr, "-"));
-	my (%genes, @f_genes, @r_genes);
-	push @f_genes, $f_tree->intersect([$start, $end]);
-	push @r_genes, $r_tree->intersect([$start, $end]);
-	if(!@f_genes && !@r_genes){
-		push @f_genes, $f_tree->intersect([$start-5000, $end+5000]);
-		push @r_genes, $r_tree->intersect([$start-5000, $end+5000]);
-	}
-	if(!@f_genes && !@r_genes){
-		push @f_genes, $f_tree->intersect([$start-10000, $end+10000]);
-		push @r_genes, $r_tree->intersect([$start-10000, $end+10000]);
-	}
-	return (\@f_genes, \@r_genes);
-}
-
-sub get_gene_name {
-	my ($gm, $chr, $start, $end) = @_;
-	my ($f_tree, $r_tree) = ($gm->sub_model($chr, "+"), $gm->sub_model($chr, "-"));
-	my (%genes, @f_genes, @r_genes);
-	push @f_genes, $f_tree->intersect([$start, $end]);
-	push @r_genes, $r_tree->intersect([$start, $end]);
-	if(!@f_genes && !@r_genes){
-		push @f_genes, $f_tree->intersect([$start-5000, $end+5000]);
-		push @r_genes, $r_tree->intersect([$start-5000, $end+5000]);
-	}
-	if(!@f_genes && !@r_genes){
-		push @f_genes, $f_tree->intersect([$start-10000, $end+10000]);
-		push @r_genes, $r_tree->intersect([$start-10000, $end+10000]);
-	}
-	if(!@f_genes && !@r_genes){
-		push @f_genes, $f_tree->intersect([$start-40000, $end+40000]);
-		push @r_genes, $r_tree->intersect([$start-40000, $end+40000]);
-	}
-	if(!@f_genes && !@r_genes) {
-		$genes{'NA'} = 0;
-		return \%genes;
-	};
-
-	foreach my $g (@f_genes){
-		my @gene_names = split(/,|\|/,$g->val->name);
-		foreach my $g1 (@gene_names){
-			$genes{$g1} = 1;
-		}
-	}	
-
-	foreach my $g (@r_genes){
-		my @gene_names = split(/,|\|/,$g->val->name);
-		foreach my $g1 (@gene_names){
-			$genes{$g1} = -1;
-		}
-	}	
-	return \%genes;
-}
-
 sub get_type {
 
 	my ($first_bp, $second_bp, $same_gene, $transcript_strand) = @_;
@@ -1266,21 +982,6 @@ sub get_type {
 		return 'INS';
 	}
 	return 'undef';
-}
-
-sub same_gene{
-
-	my ($gene1, $gene2) = @_;
-	my @g1_names = split(/,|\|/,$gene1);
-	my @g2_names = split(/,|\|/,$gene2);
-	my $same_gene=0;
-	foreach my $g1 (@g1_names){
-		foreach my $g2 (@g2_names){
-			return 0 if($g1 eq "NA" && $g2 eq "NA");
-			return 1 if($g1 eq $g2);
-		}
-	}
-	return 0;
 }
 
 =head1 LICENCE AND COPYRIGHT

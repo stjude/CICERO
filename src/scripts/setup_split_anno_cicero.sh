@@ -194,12 +194,12 @@ touch `get_step_cmds_file`
 cat /dev/null > `get_step_cmds_file`
 
 while read case_bam 
- do
-   bam="$DATA_DIR/\$case_bam/$case_bam.bam"
+do
+   bam="$DATA_DIR/\$case_bam/\$case_bam.bam"
    LEN=\`getReadLength.sh \$bam\` 
    ln -s $EXCLUDED_GENES $DATA_DIR/\$case_bam
-   echo "get_rawSVs.pl -c 10 -i \$bam -o $DATA_DIR/\$case_bam -l $LEN -genome $GENOME -s $case_bam -f $DATA_DIR/\$case_bam/\$case_bam.gene_info.txt -j $DATA_DIR/\$case_bam/\$case_bam.bam.junctions.tab.shifted.tab" >> `get_step_cmds_file`
-   echo "get_rawSVs.pl -c 10 -i \$bam -o $DATA_DIR/\$case_bam -l $LEN -genome $GENOME -s $case_bam -f $DATA_DIR/\$case_bam/\$case_bam.gene_info.txt -internal" >> `get_step_cmds_file`
+   echo "get_rawSVs.pl -c 10 -i \$bam -o $DATA_DIR/\$case_bam -l \$LEN -genome $GENOME -s \$case_bam -f $DATA_DIR/\$case_bam/\$case_bam.gene_info.txt -j $DATA_DIR/\$case_bam/\$case_bam.bam.junctions.tab.shifted.tab" >> `get_step_cmds_file`
+   echo "get_rawSVs.pl -c 10 -i \$bam -o $DATA_DIR/\$case_bam -l \$LEN -genome $GENOME -s \$case_bam -f $DATA_DIR/\$case_bam/\$case_bam.gene_info.txt -internal" >> `get_step_cmds_file`
  done < $RUN_DIR/config.txt
 EOF
 
@@ -228,7 +228,6 @@ while read case_bam
 done < $RUN_DIR/config.txt
 EOF
 
-
 cat > `get_step_make_cmds_script` <<EOF
 #!/bin/bash
 touch `get_step_cmds_file`
@@ -242,12 +241,12 @@ do
    
    for x in \$(ls \$outdir/raw.fusion.txt.*)
    do
-      echo "process_rawSVs.pl -c 10 -i \$bam -o $DATA_DIR/\$case_bam -r \$x -l \$LEN -genome $GENOME -s \$case_bam -f $DATA_DIR/\$case_bam/\$case_bam.gene_info.txt -j $DATA_DIR/\$case_bam/\$case_bam.bam.junctions.tab.shifted.tab"
+      echo "annotate_rawSVs.pl -c 10 -i \$bam -o $DATA_DIR/\$case_bam -r \$x -l \$LEN -genome $GENOME -s \$case_bam -f $DATA_DIR/\$case_bam/\$case_bam.gene_info.txt -j $DATA_DIR/\$case_bam/\$case_bam.bam.junctions.tab.shifted.tab"
    done >> `get_step_cmds_file`
    
    for x in \$(ls \$outdir/raw.internal.txt.*)
    do
-      echo "process_rawSVs.pl -c 10 -i \$bam -o $DATA_DIR/\$case_bam -r \$x -l \$LEN -genome $GENOME -s \$case_bam -f $DATA_DIR/\$case_bam/\$case_bam.gene_info.txt -j $DATA_DIR/\$case_bam/\$case_bam.bam.junctions.tab.shifted.tab -internal"
+      echo "annotate_rawSVs.pl -c 10 -i \$bam -o $DATA_DIR/\$case_bam -r \$x -l \$LEN -genome $GENOME -s \$case_bam -f $DATA_DIR/\$case_bam/\$case_bam.gene_info.txt -j $DATA_DIR/\$case_bam/\$case_bam.bam.junctions.tab.shifted.tab -internal"
    done >> `get_step_cmds_file`
    
 done < $RUN_DIR/config.txt
@@ -269,8 +268,8 @@ cat > `get_step_local_work_script` <<EOF
 while read case_bam 
 do
    outdir="$DATA_DIR/\$case_bam"
-   cat \$outdir/annotated.fusion.txt.* > \$outdir/annotated.fusion.txt
-   cat \$outdir/annotated.internal.txt.* > \$outdir/annotated.internal.txt
+   cat \$outdir/quantified.fusion.txt.* > \$outdir/quantified.fusion.txt
+   cat \$outdir/quantified.internal.txt.* > \$outdir/quantified.internal.txt
 done < $RUN_DIR/config.txt
 EOF
 
@@ -285,8 +284,8 @@ do
    outdir="$DATA_DIR/\$case_bam"
    LEN=\`getReadLength.sh \$bam\` 
    
-   echo "find_uniqSVs.pl -c 10 -i \$bam -o $DATA_DIR/\$case_bam -a $DATA_DIR/\$case_bam/annotated.fusion.txt -l \$LEN -genome $GENOME -s \$case_bam -f $DATA_DIR/\$case_bam/\$case_bam.gene_info.txt -j $DATA_DIR/\$case_bam/\$case_bam.bam.junctions.tab.shifted.tab" >> `get_step_cmds_file`
-   echo "find_uniqSVs.pl -c 10 -i \$bam -o $DATA_DIR/\$case_bam -a $DATA_DIR/\$case_bam/annotated.internal.txt -l \$LEN -genome $GENOME -s \$case_bam -f $DATA_DIR/\$case_bam/\$case_bam.gene_info.txt -j $DATA_DIR/\$case_bam/\$case_bam.bam.junctions.tab.shifted.tab -internal" >> `get_step_cmds_file`
+   echo "identify_uniqSVs.pl -c 10 -i \$bam -o $DATA_DIR/\$case_bam -a $DATA_DIR/\$case_bam/quantified.fusion.txt -l \$LEN -genome $GENOME -s \$case_bam -f $DATA_DIR/\$case_bam/\$case_bam.gene_info.txt -j $DATA_DIR/\$case_bam/\$case_bam.bam.junctions.tab.shifted.tab" >> `get_step_cmds_file`
+   echo "identify_uniqSVs.pl -c 10 -i \$bam -o $DATA_DIR/\$case_bam -a $DATA_DIR/\$case_bam/quantified.internal.txt -l \$LEN -genome $GENOME -s \$case_bam -f $DATA_DIR/\$case_bam/\$case_bam.gene_info.txt -j $DATA_DIR/\$case_bam/\$case_bam.bam.junctions.tab.shifted.tab -internal" >> `get_step_cmds_file`
    
 done < $RUN_DIR/config.txt
 EOF
