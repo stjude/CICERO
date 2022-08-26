@@ -49,7 +49,7 @@ my $out_header = join("\t", "sample", "geneA", "chrA", "posA", "ortA", "featureA
 
 # input/output
 my ($genome, $ref_genome, $header);
-my ($gene_info_file, $known_fusion_file);
+my ($out_dir,$gene_info_file, $known_fusion_file);
 my ($input_bam, $annotated_file, $sample);
 my ($excluded_gene_file);
 my ($help, $man, $version, $usage );
@@ -109,7 +109,6 @@ if (! $gene_info_file || ! -e $gene_info_file){
 
 my $uniq_file = $annotated_file;
 $uniq_file =~ s/quantified/annotated/;
-print STDERR "unfiltered results: $unfiltered_file\n" if($debug);
 
 my %gene_info = ();
 print STDERR "\ngene_info_file: $gene_info_file\n" if($debug);
