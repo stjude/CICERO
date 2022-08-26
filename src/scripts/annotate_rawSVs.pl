@@ -984,6 +984,21 @@ sub get_type {
 	return 'undef';
 }
 
+sub same_gene{
+
+	my ($gene1, $gene2) = @_;
+	my @g1_names = split(/,|\|/,$gene1);
+	my @g2_names = split(/,|\|/,$gene2);
+	my $same_gene=0;
+	foreach my $g1 (@g1_names){
+		foreach my $g2 (@g2_names){
+			return 0 if($g1 eq "NA" && $g2 eq "NA");
+			return 1 if($g1 eq $g2);
+		}
+	}
+	return 0;
+}
+
 =head1 LICENCE AND COPYRIGHT
 Copyright 2019 St. Jude Children's Research Hospital
 
