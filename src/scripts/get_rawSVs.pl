@@ -511,7 +511,6 @@ foreach my $g (sort { $gene_recurrance{$b} <=> $gene_recurrance{$a} } keys %gene
 }
 close($NEXC);
 
-print STDERR "out file is: $out_file\nnumber of SVs: ", scalar @raw_SVs, "\n" if($debug);
 `mkdir  -p $out_dir/tmp_anno`;
 if ($?){
 	my $err = $!;
