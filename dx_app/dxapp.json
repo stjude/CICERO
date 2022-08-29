@@ -36,7 +36,8 @@
   "runSpec": {
     "distribution": "Ubuntu",
     "interpreter": "bash",
-    "release": "16.04",
+    "release": "20.04",
+    "version": "0",
     "file": "src/code.sh",
     "timeoutPolicy": {
       "*": {
