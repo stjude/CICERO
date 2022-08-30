@@ -50,7 +50,7 @@
       { "name": "zlib1g-dev" },
       { "name": "parallel" },
       { "name": "bioperl" },
-      { "name": "realpath" },
+      { "name": "coreutils" },
       { "name": "samtools" },
       { "name": "libbio-samtools-perl" },
       { "name": "parallel" },
