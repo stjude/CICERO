@@ -223,8 +223,8 @@ while read case_bam
    rm \$outdir/raw.fusion.txt.*
    rm \$outdir/raw.internal.txt.*
    
-   split -a 4 -d -C 25000 \$outdir/raw.fusion.txt \$outdir/raw.fusion.txt.
-   split -a 4 -d -C 25000 \$outdir/raw.internal.txt \$outdir/raw.internal.txt.
+   split -a 4 -d -C 5000 \$outdir/raw.fusion.txt \$outdir/raw.fusion.txt.
+   split -a 4 -d -C 5000 \$outdir/raw.internal.txt \$outdir/raw.internal.txt.
 done < $RUN_DIR/config.txt
 EOF
 
