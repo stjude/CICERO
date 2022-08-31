@@ -268,8 +268,8 @@ cat > `get_step_local_work_script` <<EOF
 while read case_bam 
 do
    outdir="$DATA_DIR/\$case_bam"
-   cat \$outdir/quantified.fusion.txt.* > \$outdir/quantified.fusion.txt
-   cat \$outdir/quantified.internal.txt.* > \$outdir/quantified.internal.txt
+   cat $(ls \$outdir/quantified.fusion.txt.* | sort) > \$outdir/quantified.fusion.txt
+   cat $(ls \$outdir/quantified.internal.txt.* | sort) > \$outdir/quantified.internal.txt
 done < $RUN_DIR/config.txt
 EOF
 
