@@ -236,15 +236,15 @@ cat /dev/null > `get_step_cmds_file`
 while read case_bam
 do
    bam="$DATA_DIR/\$case_bam/\$case_bam.bam"
-   LEN=\`getReadLength.sh \$bam\` 
+   LEN=\`getReadLength.sh \$bam\`
    outdir="$DATA_DIR/\$case_bam"
    
-   for x in \$(ls \$outdir/raw.fusion.txt.*)
+   for x in \$(ls \$outdir/raw.fusion.txt.* | sort)
    do
       echo "annotate_rawSVs.pl -c 10 -i \$bam -o $DATA_DIR/\$case_bam -r \$x -l \$LEN -genome $GENOME -s \$case_bam -f $DATA_DIR/\$case_bam/\$case_bam.gene_info.txt -j $DATA_DIR/\$case_bam/\$case_bam.bam.junctions.tab.shifted.tab"
    done >> `get_step_cmds_file`
    
-   for x in \$(ls \$outdir/raw.internal.txt.*)
+   for x in \$(ls \$outdir/raw.internal.txt.* | sort)
    do
       echo "annotate_rawSVs.pl -c 10 -i \$bam -o $DATA_DIR/\$case_bam -r \$x -l \$LEN -genome $GENOME -s \$case_bam -f $DATA_DIR/\$case_bam/\$case_bam.gene_info.txt -j $DATA_DIR/\$case_bam/\$case_bam.bam.junctions.tab.shifted.tab -internal"
    done >> `get_step_cmds_file`
@@ -268,8 +268,8 @@ cat > `get_step_local_work_script` <<EOF
 while read case_bam 
 do
    outdir="$DATA_DIR/\$case_bam"
-   cat $(ls \$outdir/quantified.fusion.txt.* | sort) > \$outdir/quantified.fusion.txt
-   cat $(ls \$outdir/quantified.internal.txt.* | sort) > \$outdir/quantified.internal.txt
+   cat \$(ls \$outdir/quantified.fusion.txt.* | sort) > \$outdir/quantified.fusion.txt
+   cat \$(ls \$outdir/quantified.internal.txt.* | sort) > \$outdir/quantified.internal.txt
 done < $RUN_DIR/config.txt
 EOF
 
