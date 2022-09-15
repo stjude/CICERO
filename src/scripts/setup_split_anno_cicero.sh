@@ -223,8 +223,8 @@ while read case_bam
    rm \$outdir/raw.fusion.txt.*
    rm \$outdir/raw.internal.txt.*
    
-   split -a 4 -d -C 10000 \$outdir/raw.fusion.txt \$outdir/raw.fusion.txt.
-   split -a 4 -d -C 10000 \$outdir/raw.internal.txt \$outdir/raw.internal.txt.
+   split -a 5 -d -C 10000 \$outdir/raw.fusion.txt \$outdir/raw.fusion.txt.
+   split -a 5 -d -C 10000 \$outdir/raw.internal.txt \$outdir/raw.internal.txt.
 done < $RUN_DIR/config.txt
 EOF
 
@@ -294,11 +294,11 @@ write_step_submit_script
 
 
 #
-# Step 07: filter
+# Step 07: filter_inframe
 #
 
 
-init_step filter
+init_step filter_inframe
 
 cat > `get_step_qc_script` <<EOF
 #!/bin/bash
@@ -318,19 +318,58 @@ then
 fi
 EOF
 
+cat > `get_step_local_work_script` <<EOF
+#!/bin/bash
+while read case_bam
+ do
+   outdir="$DATA_DIR/\$case_bam"
+   cat \$outdir/annotated.fusion.txt \$outdir/annotated.internal.txt > \$outdir/annotated.all.txt
+   
+   split -a 5 -d -l 2000 \$outdir/annotated.all.txt \$outdir/annotated.all.txt.
+
+done < $RUN_DIR/config.txt
+EOF
+
+cat > `get_step_make_cmds_script` <<EOF
+#!/bin/bash
+touch `get_step_cmds_file`
+cat /dev/null > `get_step_cmds_file`
+
+while read case_bam
+do
+   bam="$DATA_DIR/\$case_bam/\$case_bam.bam"
+   LEN=\`getReadLength.sh \$bam\`
+   outdir="$DATA_DIR/\$case_bam"
+   
+   for x in \$(ls \$outdir/annotated.all.txt.* | sort)
+   do
+      echo sv_inframe.pl -genome $GENOME -single $x -fq
+   done >> `get_step_cmds_file`
+   
+done < $RUN_DIR/config.txt
+EOF
+
+write_step_submit_script
+
+
+#
+# Step 08: filter_rank
+#
+
+init_step filter_rank
 
 cat > `get_step_make_cmds_script` <<EOF
 #!/bin/bash
 while read case_bam 
 do
-  echo cicero_filter.sh $DATA_DIR \$case_bam $GENOME
+  echo cicero_filter_rank.sh $DATA_DIR \$case_bam $GENOME
 done < $RUN_DIR/config.txt > `get_step_cmds_file`
 EOF
 write_step_submit_script
 
 
 #
-# Step 08: final_qa
+# Step 09: final_qa
 #
 
 
