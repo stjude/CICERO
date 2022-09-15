@@ -368,6 +368,7 @@ foreach my $sv (@uniq_SVs){
 open(hFo, ">$uniq_file");
 print hFo $out_header, "\n";
 print hFo join ("\n", @out_strings);
+print hFo "\n";
 close(hFo);
 
 ### start of annotate.pl tail
