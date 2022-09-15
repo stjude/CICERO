@@ -325,7 +325,7 @@ while read case_bam
    outdir="$DATA_DIR/\$case_bam"
    cat \$outdir/annotated.fusion.txt \$outdir/annotated.internal.txt > \$outdir/annotated.all.txt
    
-   split -a 5 -d -l 2000 \$outdir/annotated.all.txt \$outdir/annotated.all.txt.
+   split -a 5 -d -l 500 \$outdir/annotated.all.txt \$outdir/annotated.all.txt.
 
 done < $RUN_DIR/config.txt
 EOF
