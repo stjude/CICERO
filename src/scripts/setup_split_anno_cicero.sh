@@ -328,7 +328,7 @@ while read case_bam
    tail -n +2 \$outdir/annotated.all.txt | split -a 5 -d -l 250 - \$outdir/annotated.all.txt.
    for x in $(ls \$outdir/annotated.all.txt.*)
    do
-     echo "$(cat <(head -n1 $outdir/annotated.all.txt) $x)" > $x
+     echo "$(cat <(head -n1 \$outdir/annotated.all.txt) $x)" > $x
    done
    
 done < $RUN_DIR/config.txt
