@@ -343,7 +343,7 @@ do
    
    for x in \$(ls \$outdir/annotated.all.txt.* | sort)
    do
-      echo sv_inframe.pl -genome $GENOME -single $x -fq
+      echo sv_inframe.pl -genome $GENOME -single \$x -fq
    done >> `get_step_cmds_file`
    
 done < $RUN_DIR/config.txt
