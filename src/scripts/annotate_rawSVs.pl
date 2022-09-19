@@ -377,10 +377,10 @@ foreach my $annotated_SV (@annotated_SVs){
 								$first_bp->{tpos}, $second_bp->{tpos},
 								$first_bp->{ort}, $first_bp->{tname}, $first_bp->{qpos}, $first_bp->{qstart}, $first_bp->{qend},
 								$first_bp->{qstrand}, $first_bp->{ts_strand}, $first_bp->{matches}, $first_bp->{percent}, $first_bp->{repeat}, 
-								$first_bp->{clip}, $first_bp->{area}, $first_bp->{feature}, $first_bp->{annotate_score},
+								$first_bp->{clip}, $first_bp->{area}, $first_bp->{feature},# $first_bp->{annotate_score},
 								$second_bp->{ort}, $second_bp->{tname}, $second_bp->{qpos}, $second_bp->{qstart}, $second_bp->{qend},
 								$second_bp->{qstrand}, $second_bp->{ts_strand}, $second_bp->{matches}, $second_bp->{percent}, $second_bp->{repeat}, 
-								$second_bp->{clip}, $second_bp->{area}, $second_bp->{feature}, $second_bp->{annotate_score},
+								$second_bp->{clip}, $second_bp->{area}, $second_bp->{feature},# $second_bp->{annotate_score},
 								$annotated_SV->{junc_seq},$annotated_SV->{type},$annotated_SV->{ort}
 								);
 
