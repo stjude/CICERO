@@ -220,27 +220,27 @@ foreach my $line (@lines){
 		clip => $fields[16],
 		area => $fields[17],
 		feature => $fields[18],
-		#annotate_score => $fields[19]
+		annotate_score => $fields[19]
 	};
 
 	my $second_bp = {
 		reads_num => $fields[3],
 		gene => $fields[1],
 		tpos => $fields[5],
-		ort => $fields[19],
-		tname => $fields[20],
-		qpos => $fields[21],
-		qstart => $fields[22],
-		qend => $fields[23],
-		qstrand => $fields[24],
-		ts_strand => $fields[25],
-		matches => $fields[26],
-		percent => $fields[27],
-		repeat => $fields[28],
-		clip => $fields[29],
-		area => $fields[30],
-		feature => $fields[31],
-		#annotate_score => $fields[33]
+		ort => $fields[20],
+		tname => $fields[21],
+		qpos => $fields[22],
+		qstart => $fields[23],
+		qend => $fields[24],
+		qstrand => $fields[25],
+		ts_strand => $fields[26],
+		matches => $fields[27],
+		percent => $fields[28],
+		repeat => $fields[29],
+		clip => $fields[30],
+		area => $fields[31],
+		feature => $fields[32],
+		annotate_score => $fields[33]
 	};
 
 	my $sv = {
@@ -248,9 +248,9 @@ foreach my $line (@lines){
 		second_bp => $second_bp,
 		};
 
-	$sv->{junc_seq} = $fields[32];
-	$sv->{type} = $fields[33];
-	$sv->{ort} = $fields[34];
+	$sv->{junc_seq} = $fields[34];
+	$sv->{type} = $fields[35];
+	$sv->{ort} = $fields[36];
 
 	push @annotated_SVs, $sv;
 }
