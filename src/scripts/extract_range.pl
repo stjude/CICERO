@@ -98,12 +98,12 @@ my($pcover, $ncover) = extract_range_sclip(
 	-RANGE => $range, 
 	-VALIDATOR => $validator);
 
-foreach my $p (keys(%{$pcover})) {
+foreach my $p (sort keys(%{$pcover})) {
 	my @c = @{$pcover->{$p}};
 	my $tc = count_coverage($sam, $chr, $p);
 	print $SC_file join("\t", $chr, $p, "+", @c), "\t", $tc->{"+"},"\t", $tc->{"-"}, "\n" if($c[0]>=$min_sc_reads);
 }
-foreach my $p (keys(%{$ncover})) {
+foreach my $p (sort keys(%{$ncover})) {
 	my @c = @{$ncover->{$p}};
 	my $tc = count_coverage($sam, $chr, $p);
 	print $SC_file join("\t", $chr, $p, "-", @c), "\t", $tc->{"+"},"\t", $tc->{"-"}, "\n" if($c[0]>=$min_sc_reads);

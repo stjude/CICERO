@@ -408,12 +408,13 @@ sub is_dup_SV {
 	foreach my $s (@{$r_SVs}) {
 		my $more_reads = ($s->{first_bp}->{reads_num} + $s->{second_bp}->{reads_num} >= $sv->{first_bp}->{reads_num} + $sv->{second_bp}->{reads_num}) ? 1 : 0;
 		my $longer_contig = ($s->{first_bp}->{matches} + $s->{second_bp}->{matches} >= $sv->{first_bp}->{matches} + $sv->{second_bp}->{matches}) ? 1 : 0;
-		return 1
 		if( 	($more_reads || $longer_contig) &&
 			abs($s->{first_bp}->{tpos} - $sv->{first_bp}->{tpos}) < 10 &&
 			abs($s->{second_bp}->{tpos} - $sv->{second_bp}->{tpos}) < 10 &&
 			$s->{first_bp}->{tname} eq $sv->{first_bp}->{tname} &&
-			$s->{second_bp}->{tname} eq $sv->{second_bp}->{tname});
+			$s->{second_bp}->{tname} eq $sv->{second_bp}->{tname}) {
+			return 1;
+		}
 	}
 	return 0;
 }
