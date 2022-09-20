@@ -536,18 +536,18 @@ if($internal) {
 open(hFo, ">$raw_file");
 foreach my $raw_SV (@raw_SVs){
 	my ($first_bp, $second_bp) = ($raw_SV->{first_bp}, $raw_SV->{second_bp});
-
-	my $out_string = join("\t", $first_bp->{gene}, $second_bp->{gene},
-								$first_bp->{reads_num}, $second_bp->{reads_num},
-								$first_bp->{tpos}, $second_bp->{tpos},
-								$first_bp->{ort}, $first_bp->{tname}, $first_bp->{qstart}, $first_bp->{qend},
-								$first_bp->{qstrand}, $first_bp->{matches}, $first_bp->{percent}, $first_bp->{repeat}, 
-								$first_bp->{clip},
-								$second_bp->{ort}, $second_bp->{tname}, $second_bp->{qstart}, $second_bp->{qend},
-								$second_bp->{qstrand}, $second_bp->{matches}, $second_bp->{percent}, $second_bp->{repeat}, 
-								$second_bp->{clip},
-								$raw_SV->{junc_seq},$raw_SV->{type}
-								);
+	my @row = ($first_bp->{gene}, $second_bp->{gene},
+				$first_bp->{reads_num}, $second_bp->{reads_num},
+				$first_bp->{tpos}, $second_bp->{tpos},
+				$first_bp->{ort}, $first_bp->{tname}, $first_bp->{qstart}, $first_bp->{qend},
+				$first_bp->{qstrand}, $first_bp->{matches}, $first_bp->{percent}, $first_bp->{repeat}, 
+				$first_bp->{clip},
+				$second_bp->{ort}, $second_bp->{tname}, $second_bp->{qstart}, $second_bp->{qend},
+				$second_bp->{qstrand}, $second_bp->{matches}, $second_bp->{percent}, $second_bp->{repeat}, 
+				$second_bp->{clip},
+				$raw_SV->{junc_seq},$raw_SV->{type}
+				);
+	my $out_string = join("\t", map { defined ? $_ : '' } @row);
 
 	print hFo $out_string, "\n";
 }
