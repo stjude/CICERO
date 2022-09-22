@@ -106,6 +106,7 @@ while (my $chr = <$chrFile>){
 					# If the region is long, break it into smaller chunks
 					my $tmpend = $s;
 					my $tmpstart = $s;
+					my $printend = $s;
 					while ($tmpend < $region_end){
 						my $tmpend = $tmpend + $limit;
 						if ($tmpend >= $region_end){
