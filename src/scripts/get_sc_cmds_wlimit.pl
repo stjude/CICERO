@@ -108,17 +108,17 @@ while (my $chr = <$chrFile>){
 					my $tmpstart = $s;
 					my $printend = $s;
 					while ($tmpend < $region_end){
-						my $tmpend = $tmpend + $limit;
+						$tmpend = $tmpend + $limit;
 						if ($tmpend >= $region_end){
-							my $tmpend = $region_end;
-							my $printend = $tmpend;
+							$tmpend = $region_end;
+							$printend = $tmpend;
 						}
 						else {
-							my $printend = $tmpend - 1;
+							$printend = $tmpend - 1;
 						}
 						my $cmd = "extract_range.pl --ref_genome $genome_file -i $bam_file -o $output_dir -r $chr:$tmpstart-$printend -l $read_length -m 2 -min_sc_len 3 -c $sc_shift";
 						print $cmd."\n";
-						my $tmpstart = $tmpend;
+						$tmpstart = $tmpend;
 					}
 				}
 				# The new current start is the start of this region.
@@ -133,17 +133,17 @@ while (my $chr = <$chrFile>){
 			my $tmpstart = $s;
 			my $printend = $s;
 			while ($tmpend < $len){
-				my $tmpend = $tmpend + $limit;
+				$tmpend = $tmpend + $limit;
 				if ($tmpend >= $len){
-					my $tmpend = $len;
-					my $printend = $tmpend;
+					$tmpend = $len;
+					$printend = $tmpend;
 				}
 				else {
-					my $printend = $tmpend - 1;
+					$printend = $tmpend - 1;
 				}
 				my $cmd = "extract_range.pl --ref_genome $genome_file -i $bam_file -o $output_dir -r $chr:$tmpstart-$printend -l $read_length -m 2 -min_sc_len 3 -c $sc_shift";
 				print $cmd."\n";
-				my $tmpstart = $tmpend;
+				$tmpstart = $tmpend;
 			}
 		}
 	}
