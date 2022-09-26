@@ -138,8 +138,8 @@ cat > `get_step_local_work_script` <<EOF
 while read case_bam 
  do
    bam="$DATA_DIR/\$case_bam/\$case_bam.bam"
-   for x in \$(find $DATA_DIR/\$case_bam/*/unfiltered.fusion.txt | sort -V) > $DATA_DIR/\$case_bam/unfiltered.fusion.txt
-   for x in \$(find $DATA_DIR/\$case_bam/*/unfiltered.internal.txt | sort -V) > $DATA_DIR/\$case_bam/unfiltered.internal.txt
+   cat $DATA_DIR/\$case_bam/*/unfiltered.fusion.txt > $DATA_DIR/\$case_bam/unfiltered.fusion.txt
+   cat $DATA_DIR/\$case_bam/*/unfiltered.internal.txt > $DATA_DIR/\$case_bam/unfiltered.internal.txt
  done < $RUN_DIR/config.txt 
 EOF
 
