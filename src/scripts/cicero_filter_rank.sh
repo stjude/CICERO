@@ -18,5 +18,5 @@ cat $(ls $DATA_DIR/$CASE_BAM/annotated.all.txt.*.frame.tab | sort) > $DATA_DIR/$
 
 bam="$DATA_DIR/$CASE_BAM/$CASE_BAM.bam"
 LEN=`getReadLength.sh $bam`
-rank_SVs.pl -i $DATA_DIR/$CASE_BAM/annotated.all.txt.frame.tab -genome $GENOME -l $LEN
+filter_rank_SVs.pl -i $DATA_DIR/$CASE_BAM/annotated.all.txt.frame.tab -genome $GENOME -l $LEN
 head -n 1 $DATA_DIR/$CASE_BAM/final_fusions.txt > $DATA_DIR/$CASE_BAM/final_internal.txt

@@ -267,7 +267,7 @@ foreach my $sv (@annotated_SVs){
 			next;
 		}
 	}
-	if($sv && ! is_dup_SV(\@uniq_SVs, $sv)){
+	if($sv) {	#&& ! is_dup_SV(\@uniq_SVs, $sv)){
 		push @uniq_SVs, $sv;
 	}
 	else{
