@@ -64,6 +64,9 @@ my $optionOK = GetOptions(
 	'genome=s'  => \$genome,
 	'ref_genome=s'  => \$ref_genome,
 	'genemodel=s'		=> \$gene_model_file,
+	'excluded-genes=s'	=> \$excluded_gene_file,
+	'excluded-fusions=s'	=> \$excluded_fusion_file,
+
 	'max_num_hits=i'	=> \$max_num_hits,
 	'internal!' => \$internal,
 	'all!' => \$all_output,
@@ -254,6 +257,7 @@ while(my $line = <$UNF>){
 	my ($gene1, $gene2) = ($fields[1], $fields[2]);
 	my $cutoff = $fields[4];
 	my $qseq = $fields[17];
+	print STDERR "SC_site: ",$fields[30],"\n";
 
 	if($gene1 eq "NA"){
 			my $crA = in_complex_region($fields[8], $fields[5]);
