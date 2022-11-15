@@ -263,7 +263,8 @@ sub detect_SV{
 	my @mappings;
 	print STDERR "start mapping ... $contig_file\nsc_site: $sc_site\tclip: $clip\tmin_hit_len: $min_hit_len\n" if($debug && -s $contig_file);
 	my $ref_chr = normalizeChromosomeName($seq_ids[0], $chr);
-	push @mappings, $mapper->run(-QUERY=>$contig_file, -scChr => $ref_chr, -scSite=>$sc_site, -CLIP=>$clip, -READ_LEN=>$read_len) if(-s $contig_file);
+#	push @mappings, $mapper->run(-QUERY=>$contig_file, -scChr => $ref_chr, -scSite=>$sc_site, -CLIP=>$clip, -READ_LEN=>$read_len) if(-s $contig_file);
+	push @mappings, $mapper->run(-QUERY=>$contig_file, -scChr => $ref_chr, -scSite=>$sc_site, -CLIP=>$clip, -READ_LEN=>$read_len, "-blat-adjust-sc" => $gm) if(-s $contig_file);
 
 	my %num_of_mappings = ();
 	foreach my $sv (@mappings){
@@ -378,6 +379,18 @@ sub detect_SV{
 			print STDERR join("\t", $sample, $gene1, $gene2, $sc_cover, $sc_cutoff, $pos1, $pos2, $out_string), "\n" if($debug);
 			if($same_gene) {print $UIF join("\t", $sample, $gene1, $gene2, $sc_cover, $sc_cutoff, $pos1, $pos2, $out_string), "\n";}
  			else { print $UFF join("\t", $sample, $gene1, $gene2, $sc_cover, $sc_cutoff, $pos1, $pos2, $out_string), "\n"; }
+			
+			#when sc_site was updated (>50bp), put raw sc_site as a possible fusion in unfiltered file; which would be justified in annotate.pl step 
+			if(abs($sc_site-$pos1)>50 && ($ref_chr eq $g1_chr))
+			{
+				if($same_gene) {print $UIF join("\t", $sample, $gene1, $gene2, $sc_cover, $sc_cutoff, $sc_site, $pos2, $out_string), "\n";}
+                        	else { print $UFF join("\t", $sample, $gene1, $gene2, $sc_cover, $sc_cutoff, $sc_site, $pos2, $out_string), "\n"; }
+			}
+			if(abs($sc_site-$pos2)>50 && ($ref_chr eq $g2_chr))
+                        {
+                                if($same_gene) {print $UIF join("\t", $sample, $gene1, $gene2, $sc_cover, $sc_cutoff, $pos1, $sc_site, $out_string), "\n";}
+                                else { print $UFF join("\t", $sample, $gene1, $gene2, $sc_cover, $sc_cutoff, $pos1, $sc_site, $out_string), "\n"; }
+                        }
 		}
 		close($UFF);
 		close($UIF);

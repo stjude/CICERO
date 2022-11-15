@@ -41,6 +41,11 @@ use GeneModel;
 
 use constant BADFUSION_DISTANCE_CUTOFF => 200;
 
+use constant POSITION_RESCUE_MAX_EXON_DISTANCE => 15;
+# maximum distance from rescue position to an exon/splice boundary
+use constant POSITION_RESCUE_MAX_INTRON_DISTANCE => 100000;
+# maximum adjusted position distance, should be approximate max intron size
+
 my $debug = 0;
 
 my $out_header = join("\t", "sample", "geneA", "chrA", "posA", "ortA", "featureA", "geneB", "chrB", "posB", "ortB", "featureB",
@@ -80,6 +85,9 @@ my $optionOK = GetOptions(
 	'header'    => \$header,
 	'ref_genome=s'  => \$ref_genome,
 	'genemodel=s'		=> \$gene_model_file,
+	'excluded-genes=s'	=> \$excluded_gene_file,
+	'excluded-fusions=s'	=> \$excluded_fusion_file,
+
 	'blatserver' =>	\$blat_server,
 	'blatport=s'		=> \$blat_port,
 	'min_hit_len=i'		=> \$min_hit_len,
@@ -325,6 +333,7 @@ while(my $line = <$UNF>){
 	my ($gene1, $gene2) = ($fields[1], $fields[2]);
 	my $cutoff = $fields[4];
 	my $qseq = $fields[17];
+	print STDERR "SC_site: ",$fields[30],"\n";
 
 	if($gene1 eq "NA"){
 			my $crA = in_complex_region($fields[8], $fields[5]);
@@ -1333,11 +1342,11 @@ sub quantification {
 	print STDERR "start mapping ... $contig_file\n" if($debug && -s $contig_file);
 	print STDERR join("\t", $chr1, $pos1, $clip1, $read_len), "\n" if($debug);
 	my $ref_chr1 = normalizeChromosomeName($seq_ids[0], $chr1);
-	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr1, -scSite=>$pos1, -CLIP=>$clip1, -READ_LEN => $read_len) if(-s $contig_file);
+	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr1, -scSite=>$pos1, -CLIP=>$clip1, -READ_LEN => $read_len, "-blat-adjust-sc" => $gm) if(-s $contig_file);
 	print STDERR "number of mapping: ", scalar @mappings, "\n" if($debug);
 	my $ref_chr2 = normalizeChromosomeName($seq_ids[0], $chr2);
-	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr2, -scSite=>$pos2, -CLIP=>$clip2, -READ_LEN => $read_len) if(-s $contig_file);
-	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr2, -scSite=>$pos2, -CLIP=>$clip2, -READ_LEN => $read_len) if(($SV->{type} eq 'Internal_dup' || !@mappings) && -s $contig_file);
+	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr2, -scSite=>$pos2, -CLIP=>$clip2, -READ_LEN => $read_len, "-blat-adjust-sc" => $gm) if(-s $contig_file);
+	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr2, -scSite=>$pos2, -CLIP=>$clip2, -READ_LEN => $read_len, "-blat-adjust-sc" => $gm) if(($SV->{type} eq 'Internal_dup' || !@mappings) && -s $contig_file);
 
 	my @qSVs;
 	foreach my $sv (@mappings){
@@ -1368,11 +1377,29 @@ sub quantification {
 		print STDERR "bp1: ", join("\t", $bp1->{ort}, $bp1->{tname}, $bp1->{tpos}, $bp1->{qstrand}), "\n" if($debug);
 		print STDERR "bp2: ", join("\t", $bp2->{ort}, $bp2->{tname}, $bp2->{tpos}, $bp2->{qstrand}), "\n" if($debug);
 	
-		next unless(($chrA eq $bp1->{tname} && abs($bp1->{tpos} - $tposA)<50 &&
-			    $bp2->{tname} eq $chrB && abs($bp2->{tpos} - $tposB)<50) ||
-			    ($bp2->{tname} eq $chrA && abs($bp2->{tpos} - $tposA)<50 &&
-                            $bp1->{tname} eq $chrB && abs($bp1->{tpos} - $tposB)<50));
+		#next unless(($chrA eq $bp1->{tname} && abs($bp1->{tpos} - $tposA)<50 &&
+		#	    $bp2->{tname} eq $chrB && abs($bp2->{tpos} - $tposB)<50) ||
+		#	    ($bp2->{tname} eq $chrA && abs($bp2->{tpos} - $tposA)<50 &&
+                #            $bp1->{tname} eq $chrB && abs($bp1->{tpos} - $tposB)<50));
 		# to do alignment
+
+		my $usable;
+		if (($chrA eq $bp1->{tname} && abs($bp1->{tpos} - $tposA)<50 &&
+			     $bp2->{tname} eq $chrB && abs($bp2->{tpos} - $tposB)<50) ||
+			    ($bp2->{tname} eq $chrA && abs($bp2->{tpos} - $tposA)<50 &&
+			     $bp1->{tname} eq $chrB && abs($bp1->{tpos} - $tposB)<50)) {
+		  # passes original requirement, OK
+		  $usable = 1;
+		} else {
+		  #
+		  # rescue site if both ends are near a splice site
+		  #
+		  # - chrA/tposA/chrB/tposB are the blat align-adjusted
+		  #   positions
+		  $usable = breakpoint_annotation_qc($chrA, $tposA, $chrB, $tposB, $bp1, $bp2);
+		};
+		next unless $usable;
+
 		my $tmp_ctg_file = "$anno_dir/reads.$chr1.$pos1.$chr2.$pos2.fa.tmp.contig";
 		open(my $CTG, ">$tmp_ctg_file");
 		print $CTG ">ctg\n$qseq\n";
@@ -1403,18 +1430,39 @@ sub quantification {
 		my $shift_bases = 5;
 		if($chrA eq $bp1->{tname} && abs($bp1->{tpos} - $tposA)<50 &&
 		   $bp2->{tname} eq $chrB && abs($bp2->{tpos} - $tposB)<50){
-				$tposA = $bp1->{tpos};
-				$tposB = $bp2->{tpos};
+				#$tposA = $bp1->{tpos};
+				#$tposB = $bp2->{tpos};
 				($readsA, $areaA) = get_junc_reads($psl_file1, $qposA, $ortA, $shift_bases) if(-f $psl_file1);
 				($readsB, $areaB) = get_junc_reads($psl_file2, $qposB, $ortB, $shift_bases) if(-f $psl_file2);
 		}
 		elsif($bp2->{tname} eq $chrA && abs($bp2->{tpos} - $tposA)<50 &&
                    $bp1->{tname} eq $chrB && abs($bp1->{tpos} - $tposB)<50){
-				$tposA = $bp2->{tpos};
-				$tposB = $bp1->{tpos};
+				#$tposA = $bp2->{tpos};
+				#$tposB = $bp1->{tpos};
 				($readsA, $areaA) = get_junc_reads($psl_file2, $qposA, $ortA, $shift_bases) if(-f $psl_file2);
 				($readsB, $areaB) = get_junc_reads($psl_file1, $qposB, $ortB, $shift_bases) if(-f $psl_file1);
 		}
+		#intron size usually <100kb
+		elsif($chrA eq $bp1->{tname} && abs($bp1->{tpos} - $tposA)<100000 &&
+                   $bp2->{tname} eq $chrB && abs($bp2->{tpos} - $tposB)<50){
+                                ($readsA, $areaA) = get_junc_reads($psl_file1, $qposA, $ortA, $shift_bases) if(-f $psl_file1);
+                                ($readsB, $areaB) = get_junc_reads($psl_file2, $qposB, $ortB, $shift_bases) if(-f $psl_file2);
+                }
+		elsif($chrA eq $bp1->{tname} && abs($bp1->{tpos} - $tposA)<50 &&
+                   $bp2->{tname} eq $chrB && abs($bp2->{tpos} - $tposB)<100000){
+                                ($readsA, $areaA) = get_junc_reads($psl_file1, $qposA, $ortA, $shift_bases) if(-f $psl_file1);
+                                ($readsB, $areaB) = get_junc_reads($psl_file2, $qposB, $ortB, $shift_bases) if(-f $psl_file2);
+                }
+                elsif($bp2->{tname} eq $chrA && abs($bp2->{tpos} - $tposA)<100000 &&
+                   $bp1->{tname} eq $chrB && abs($bp1->{tpos} - $tposB)<50){
+                                ($readsA, $areaA) = get_junc_reads($psl_file2, $qposA, $ortA, $shift_bases) if(-f $psl_file2);
+                                ($readsB, $areaB) = get_junc_reads($psl_file1, $qposB, $ortB, $shift_bases) if(-f $psl_file1);
+                }
+		elsif($bp2->{tname} eq $chrA && abs($bp2->{tpos} - $tposA)<50 &&
+                   $bp1->{tname} eq $chrB && abs($bp1->{tpos} - $tposB)<100000){
+                                ($readsA, $areaA) = get_junc_reads($psl_file2, $qposA, $ortA, $shift_bases) if(-f $psl_file2);
+                                ($readsB, $areaB) = get_junc_reads($psl_file1, $qposB, $ortB, $shift_bases) if(-f $psl_file1);
+                }
 
 	my $selected_bp1 = {
 		clip => $clipA,
@@ -1594,6 +1642,82 @@ sub same_gene{
 		}
 	}
 	return 0;
+}
+
+sub breakpoint_annotation_qc {
+  my ($chrA, $tposA, $chrB, $tposB, $bp1, $bp2) = @_;
+
+  my $pass_max_distance = (
+			   ($chrA eq $bp1->{tname} && abs($bp1->{tpos} - $tposA) < POSITION_RESCUE_MAX_INTRON_DISTANCE &&
+			    $bp2->{tname} eq $chrB && abs($bp2->{tpos} - $tposB) < POSITION_RESCUE_MAX_INTRON_DISTANCE) ||
+			   ($bp2->{tname} eq $chrA && abs($bp2->{tpos} - $tposA) < POSITION_RESCUE_MAX_INTRON_DISTANCE &&
+			    $bp1->{tname} eq $chrB && abs($bp1->{tpos} - $tposB) < POSITION_RESCUE_MAX_INTRON_DISTANCE)
+			  );
+
+  my $usable_count = 0;
+  my @status;
+
+  if ($pass_max_distance) {
+    #
+    #  only perform gene checks if shift distance is acceptable
+    #
+    foreach my $set (
+		     [$chrA, $tposA],
+		     [$chrB, $tposB]
+		    ) {
+      my ($chr, $pos) = @{$set};
+
+      $chr = "chr" . $chr unless $chr =~ /^chr/;
+      # ensure UCSC-style prefix is present to match refFlat
+
+      my $usable_reason;
+      my $usable_transcript;
+
+      unless ($chr =~ /M/) {
+      SEARCH:
+	foreach my $strand (qw(+ -)) {
+	  my $tree = $gm->sub_model($chr, $strand);
+	  if (defined $tree) {
+	    foreach my $model ($tree->intersect([$pos, $pos])) {
+	      my $gene_ref = $model->val();
+	      foreach my $transcript (@{$gene_ref->transcripts}) {
+		foreach my $er (@{$transcript->exons}) {
+		  my ($start, $end) = @{$er};
+		  $start++;
+		  # convert UCSC interbase to 1-based start/end
+		  foreach my $edge ($start, $end) {
+		    my $distance = abs($pos - $edge);
+		    if ($distance <= POSITION_RESCUE_MAX_EXON_DISTANCE) {
+		      $usable_transcript = $transcript;
+		      $usable_reason = "near_exon_edge";
+		      last SEARCH;
+		    }
+		  }
+		}
+	      }
+	    }
+	  }
+	}
+      }
+
+      my @info;
+      if ($usable_reason) {
+	push @info, $usable_reason, $usable_transcript->name(), $usable_transcript->refseq_id();
+	$usable_count++;
+      } else {
+	push @info, "far_from_splice";
+      }
+
+      push @status, join ".", @info, $chr, $pos;
+    }
+  } else {
+    push @status, join ".", "shift_beyond_max_intron_distance", $chrA, $tposA, $chrB, $tposB, $bp1->{tname}, $bp1->{tpos}, $bp2->{tname}, $bp2->{tpos};
+  }
+
+  my $final_call = $usable_count == 2 ? 1 : 0;
+  printf STDERR "rescue:%d %s\n", $final_call, join " ", @status;
+
+  return $final_call;
 }
 
 =head1 LICENCE AND COPYRIGHT
