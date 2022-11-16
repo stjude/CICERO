@@ -80,7 +80,6 @@ my $optionOK = GetOptions(
 	'ref_genome=s'  => \$ref_genome,
 	'genemodel=s'		=> \$gene_model_file,
 	'excluded-genes=s'	=> \$excluded_gene_file,
-	'excluded-fusions=s'	=> \$excluded_fusion_file,
 
 	'blatserver' =>	\$blat_server,
 	'blatport=s'		=> \$blat_port,

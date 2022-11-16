@@ -68,7 +68,6 @@ my $optionOK = GetOptions(
 	'header'    => \$header,
 	'ref_genome=s'  => \$ref_genome,
 	'excluded-genes=s'	=> \$excluded_gene_file,
-	'excluded-fusions=s'	=> \$excluded_fusion_file,
 
 	'f|gene_info_file=s' => \$gene_info_file,
 	'known_fusion_file=s'	=> \$known_fusion_file,
