@@ -28,6 +28,7 @@ SC_CUTOFF=3
 SC_SHIFT=
 OPTIMIZE=1
 DISABLE_EXCLUDE=0
+MAX_CHECKS=200
 
 usage() {
     echo "Cicero.sh [-h] [-n ncores] -b bamfile -g genome -r refdir [-j junctions] [-o outdir] [-t threshold] [-s sc_cutoff] [-c sc_shift] [-p]"
@@ -39,6 +40,7 @@ usage() {
     echo "-j <file> - junctions file from RNApeg"
     echo "-n <num> - number of cores to utilize with GNU parallel"
     echo "-d - disable excluded regions file use"
+    echo "-max-checks - Set the maximum number of checks for the gfServer. This script waits 10s between checks. Default: 200"
 }
 
 
@@ -61,6 +63,7 @@ while [ ! -z "$1" ]; do
         -p) OPTIMIZE=1;;
         -no-optimize) OPTIMIZE=0;;
         -d) DISABLE_EXCLUDE=1;;
+        -max-checks) MAX_CHECKS=$2;;
     esac
     shift
 done
@@ -209,7 +212,7 @@ if [[ $RETURN_CODE != 0 ]]; then
     RETURN_CODE=1
     echo "Starting local blat server"
     NUM_CHECKS=0
-    while [[ $RETURN_CODE != 0 && $NUM_CHECKS -le 200 ]]; do
+    while [[ $RETURN_CODE != 0 && $NUM_CHECKS -le $MAX_CHECKS ]]; do
         echo "Blat server not yet running ..."
         if  ps -p $BLAT_SERVER_PID > /dev/null; then
             gfServer status $BLAT_HOST $BLAT_PORT 1>> ${GFSERVER_LOG}.out 2>> ${GFSERVER_LOG}.err
