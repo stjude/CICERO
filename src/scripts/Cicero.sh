@@ -222,9 +222,24 @@ if [[ $RETURN_CODE != 0 ]]; then
         else
             >&2 echo "ERROR: The server has probably died. Please review error logs at below location:"
             >&2 echo "$OUTDIR/${GFSERVER_LOG}.err"
-            >&2 cat "$OUTDIR/${GFSERVER_LOG}.err"
-            >&2 cat "$OUTDIR/${GFSERVER_LOG}.log"
-            >&2 cat "$OUTDIR/${GFSERVER_LOG}.out"
+            if [ -e "$OUTDIR/${GFSERVER_LOG}.err" ]
+            then
+                >&2 cat "$OUTDIR/${GFSERVER_LOG}.err"
+            else
+                >&2 echo "$OUTDIR/${GFSERVER_LOG}.err does not exist"
+            fi
+            if [ -e "$OUTDIR/${GFSERVER_LOG}.log" ]
+            then
+                >&2 cat "$OUTDIR/${GFSERVER_LOG}.log"
+            else
+                >&2 echo "$OUTDIR/${GFSERVER_LOG}.log does not exist"
+            fi
+            if [ -e "$OUTDIR/${GFSERVER_LOG}.out" ]
+            then
+                >&2 cat "$OUTDIR/${GFSERVER_LOG}.out"
+            else
+                >&2 echo "$OUTDIR/${GFSERVER_LOG}.out does not exist"
+            fi
             exit 1
         fi
     done
