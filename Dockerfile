@@ -17,6 +17,7 @@ RUN apt-get update && \
     apt-get install libexpat1-dev -y && \
     apt-get install libdb-dev -y && \
     apt-get install locales -y && \
+    apt-get install libssl-dev -y && \
     rm -r /var/lib/apt/lists/*
 
 
@@ -75,7 +76,8 @@ RUN cpanm --force -i \
 RUN cpanm --force -i \ 
     enum \
     Data::Compare@1.22 \
-    DBI@1.626 && \
+    DBI@1.626 \
+    Test::Deep@1.128 && \
     chown -R root:root /usr/local/.cpanm
 
 WORKDIR /tmp
