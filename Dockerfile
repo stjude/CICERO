@@ -1,4 +1,4 @@
-FROM ubuntu:18.04 as builder
+FROM ubuntu:20.04 as builder
 
 RUN apt-get update && \
     apt-get upgrade -y && \
@@ -90,7 +90,12 @@ RUN wget https://github.com/samtools/samtools/archive/0.1.17.tar.gz && \
 
 RUN SAMTOOLS="/tmp/samtools-0.1.17" cpanm --force -i Bio::DB::Sam@1.35 && chown -R root:root /usr/local/.cpanm
 
-FROM ubuntu:18.04
+FROM ubuntu:20.04
+
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y libncursesw5 && \
+    rm -r /var/lib/apt/lists/*
 
 COPY --from=builder /opt/conda/bin/gfClient /opt/conda/bin/gfClient
 COPY --from=builder /opt/conda/bin/gfServer /opt/conda/bin/gfServer
