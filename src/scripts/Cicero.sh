@@ -338,8 +338,6 @@ find $CICERO_DATADIR/$SAMPLE/ -mindepth 2 -type f -name 'unfiltered.fusion.txt' 
 find $CICERO_DATADIR/$SAMPLE/ -mindepth 2 -type f -name 'unfiltered.internal.txt' -exec cat {} \; | sort -V -k 9,9 -k 10,10n -k 11,11n > $CICERO_DATADIR/$SAMPLE/unfiltered.internal.txt
 } 1> 03_Combine.out 2> 03_Combine.err
 
-wait
-
 ## QC
 if [ ! -s $CICERO_DATADIR/$SAMPLE/unfiltered.fusion.txt ]
 then
