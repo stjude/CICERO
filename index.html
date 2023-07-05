@@ -104,6 +104,11 @@
               </ul>
             </li>
             
+            <li class="nav-item" data-level="2"><a href="#output-fields" class="nav-link">Output Fields </a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            
             <li class="nav-item" data-level="2"><a href="#citation" class="nav-link">Citation </a>
               <ul class="nav flex-column">
               </ul>
@@ -184,6 +189,7 @@
 <li><a href="#reference">Reference Files</a></li>
 <li><a href="#genomes">Supported Genomes</a></li>
 <li><a href="#demo">Demo</a></li>
+<li><a href="#outputfields">Output Fields</a></li>
 <li><a href="#citation">Citation</a></li>
 <li><a href="#license">License</a></li>
 </ul>
@@ -307,6 +313,101 @@ for running and interpreting results is available in the <a href="https://univer
 <h2 id="demo">Demo <a name="demo"></a></h2>
 <p>A demo of CICERO can be found at the following location:
 * https://www.stjuderesearch.org/site/lab/zhang/cicero</p>
+<h2 id="output-fields">Output Fields <a name="outputfields"></a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>sample</td>
+<td>Sample ID</td>
+</tr>
+<tr>
+<td>geneA / geneB</td>
+<td>gene at breakpoint A / B</td>
+</tr>
+<tr>
+<td>chrA / chrB</td>
+<td>chromosome at breakpoint A / B</td>
+</tr>
+<tr>
+<td>posA / posB</td>
+<td>coordinate at breakpoint A / B</td>
+</tr>
+<tr>
+<td>ortA / ortB</td>
+<td>Mapping strand of assembled contig at breakpoint A / B</td>
+</tr>
+<tr>
+<td>featureA / featureB</td>
+<td>5utr / 3utr / coding / intron / intergenic at breakpoint A / B</td>
+</tr>
+<tr>
+<td>sv_ort</td>
+<td>Whether the mapping orientation of assembled contig has confident biological meaning; if confident, then '&gt;', else '?' (e.g. the contig mapping is from sense strand of gene A to antisense strand of gene B).</td>
+</tr>
+<tr>
+<td>readsA / readsB</td>
+<td>number of junction reads that support the fusion at breakpoint A / B</td>
+</tr>
+<tr>
+<td>matchA / matchB</td>
+<td>contig matched length at breakpoint A / B region</td>
+</tr>
+<tr>
+<td>repeatA / repeatB</td>
+<td>repeat score (0~1) at breakpoint A / B region, the higher the more repetitive</td>
+</tr>
+<tr>
+<td>coverageA / coverageB</td>
+<td>coverage of junction reads that support the fusion at breakpoint A / B (add the sequence length that can be mapped to the assembled contig for each junction read)</td>
+</tr>
+<tr>
+<td>ratioA / ratioB</td>
+<td>MAF of soft-clipped reads at breakpoint A / B (calculate the MAF for plus mapped reads and minus mapped reads, respectively; use the maximum MAF).</td>
+</tr>
+<tr>
+<td>qposA / qposB</td>
+<td>breakpoint position in the contig that belongs to A / B part</td>
+</tr>
+<tr>
+<td>total_readsA / total_readsB</td>
+<td>total reads number at the breakpoint at breakpoint A / B</td>
+</tr>
+<tr>
+<td>contig</td>
+<td>Assembled contig sequence that support the fusion</td>
+</tr>
+<tr>
+<td>type</td>
+<td>CTX (interchromosomal translocation) / Internal_dup / ITX (inversion) / DEL (deletion) / INS (insertion) / read_through</td>
+</tr>
+<tr>
+<td>score</td>
+<td>Fusion score, the higher the better</td>
+</tr>
+<tr>
+<td>rating</td>
+<td>HQ (known fusions) / RT (read_through) / LQ (others)</td>
+</tr>
+<tr>
+<td>medal</td>
+<td>Estimated pathogenicity assessment using St. Jude Medal Ceremony. Value: 0/1/2/3/4, the bigger the better</td>
+</tr>
+<tr>
+<td>functional effect</td>
+<td>ITD (Internal_dup) / Fusion / upTSS / NLoss / CLoss / other</td>
+</tr>
+<tr>
+<td>frame</td>
+<td>0 (event is not in frame) / 1 (event is in-frame) / 2 (geneB portion contains canonical coding start site (i.e. the entire CDS for geneB)) / 3 (possible 5' UTR fusion in geneB)</td>
+</tr>
+</tbody>
+</table>
 <h2 id="citation">Citation <a name="citation"></a></h2>
 <p>Tian, L., Li, Y., Edmonson, M.N. et al. CICERO: a versatile method for detecting complex and diverse driver fusions using cancer RNA sequencing data. Genome Biol 21, 126 (2020). https://doi.org/10.1186/s13059-020-02043-x</p>
 <h2 id="license">License <a name="license"></a></h2>
@@ -401,6 +502,6 @@ limitations under the License.</p></div>
 </html>
 
 <!--
-MkDocs version : 1.4.2
-Build Date UTC : 2023-03-17 14:05:55.764443+00:00
+MkDocs version : 1.4.3
+Build Date UTC : 2023-07-05 20:23:22.409855+00:00
 -->
