@@ -67,6 +67,7 @@
 - [Reference Files](#reference)
 - [Supported Genomes](#genomes)
 - [Demo](#demo)
+- [Output Fields](#outputfields)
 - [Citation](#citation)
 - [License](#license)
 
@@ -234,6 +235,31 @@ CICERO currently supports `GRCh37-lite` and `GRCh38_no_alt`.
 
 A demo of CICERO can be found at the following location:
 * https://www.stjuderesearch.org/site/lab/zhang/cicero
+
+## Output Fields <a name="outputfields"></a>
+| Field    | Description |
+|----------|-------------|
+| sample   | Sample ID   |
+| geneA / geneB | gene at breakpoint A / B |
+| chrA / chrB | chromosome at breakpoint A / B |
+| posA / posB | coordinate at breakpoint A / B |
+| ortA / ortB | Mapping strand of assembled contig at breakpoint A / B |
+| featureA / featureB | 5utr / 3utr / coding / intron / intergenic at breakpoint A / B |
+| sv_ort | Whether the mapping orientation of assembled contig has confident biological meaning; if confident, then '>', else '?' (e.g. the contig mapping is from sense strand of gene A to antisense strand of gene B). |
+| readsA / readsB | number of junction reads that support the fusion at breakpoint A / B |
+| matchA / matchB | contig matched length at breakpoint A / B region |
+| repeatA / repeatB | repeat score (0~1) at breakpoint A / B region, the higher the more repetitive |
+| coverageA / coverageB | coverage of junction reads that support the fusion at breakpoint A / B (add the sequence length that can be mapped to the assembled contig for each junction read) |
+| ratioA / ratioB | MAF of soft-clipped reads at breakpoint A / B (calculate the MAF for plus mapped reads and minus mapped reads, respectively; use the maximum MAF). |
+| qposA / qposB | breakpoint position in the contig that belongs to A / B part |
+| total_readsA / total_readsB | total reads number at the breakpoint at breakpoint A / B |
+| contig | Assembled contig sequence that support the fusion |
+| type | CTX (interchromosomal translocation) / Internal_dup / ITX (inversion) / DEL (deletion) / INS (insertion) / read_through |
+| score | Fusion score, the higher the better |
+| rating | HQ (known fusions) / RT (read_through) / LQ (others) |
+| medal | Estimated pathogenicity assessment using St. Jude Medal Ceremony. Value: 0/1/2/3/4, the bigger the better |
+| functional effect | ITD (Internal_dup) / Fusion / upTSS / NLoss / CLoss / other |
+| frame | 0 (event is not in frame) / 1 (event is in-frame) / 2 (geneB portion contains canonical coding start site (i.e. the entire CDS for geneB)) / 3 (possible 5' UTR fusion in geneB) |
 
 ## Citation <a name="citation"></a>
 
