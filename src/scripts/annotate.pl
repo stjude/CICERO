@@ -185,7 +185,7 @@ else{
 		if ($?){
 			my $err = $!;
 			print STDERR "Warning: combining fusion events failed: $err\n";
-   			print STDERR "No events may be a valid result.\n";
+			print STDERR "No events may be a valid result.\n";
 		}
 	}
 }
