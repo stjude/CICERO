@@ -174,8 +174,8 @@ if($internal) {
 		`cat $out_dir/*/unfiltered.internal.txt > $unfiltered_file`;
 		if ($?){
 			my $err = $!;
-			print STDERR "Error combining internal events: $err\n";
-			exit 2;
+			print STDERR "Warning: combining internal events failed: $err\n";
+			print STDERR "No events may be a valid result.\n";
 		}		
 	}
 }
@@ -184,8 +184,8 @@ else{
 		`cat $out_dir/*/unfiltered.fusion.txt > $unfiltered_file`;
 		if ($?){
 			my $err = $!;
-			print STDERR "Error combining fusion events: $err\n";
-			exit 3;
+			print STDERR "Warning: combining fusion events failed: $err\n";
+			print STDERR "No events may be a valid result.\n";
 		}
 	}
 }
