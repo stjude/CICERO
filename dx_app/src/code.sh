@@ -78,7 +78,7 @@ main() {
     export bam_index_path="/home/dnanexus/in/bam_index/$star_mapped_sorted_bam_prefix.bam.bai"
     export bam_index_prefix="$star_mapped_sorted_bam_prefix.bam.bai"
     mkdir -p /home/dnanexus/in/bam_index/
-    ( sambamba index $star_mapped_sorted_bam_path $bam_index_path )&
+    ( samtools index $star_mapped_sorted_bam_path $bam_index_path )&
     export bam_index_pid=$!
   fi
 

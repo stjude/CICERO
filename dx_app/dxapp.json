@@ -1,5 +1,5 @@
 {
-  "openSource": false,
+  "openSource": true,
   "developers": [ "user-clmcleod", "user-athrashe", "user-appdpdnanexus_stjude.org" ],
   "authorizedUsers": [
     "user-clmcleod",
@@ -36,7 +36,8 @@
   "runSpec": {
     "distribution": "Ubuntu",
     "interpreter": "bash",
-    "release": "16.04",
+    "release": "20.04",
+    "version": "0",
     "file": "src/code.sh",
     "timeoutPolicy": {
       "*": {
@@ -49,7 +50,7 @@
       { "name": "zlib1g-dev" },
       { "name": "parallel" },
       { "name": "bioperl" },
-      { "name": "realpath" },
+      { "name": "coreutils" },
       { "name": "samtools" },
       { "name": "libbio-samtools-perl" },
       { "name": "parallel" },

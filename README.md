@@ -67,6 +67,7 @@
 - [Reference Files](#reference)
 - [Supported Genomes](#genomes)
 - [Demo](#demo)
+- [Output Fields](#outputfields)
 - [Citation](#citation)
 - [License](#license)
 
@@ -139,7 +140,7 @@ CICERO can be run with Docker. Pre-built Docker images are provided for each rel
 Invoke the CICERO wrapper using the Docker image available in GitHub Packages. You will likely need to add an additional bind mount for the output and input (BAM + junctions) files. Note the following command pulls the `latest` tag for the Docker image. For reproducible results, it is advisable to specify the exact version to run.
 
 ```bash
-docker run -v <path to reference directory>:/reference ghcr.io/stjude/cicero:latest Cicero.sh [-n cores] -b <bam file path> -g <genome> -r /reference -o <output directory> [-j junctions file] [-p] [-s int] [-t int] [-c int]
+docker run -v <path to reference directory>:/reference ghcr.io/stjude/cicero:latest [-n cores] -b <bam file path> -g <genome> -r /reference -o <output directory> [-j junctions file] [-p] [-s int] [-t int] [-c int]
 ```
 
 See [Running CICERO](#running) for details of the parameters.
@@ -205,7 +206,7 @@ Output is also written in UCSC .bed format, which can be used to visualize the j
 ### Running RNApeg via Docker
 
 ```bash
-docker run -v <outdir>:/results ghcr.io/stjude/rnapeg:latest RNApeg.sh -b bamfile -f fasta -r refflat
+docker run -v <outdir>:/results ghcr.io/stjude/rnapeg:latest -b bamfile -f fasta -r refflat
 ```
 
 - `fasta` reference genome; i.e. "Homo_sapiens/GRCh38_no_alt/FASTA/GRCh38_no_alt.fa" or "Homo_sapiens/GRCh37-lite/FASTA/GRCh37-lite.fa" from [Reference Files](#reference).
@@ -214,7 +215,7 @@ docker run -v <outdir>:/results ghcr.io/stjude/rnapeg:latest RNApeg.sh -b bamfil
 ### Running RNApeg via Singularity:
 
 ```bash
-singularity run --containall --bind <outdir>:/results docker://ghcr.io/stjude/rnapeg:latest RNApeg.sh -b bamfile -f fasta -r refflat
+singularity run --containall --bind <outdir>:/results docker://ghcr.io/stjude/rnapeg:latest -b bamfile -f fasta -r refflat
 ```
 
 You will also need to add `--bind` arguments to mount the file paths for `bamfile`, `fasta`, and `refflat` into the container. 
@@ -234,6 +235,31 @@ CICERO currently supports `GRCh37-lite` and `GRCh38_no_alt`.
 
 A demo of CICERO can be found at the following location:
 * https://www.stjuderesearch.org/site/lab/zhang/cicero
+
+## Output Fields <a name="outputfields"></a>
+| Field    | Description |
+|----------|-------------|
+| sample   | Sample ID   |
+| geneA / geneB | gene at breakpoint A / B |
+| chrA / chrB | chromosome at breakpoint A / B |
+| posA / posB | coordinate at breakpoint A / B |
+| ortA / ortB | Mapping strand of assembled contig at breakpoint A / B |
+| featureA / featureB | 5utr / 3utr / coding / intron / intergenic at breakpoint A / B |
+| sv_ort | Whether the mapping orientation of assembled contig has confident biological meaning; if confident, then '>', else '?' (e.g. the contig mapping is from sense strand of gene A to antisense strand of gene B). |
+| readsA / readsB | number of junction reads that support the fusion at breakpoint A / B |
+| matchA / matchB | contig matched length at breakpoint A / B region |
+| repeatA / repeatB | repeat score (0~1) at breakpoint A / B region, the higher the more repetitive |
+| coverageA / coverageB | coverage of junction reads that support the fusion at breakpoint A / B (add the sequence length that can be mapped to the assembled contig for each junction read) |
+| ratioA / ratioB | MAF of soft-clipped reads at breakpoint A / B (calculate the MAF for plus mapped reads and minus mapped reads, respectively; use the maximum MAF). |
+| qposA / qposB | breakpoint position in the contig that belongs to A / B part |
+| total_readsA / total_readsB | total reads number at the breakpoint at breakpoint A / B |
+| contig | Assembled contig sequence that support the fusion |
+| type | CTX (interchromosomal translocation) / Internal_dup / ITX (inversion) / DEL (deletion) / INS (insertion) / read_through |
+| score | Fusion score, the higher the better |
+| rating | HQ (known fusions) / RT (read_through) / LQ (others) |
+| medal | Estimated pathogenicity assessment using St. Jude Medal Ceremony. Value: 0/1/2/3/4, the bigger the better |
+| functional effect | ITD (Internal_dup) / Fusion / upTSS / NLoss / CLoss / other |
+| frame | 0 (event is not in frame) / 1 (event is in-frame) / 2 (geneB portion contains canonical coding start site (i.e. the entire CDS for geneB)) / 3 (possible 5' UTR fusion in geneB) |
 
 ## Citation <a name="citation"></a>
 
