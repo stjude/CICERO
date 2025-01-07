@@ -215,7 +215,7 @@ docker run -v <outdir>:/results ghcr.io/stjude/rnapeg:latest -b bamfile -f fasta
 ### Running RNApeg via Singularity:
 
 ```bash
-singularity run --containall --bind <outdir>:/results docker://ghcr.io/stjude/rnapeg:latest -b bamfile -f fasta -r refflat
+singularity run --containall --bind <outdir>:/results docker://ghcr.io/stjude/rnapeg:latest -b bamfile -f fasta -r refflat -O /results
 ```
 
 You will also need to add `--bind` arguments to mount the file paths for `bamfile`, `fasta`, and `refflat` into the container. 
