@@ -1,13 +1,12 @@
 <p align="center">
 
   <h1 align="center">
-    CICERO
+    CICERO [UNMAINTAINED]
   </h1>
 
   <p align="center">
    <a href="https://github.com/stjude/CICERO" target="_blank">
-     <img alt="Status"
-          src="https://img.shields.io/badge/status-active-success.svg" />
+     <img alt="Status" src="https://img.shields.io/badge/status-unmaintained-red">
    </a>
    <a href="https://github.com/stjude/CICERO/issues" target="_blank">
      <img alt="Github Issues"
@@ -25,6 +24,7 @@
      <img alt="License: MIT"
           src="https://img.shields.io/badge/License-MIT-blue.svg" />
    </a>
+   <img alt="Maintenance" src="https://img.shields.io/maintenance/no/2025">
   </p>
 
 
@@ -59,6 +59,7 @@
 
 ## 📝 Table of Contents
 
+- [Unmaintained](#unmaintained)
 - [Running CICERO](#running)
 - [Dependencies](#dependencies)
 - [Running with Docker](#docker)
@@ -70,6 +71,10 @@
 - [Output Fields](#outputfields)
 - [Citation](#citation)
 - [License](#license)
+
+## Unmaintained <a name="unmaintained"></a>
+
+As of 2025, CICERO is no longer receiving regular maintenance or updates. It should generally remain usable and suitable for use. Any questions can be addressed to the senior author of the CICERO [manuscript](#citation).
 
 ## Running CICERO <a name="running"></a>
 
