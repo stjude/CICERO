@@ -48,7 +48,7 @@ my $gm_format = "REFFLAT";
 my $cap3_options = " -o 25 -z 2 -h 60 -y 10 > /dev/null 2>&1";
 
 # 2 blat related variables, using blat server and blat standalone
-my $blat_client_exe = "gfClient";
+## blat_client_exe deferred until we have app/cicero config
 my $blat_client_options = '-out=psl -nohead > /dev/null 2>&1';
 my ($blat_server, $blat_port, $dir_2bit);
 my ($paired, $rmtmp, $rmdup) = (1, 1, 1);
@@ -134,6 +134,8 @@ $max_num_hits = $conf->{MAX_NUM_HITS} unless($max_num_hits);
 $min_fusion_distance = $conf->{MIN_FUSION_DIST} unless($min_fusion_distance);
 $min_sclip_reads = $conf->{MIN_SC_READS} unless($min_sclip_reads);
 $min_sclip_len = $conf->{MIN_SC_LEN} unless($min_sclip_len);
+
+my $blat_client_exe = defined($conf->{BLAT_CLIENT}) ? $conf->{BLAT_CLIENT} : 'gfClient';
 
 croak "You need specify the input gene model file" unless ($gene_model_file);
 if($gene_model_file) {
@@ -287,7 +289,7 @@ sub detect_SV{
 		# Nothing has failed at this point, there are simply no results.
 		return if($n_m == 0);
 		foreach my $sv (@mappings){
-			
+
 			my ($bp1, $bp2, $qseq, $qname) = ($sv->{first_bp}, $sv->{second_bp}, $sv->{junc_seq}, $sv->{contig_name});
 			if($chr =~ m/chr/ && $bp1->{tname} !~ m/chr/) {$bp1->{tname} = "chr".$bp1->{tname};}
 			if($chr =~ m/chr/ && $bp2->{tname} !~ m/chr/) {$bp2->{tname} = "chr".$bp2->{tname};}
@@ -295,7 +297,7 @@ sub detect_SV{
 			$sv->{gap} = $bp1->{ort} > 0 ? $bp2->{qstart} - $bp1->{qend} : $bp1->{qstart} - $bp2->{qend};
 			print STDERR "bp1: ", join("\t",$bp1->{tname}, $bp1->{qstrand}, $bp1->{tend}, $bp1->{tstart}, $bp1->{ort}, $bp1->{qend}, $bp1->{qstart}), "\n" if($debug);
 			print STDERR "bp2: ", join("\t",$bp2->{tname}, $bp2->{qstrand}, $bp2->{tend}, $bp2->{tstart}, $bp2->{ort}, $bp2->{qend}, $bp2->{qstart}), "\n" if($debug);
-	
+
 =pos
 			if($num_of_mappings{$qname} >= $max_num_hits){
 				my $reads_num2 = second_sc_chk($sam_d, $bp2);
@@ -305,10 +307,10 @@ sub detect_SV{
 =cut
 			my ($pos1, $pos2);
 			$pos1 = ($bp1->{qstrand}*$bp1->{ort} > 0)? $bp1->{tend}: $bp1->{tstart};
-			$bp1->{tpos} = $pos1;	
-				
+			$bp1->{tpos} = $pos1;
+
 			$pos2 = ($bp2->{qstrand}*$bp2->{ort} > 0) ? $bp2->{tend}: $bp2->{tstart};
-			$bp2->{tpos} = $pos2;	
+			$bp2->{tpos} = $pos2;
 
 			my $g1_chr = ($bp1->{tname} =~ m/chr/) ? $bp1->{tname} : "chr".$bp1->{tname};
 			my $g2_chr = ($bp2->{tname} =~ m/chr/) ? $bp2->{tname} : "chr".$bp2->{tname};
@@ -400,7 +402,7 @@ sub second_sc_chk {
 This documentation refers to Cicero.pl version 0.1.8.
 
 =head1 USAGE
-	
+
 	This program depends on several things that need to be installed and/or
 	specified.  The program uses BioPerl and Bio::DB::Sam module to parse
 	the files and bam files.  Also it uses Blat software suites to do genome
@@ -426,4 +428,3 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-

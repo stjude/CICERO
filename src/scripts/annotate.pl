@@ -48,7 +48,7 @@ my $out_header = join("\t", "sample", "geneA", "chrA", "posA", "ortA", "featureA
 			 "ratioA", "ratioB", "qposA", "qposB", "total_readsA", "total_readsB", "contig", "type");
 
 
-my ($blat_server, $blat_port, $dir_2bit);
+my ($blat_server, $blat_port, $dir_2bit, $gfClient);
 my $blat_client_options = ' -out=psl -nohead > /dev/null 2>&1';
 my $cap3_options = " -o 25 -z 2 -h 60 > /dev/null";
 
@@ -73,7 +73,7 @@ if(@ARGV == 0){
 }
 
 my $optionOK = GetOptions(
-	'i|in|input=s'	=> \$input_bam,	
+	'i|in|input=s'	=> \$input_bam,
 	'config_file=s'	=> \$config_file,
 	'o|out_dir=s'	=> \$out_dir,
 	'genome=s'  => \$genome,
@@ -139,6 +139,8 @@ $min_hit_len = $conf->{MIN_HIT_LEN} unless($min_hit_len);
 $max_num_hits = $conf->{MAX_NUM_HITS} unless($max_num_hits);
 $min_fusion_distance = $conf->{MIN_FUSION_DIST} unless($min_fusion_distance);
 
+$gfClient = defined($conf->{BLAT_CLIENT}) ? $conf->{BLAT_CLIENT} : 'gfClient';
+
 # Assume sample name is the bam prefix
 $sample = basename($input_bam, ".bam") unless($sample);
 
@@ -176,7 +178,7 @@ if($internal) {
 			my $err = $!;
 			print STDERR "Warning: combining internal events failed: $err\n";
 			print STDERR "No events may be a valid result.\n";
-		}		
+		}
 	}
 }
 else{
@@ -218,7 +220,7 @@ my $assembler = Assembler->new(
 );
 
 my $mapper = Mapper->new(
-	-PRG => join(' ', ("gfClient", $blat_server, $blat_port)),
+	-PRG => join(' ', ($gfClient, $blat_server, $blat_port)),
 	-OPTIONS => $blat_client_options,
 	-BIT2_DIR => $dir_2bit,
 	-MIN_HIT_LEN => $min_hit_len,
@@ -267,7 +269,7 @@ my $df = new DelimitedFile(
 
 while (my $row = $df->get_hash()) {
 	my ($chrA, $posA, $chrB, $posB) = ($row->{chrA}, $row->{posA}, $row->{chrB}, $row->{posB});
-	$bad_fusions{$chrA.":".$posA.":".$chrB.":".$posB} = 1;	      
+	$bad_fusions{$chrA.":".$posA.":".$chrB.":".$posB} = 1;
 }
 
 sub is_bad_fusion{
@@ -356,7 +358,7 @@ while(my $line = <$UNF>){
 			$bad_gene = 1 if(exists($excluded{$g2}));
 			next if ($g1 eq $g2);
 			my $gene_pair = ($g1 le $g2) ? join(":",$g1,$g2) : join(":",$g2,$g1);
-			next if(exists($genepairs{$gene_pair})); 
+			next if(exists($genepairs{$gene_pair}));
 			$genepairs{$gene_pair} = 1;
 			if(exists($gene_recurrance{$g1})){$gene_recurrance{$g1}++;}
 			else{$gene_recurrance{$g1} = 1;}
@@ -801,7 +803,7 @@ foreach my $sv (@uniq_SVs){
 				sprintf("%.2f", $bp2->{repeat}), $bp1->{area}, $bp2->{area}, sprintf("%.2f", $mafA), sprintf("%.2f", $mafB),
 				 $bp1->{qpos}, $bp2->{qpos}, $total_readsA, $total_readsB, $qseq, $type);
 	print hFo $out_string, "\n";
-}	
+}
 close(hFo);
 rmtree(["$annotation_dir"]);
 
@@ -1042,15 +1044,15 @@ sub sign{
 	my $b = shift;
 
 	if($b eq 'c'){
-		return '+' if($a > 0);	
-		return '-' if($a < 0);	
-		return '=' if($a == 0);	
+		return '+' if($a > 0);
+		return '-' if($a < 0);
+		return '=' if($a == 0);
 	}
 
 	if($b eq 'd'){
-		return 1 if($a > 0);	
-		return -1 if($a < 0);	
-		return 0 if($a == 0);	
+		return 1 if($a > 0);
+		return -1 if($a < 0);
+		return 0 if($a == 0);
 	}
 }
 
@@ -1066,7 +1068,7 @@ sub annotate_enhancer_gene_bp{
 	my $rev_strand = ($bp->{qstrand} > 0) ? '-' : '+';
 
 	my $extend_size = 1000000;
-	
+
 		my ($start, $end) = ($tpos - $extend_size, $tpos + $extend_size);
 		my $gm_tree = $gm->sub_model($chr, $strand);
 		return if(!defined($gm_tree));
@@ -1083,7 +1085,7 @@ sub annotate_enhancer_gene_bp{
 			$tmp_score = 0.8 if($tmp_feature =~ m/utr/);
 			$tmp_score = 0.5 if($tmp_feature eq 'intron');
 			$tmp_score = 0.1 if($tmp_feature eq 'intergenic');
-	
+
 			$bp->{annotate_score} = $tmp_score;
 			$bp->{feature} = $tmp_feature;
 			$bp->{ts_strand} = $bp->{qstrand};
@@ -1135,7 +1137,7 @@ sub annotate_bp{
 	#priority order: same_direction exon > diff_direction exon > same_direction utr > diff_direction utr
 	#   > same_direction intron > diff_direction intron > min_distance intergenic (for all same/diff direction intergenic genes)
 	foreach my $extend_size (10, 5000, 10000, 40000){
-	
+
 		my ($start, $end) = ($tpos - $extend_size, $tpos + $extend_size);
 		my $gm_tree = $gm->sub_model($chr, $strand);
 		return if(!defined($gm_tree));
@@ -1152,7 +1154,7 @@ sub annotate_bp{
 			$tmp_score = 0.5 if($tmp_feature eq 'intron');
 			$tmp_score = 0.1 if($tmp_feature eq 'intergenic');
 			my $tmp_dist = (abs($g->start - $tpos) < abs($g->end - $tpos)) ? abs($g->start - $tpos) : abs($g->end - $tpos);
-	
+
 			return $bp if($bp->{annotate_score} == 1);
 
                         if($tmp_feature eq 'intergenic')
@@ -1193,7 +1195,7 @@ sub annotate_bp{
 			$tmp_score = -0.5 if($tmp_feature eq 'intron');
 			$tmp_score = -0.1 if($tmp_feature eq 'intergenic');
 			my $tmp_dist = (abs($g->start - $tpos) < abs($g->end - $tpos)) ? abs($g->start - $tpos) : abs($g->end - $tpos);
-			
+
 			return $bp if($bp->{annotate_score} == -1);
 
                         if($tmp_feature eq 'intergenic')
@@ -1260,7 +1262,7 @@ sub quantification {
 	my $clip1x = $clip1 + 1;
 	my $fa_file1 = "$anno_dir/".join(".", $chr1,$pos1, ($clip1+1), "fa");
 	my $output_mate = 1;
-	$output_mate = 0 if($SV->{type} eq "Internal_dup");	
+	$output_mate = 0 if($SV->{type} eq "Internal_dup");
 	prepare_reads_file(
 			-OUT => $fa_file1,
 		        -SAM => $sam,
@@ -1355,7 +1357,7 @@ sub quantification {
 			if ($chrB !~ m/^chr/){
 			  $chrB = "chr".$chrB;
 			}
-		}	
+		}
 		print STDERR "first_bp: ",  join("\t", $ortA, $chrA, $tstartA, $tendA, $qstartA, $qendA, $qstrandA, $matchesA, $repeatA), "\n" if($debug);
 		print STDERR "second_bp: ", join("\t", $ortB, $chrB, $tstartB, $tendB, $qstartB, $qendB, $qstrandB, $matchesB, $repeatB), "\n" if($debug);
 		my ($qposA, $qposB) = ($ortA > 0) ? ($qendA, $qstartB) : ($qstartA, $qendB);
@@ -1367,7 +1369,7 @@ sub quantification {
 		print STDERR "second_bp: ", join("\t", $ortB, $chrB, $tposB, $qstrandB), "\n" if($debug);
 		print STDERR "bp1: ", join("\t", $bp1->{ort}, $bp1->{tname}, $bp1->{tpos}, $bp1->{qstrand}), "\n" if($debug);
 		print STDERR "bp2: ", join("\t", $bp2->{ort}, $bp2->{tname}, $bp2->{tpos}, $bp2->{qstrand}), "\n" if($debug);
-	
+
 		next unless(($chrA eq $bp1->{tname} && abs($bp1->{tpos} - $tposA)<50 &&
 			    $bp2->{tname} eq $chrB && abs($bp2->{tpos} - $tposB)<50) ||
 			    ($bp2->{tname} eq $chrA && abs($bp2->{tpos} - $tposA)<50 &&
@@ -1379,7 +1381,7 @@ sub quantification {
 		close($CTG);
 
 		my ($psl_file1, $psl_file2) = ("$anno_dir/bp1.psl", "$anno_dir/bp2.psl",);
-		
+
 		unlink $psl_file1 if(-f $psl_file1); unlink $psl_file2 if(-f $psl_file2);
 		if (-s $fa_file1){
 			`blat -noHead -maxIntron=5 $tmp_ctg_file $fa_file1 $psl_file1`;
@@ -1457,7 +1459,7 @@ sub quantification {
 			first_bp => $selected_bp1,
 			second_bp => $selected_bp2
 			};
-		
+
 		push @qSVs, $tmp_SV if($selected_bp1->{tpos} && $selected_bp2->{tpos});
 	}
 	return @qSVs;
@@ -1545,14 +1547,14 @@ sub get_gene_name {
 		foreach my $g1 (@gene_names){
 			$genes{$g1} = 1;
 		}
-	}	
+	}
 
 	foreach my $g (@r_genes){
 		my @gene_names = split(/,|\|/,$g->val->name);
 		foreach my $g1 (@gene_names){
 			$genes{$g1} = -1;
 		}
-	}	
+	}
 	return \%genes;
 }
 
