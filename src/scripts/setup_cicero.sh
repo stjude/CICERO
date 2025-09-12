@@ -1,7 +1,7 @@
 #!/bin/bash
-# Performs setup tasks for running Cicero. 
+# Performs setup tasks for running Cicero.
 #
-# Accepts the following parameters: 
+# Accepts the following parameters:
 # $1 = type
 # $2 = genome
 # $3 = analysis configuration file
@@ -28,6 +28,7 @@ ANLS_CONFIG=$3
 RUN_DIR=$4
 DATA_DIR=$5
 
+mkdir -p $RUN_DIR
 cp $ANLS_CONFIG $RUN_DIR/config.txt
 
 # Source the 3 relevant config files in order.
@@ -39,21 +40,21 @@ echo "..."
 if [ `which_config.sh app cicero` ]
 then
   . import_config.sh app cicero
-fi 
+fi
 if [ `which_config.sh target $TARGET` ]
-then 
+then
   . import_config.sh target $TARGET
 fi
 . import_config.sh genome $GENOME
 
 . steplib.sh
 
-set_step_script_dir $RUN_DIR 
+set_step_script_dir $RUN_DIR
 
 #
-# Step 01: extractSClips 
+# Step 01: extractSClips
 #
-init_step extractSClips 
+init_step extractSClips
 cat > `get_step_make_cmds_script` <<EOF
 #!/bin/bash
 touch `get_step_cmds_file`
@@ -62,7 +63,7 @@ cat /dev/null > `get_step_cmds_file`
 while read case_bam
  do
    bam="$DATA_DIR/\$case_bam/\$case_bam.bam"
-   LEN=\`getReadLength.sh \$bam\` 
+   LEN=\`getReadLength.sh \$bam\`
    get_sc_cmds.pl -c 10 -i \$bam -o $DATA_DIR/\$case_bam -genome $GENOME -l \$LEN >> `get_step_cmds_file`
    echo "get_geneInfo.pl -i \$bam -o $DATA_DIR/\$case_bam -l \$LEN -genome $GENOME -s \$case_bam " >> `get_step_cmds_file`
  done < $RUN_DIR/config.txt
@@ -80,12 +81,12 @@ cat > `get_step_qc_script` <<EOF
 anyfail=no
 while read case_bam
 do
-  if ! qcquiet.sh `get_step_failed_qc_dir`/\$case_bam qc_cicero_sclips.sh \$case_bam  $DATA_DIR 
+  if ! qcquiet.sh `get_step_failed_qc_dir`/\$case_bam qc_cicero_sclips.sh \$case_bam  $DATA_DIR
   then anyfail=yes
   fi
 done < $RUN_DIR/config.txt
 if [ "\$anyfail" == "yes" ]
-then 
+then
   echo There were QA failures
   echo "Exiting..."
   exit 1
@@ -97,10 +98,10 @@ EOF
 cat > `get_step_local_work_script` <<EOF
 #!/bin/bash
 
-while read case_bam 
+while read case_bam
  do
    bam="$DATA_DIR/\$case_bam/\$case_bam.bam"
-   LEN=\`getReadLength.sh \$bam\` 
+   LEN=\`getReadLength.sh \$bam\`
    SOFTCLIP_COUNT=\`wc -l $DATA_DIR/\$case_bam/*.cover | tail -n 1 | awk '{print \$1}'\`
 
    sc_cutoff_arg=
@@ -113,7 +114,7 @@ while read case_bam
    fi
 
    prepareCiceroInput.pl -o $DATA_DIR/\$case_bam -genome $GENOME -s 250 -p \$case_bam -l \$LEN -f $DATA_DIR/\$case_bam/\$case_bam.gene_info.txt \$sc_cutoff_arg
- done < $RUN_DIR/config.txt 
+ done < $RUN_DIR/config.txt
 EOF
 
 
@@ -122,25 +123,43 @@ cat > `get_step_make_cmds_script` <<EOF
 touch `get_step_cmds_file`
 cat /dev/null > `get_step_cmds_file`
 
-while read case_bam 
+## Start the blat server
+startblatserver.sh \$PHOENIX_DIR
+
+while read case_bam
  do
    bam="$DATA_DIR/\$case_bam/\$case_bam.bam"
-   LEN=\`getReadLength.sh \$bam\` 
-   
+   LEN=\`getReadLength.sh \$bam\`
+
    get_cicero_cmds.pl -i \$bam -genome $GENOME -l \$LEN -o $DATA_DIR/\$case_bam -c 10 >> `get_step_cmds_file`
- done < $RUN_DIR/config.txt 
+ done < $RUN_DIR/config.txt
+
+i=0
+while [[ \$i -lt \$BLAT_SERVER_RETRY_COUNT ]]; do
+  termblat.py --query -d \$PHOENIX_DIR
+  if [[ \$? -eq 0 ]]; then
+    break
+  fi
+  ((i++))
+  if [[ \$i -gt \$BLAT_SERVER_RETRY_COUNT ]]; then
+    echo blatserver has not started after initial wait time
+    exit 1
+  fi
+  sleep \$BLAT_SERVER_SLEEPTIMER
+done
+
 EOF
 write_step_submit_script
 
 init_step combine
 cat > `get_step_local_work_script` <<EOF
 #!/bin/bash
-while read case_bam 
+while read case_bam
  do
    bam="$DATA_DIR/\$case_bam/\$case_bam.bam"
    cat $DATA_DIR/\$case_bam/*/unfiltered.fusion.txt > $DATA_DIR/\$case_bam/unfiltered.fusion.txt
    cat $DATA_DIR/\$case_bam/*/unfiltered.internal.txt > $DATA_DIR/\$case_bam/unfiltered.internal.txt
- done < $RUN_DIR/config.txt 
+ done < $RUN_DIR/config.txt
 EOF
 
 
@@ -153,14 +172,14 @@ cat > `get_step_qc_script` <<EOF
 #!/bin/bash
 # QC:
 anyfail=no
-while read case_bam 
+while read case_bam
 do
-  if ! qcquiet.sh `get_step_failed_qc_dir`/\$case_bam qc_cicero.sh \$case_bam $DATA_DIR 
+  if ! qcquiet.sh `get_step_failed_qc_dir`/\$case_bam qc_cicero.sh \$case_bam $DATA_DIR
   then anyfail=yes
   fi
 done < $RUN_DIR/config.txt
 if [ "\$anyfail" == "yes" ]
-then 
+then
   echo There were QA failures
   echo "Exiting..."
   exit 1
@@ -173,14 +192,14 @@ cat > `get_step_make_cmds_script` <<EOF
 touch `get_step_cmds_file`
 cat /dev/null > `get_step_cmds_file`
 
-while read case_bam 
+while read case_bam
  do
    bam="$DATA_DIR/\$case_bam/\$case_bam.bam"
-   LEN=\`getReadLength.sh \$bam\` 
+   LEN=\`getReadLength.sh \$bam\`
    ln -s $EXCLUDED_GENES $DATA_DIR/\$case_bam
    echo "annotate.pl -c 10 -i \$bam -o $DATA_DIR/\$case_bam -l \$LEN -genome $GENOME -s \$case_bam -f $DATA_DIR/\$case_bam/\$case_bam.gene_info.txt -j $DATA_DIR/\$case_bam/\$case_bam.bam.junctions.tab.shifted.tab" >> `get_step_cmds_file`
    echo "annotate.pl -c 10 -i \$bam -o $DATA_DIR/\$case_bam -l \$LEN -genome $GENOME -s \$case_bam -f $DATA_DIR/\$case_bam/\$case_bam.gene_info.txt -internal" >> `get_step_cmds_file`
- done < $RUN_DIR/config.txt 
+ done < $RUN_DIR/config.txt
 EOF
 write_step_submit_script
 
@@ -195,14 +214,14 @@ cat > `get_step_qc_script` <<EOF
 #!/bin/bash
 # QC:
 anyfail=no
-while read case_bam 
+while read case_bam
 do
-  if ! qcquiet.sh `get_step_failed_qc_dir`/\$case_bam qc_annotation.sh \$case_bam $DATA_DIR 
+  if ! qcquiet.sh `get_step_failed_qc_dir`/\$case_bam qc_annotation.sh \$case_bam $DATA_DIR
   then anyfail=yes
   fi
 done < $RUN_DIR/config.txt
 if [ "\$anyfail" == "yes" ]
-then 
+then
   echo There were QA failures
   echo "Exiting..."
   exit 1
@@ -212,7 +231,7 @@ EOF
 
 cat > `get_step_make_cmds_script` <<EOF
 #!/bin/bash
-while read case_bam 
+while read case_bam
 do
   echo cicero_filter.sh $DATA_DIR \$case_bam $GENOME
 done < $RUN_DIR/config.txt > `get_step_cmds_file`
@@ -230,15 +249,15 @@ anyfail=no
 while read case_bam
 do
   if ! qcquiet.sh `get_step_failed_qc_dir`/\$case_bam qc_cicerofilter.sh $DATA_DIR/ \$case_bam
-  then 
+  then
     anyfail=yes
     echo "FAIL \$case_bam" >> $RUN_DIR/final_qa.txt
   else
-    echo "PASS \$case_bam" >> $RUN_DIR/final_qa.txt 
+    echo "PASS \$case_bam" >> $RUN_DIR/final_qa.txt
   fi
 done < $RUN_DIR/config.txt
 if [ "\$anyfail" == "yes" ]
-then 
+then
   echo There were QA failures
   echo "Exiting..."
   exit 1
@@ -247,10 +266,8 @@ EOF
 
 cat > `get_step_local_work_script` <<EOF
 #!/bin/bash
-while read case_bam 
+while read case_bam
  do
-   cat $HTML_FIRST_HALF $DATA_DIR/\$case_bam/final_fusions.txt $HTML_SECOND_HALF> $DATA_DIR/\$case_bam/final_fusions.report.html 
- done < $RUN_DIR/config.txt 
+   cat $HTML_FIRST_HALF $DATA_DIR/\$case_bam/final_fusions.txt $HTML_SECOND_HALF> $DATA_DIR/\$case_bam/final_fusions.report.html
+ done < $RUN_DIR/config.txt
 EOF
-
-
