@@ -123,6 +123,8 @@ cat > `get_step_make_cmds_script` <<EOF
 touch `get_step_cmds_file`
 cat /dev/null > `get_step_cmds_file`
 
+. import_config.sh app cicero BLAT_SERVER_RETRY_COUNT BLAT_SERVER_SLEEPTIMER
+
 ## Start the blat server
 startblatserver.sh \$PHOENIX_DIR
 
@@ -141,7 +143,7 @@ while [[ \$i -lt \$BLAT_SERVER_RETRY_COUNT ]]; do
     break
   fi
   ((i++))
-  if [[ \$i -gt \$BLAT_SERVER_RETRY_COUNT ]]; then
+  if [[ \$i -ge \$BLAT_SERVER_RETRY_COUNT ]]; then
     echo blatserver has not started after initial wait time
     exit 1
   fi
