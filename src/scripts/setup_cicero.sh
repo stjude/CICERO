@@ -117,13 +117,13 @@ while read case_bam
  done < $RUN_DIR/config.txt
 EOF
 
+. import_config.sh app cicero BLAT_CLIENT
+. import_config.sh app blatserver BLAT_SERVER_RETRY_COUNT BLAT_SERVER_SLEEPTIMER
 
 cat > `get_step_make_cmds_script` <<EOF
 #!/bin/bash
 
-. import_config.sh app cicero BLAT_CLIENT
-if [[ \$BLAT_CLIENT == bsClient ]]; then
-. import_config.sh app blatserver BLAT_SERVER_RETRY_COUNT BLAT_SERVER_SLEEPTIMER
+if [[ $BLAT_CLIENT == bsClient ]]; then
 
   ## Start the blat server
   startblatserver.sh \$PHOENIX_DIR
@@ -140,19 +140,19 @@ while read case_bam
    get_cicero_cmds.pl -i \$bam -genome $GENOME -l \$LEN -o $DATA_DIR/\$case_bam -c 10 >> `get_step_cmds_file`
  done < $RUN_DIR/config.txt
 
-if [[ \$BLAT_CLIENT == bsClient ]]; then
+if [[ $BLAT_CLIENT == bsClient ]]; then
   i=0
-  while [[ \$i -lt \$BLAT_SERVER_RETRY_COUNT ]]; do
+  while [[ \$i -lt $BLAT_SERVER_RETRY_COUNT ]]; do
     termblat.py --status -d \$PHOENIX_DIR
     if [[ \$? -eq 0 ]]; then
       break
     fi
     ((i++))
-    if [[ \$i -ge \$BLAT_SERVER_RETRY_COUNT ]]; then
+    if [[ \$i -ge $BLAT_SERVER_RETRY_COUNT ]]; then
       echo blatserver has not started after initial wait time
       exit 1
     fi
-    sleep \$BLAT_SERVER_SLEEPTIMER
+    sleep $BLAT_SERVER_SLEEPTIMER
   done
 fi
 
