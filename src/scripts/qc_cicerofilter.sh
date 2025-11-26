@@ -17,7 +17,7 @@ if [ -d "$DIR" ]; then passtest; else aborttestcase; fi
 cd $DIR
 
 starttest AnyFilesExist
-if ls $DIR/$EBN/final* >&2; then passtest; else aborttestcase; fi
+if ls $DIR/$EBN/${EBN}_final* >&2; then passtest; else aborttestcase; fi
 
 starttest ResultSize
 cutoff=200
@@ -28,7 +28,7 @@ do
     ls -l $file >&2
     failtestifactive Results file $file too small
   fi
-done< <(find $DIR/$EBN -type f -name "final*")
+done< <(find $DIR/$EBN -type f -name "${EBN}_final*")
 passtestbydefault
 
 summarize

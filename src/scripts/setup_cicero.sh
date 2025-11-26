@@ -165,8 +165,8 @@ cat > `get_step_local_work_script` <<EOF
 while read case_bam
  do
    bam="$DATA_DIR/\$case_bam/\$case_bam.bam"
-   cat $DATA_DIR/\$case_bam/*/unfiltered.fusion.txt > $DATA_DIR/\$case_bam/unfiltered.fusion.txt
-   cat $DATA_DIR/\$case_bam/*/unfiltered.internal.txt > $DATA_DIR/\$case_bam/unfiltered.internal.txt
+   cat $DATA_DIR/\$case_bam/*/\${case_bam}_unfiltered.fusion.txt > $DATA_DIR/\$case_bam/\${case_bam}_unfiltered.fusion.txt
+   cat $DATA_DIR/\$case_bam/*/\${case_bam}_unfiltered.internal.txt > $DATA_DIR/\$case_bam/\${case_bam}_unfiltered.internal.txt
  done < $RUN_DIR/config.txt
 EOF
 
@@ -199,14 +199,13 @@ cat > `get_step_make_cmds_script` <<EOF
 #!/bin/bash
 touch `get_step_cmds_file`
 cat /dev/null > `get_step_cmds_file`
-
 while read case_bam
  do
    bam="$DATA_DIR/\$case_bam/\$case_bam.bam"
    LEN=\`getReadLength.sh \$bam\`
    ln -s $EXCLUDED_GENES $DATA_DIR/\$case_bam
-   echo "annotate.pl -c 10 -i \$bam -o $DATA_DIR/\$case_bam -l \$LEN -genome $GENOME -s \$case_bam -f $DATA_DIR/\$case_bam/\$case_bam.gene_info.txt -j $DATA_DIR/\$case_bam/\$case_bam.bam.junctions.tab.shifted.tab" >> `get_step_cmds_file`
-   echo "annotate.pl -c 10 -i \$bam -o $DATA_DIR/\$case_bam -l \$LEN -genome $GENOME -s \$case_bam -f $DATA_DIR/\$case_bam/\$case_bam.gene_info.txt -internal" >> `get_step_cmds_file`
+   echo "annotate.pl -c 10 -i \$bam -o $DATA_DIR/\$case_bam -l \$LEN -genome $GENOME -s \$case_bam -f $DATA_DIR/\$case_bam/\${case_bam}.gene_info.txt -j $DATA_DIR/\$case_bam/\$case_bam.bam.junctions.tab.shifted.tab" >> `get_step_cmds_file`
+   echo "annotate.pl -c 10 -i \$bam -o $DATA_DIR/\$case_bam -l \$LEN -genome $GENOME -s \$case_bam -f $DATA_DIR/\$case_bam/\${case_bam}.gene_info.txt -internal" >> `get_step_cmds_file`
  done < $RUN_DIR/config.txt
 EOF
 write_step_submit_script
@@ -276,6 +275,6 @@ cat > `get_step_local_work_script` <<EOF
 #!/bin/bash
 while read case_bam
  do
-   cat $HTML_FIRST_HALF $DATA_DIR/\$case_bam/final_fusions.txt $HTML_SECOND_HALF> $DATA_DIR/\$case_bam/final_fusions.report.html
+   cat $HTML_FIRST_HALF $DATA_DIR/\$case_bam/\$case_bam_final_fusions.txt $HTML_SECOND_HALF> $DATA_DIR/\$case_bam/${case_bam}_final_fusions.report.html
  done < $RUN_DIR/config.txt
 EOF

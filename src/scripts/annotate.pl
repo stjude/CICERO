@@ -169,11 +169,11 @@ my @complex_regions;
 
 
 # Combine all of the individual results from Cicero.pl
-my $unfiltered_file = "$out_dir/unfiltered.fusion.txt";
+my $unfiltered_file = "$out_dir/${sample}_unfiltered.fusion.txt";
 if($internal) {
-	$unfiltered_file = "$out_dir/unfiltered.internal.txt";
+	$unfiltered_file = "$out_dir/${sample}_unfiltered.internal.txt";
 	unless (-s $unfiltered_file){
-		`cat $out_dir/*/unfiltered.internal.txt > $unfiltered_file`;
+		`cat $out_dir/*/${sample}_unfiltered.internal.txt > $unfiltered_file`;
 		if ($?){
 			my $err = $!;
 			print STDERR "Warning: combining internal events failed: $err\n";
@@ -183,7 +183,7 @@ if($internal) {
 }
 else{
 	unless (-s $unfiltered_file){
-		`cat $out_dir/*/unfiltered.fusion.txt > $unfiltered_file`;
+		`cat $out_dir/*/${sample}_unfiltered.fusion.txt > $unfiltered_file`;
 		if ($?){
 			my $err = $!;
 			print STDERR "Warning: combining fusion events failed: $err\n";

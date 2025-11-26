@@ -280,8 +280,8 @@ sub detect_SV{
 	my $n_m = scalar @mappings;
 	print STDERR "\nnumber of mappings: $n_m\tmin_hit_len: $min_hit_len\nmappings: @mappings\n" if($debug);
 
-	my $unfiltered_fusion_file = "$out_dir/unfiltered.fusion.txt";
-	my $unfiltered_internal_events_file = "$out_dir/unfiltered.internal.txt";
+	my $unfiltered_fusion_file = "$out_dir/${sample}_unfiltered.fusion.txt";
+	my $unfiltered_internal_events_file = "$out_dir/${sample}_unfiltered.internal.txt";
 	open(my $UFF, ">>$unfiltered_fusion_file");
 	open(my $UIF, ">>$unfiltered_internal_events_file");
 

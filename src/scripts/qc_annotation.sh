@@ -17,7 +17,7 @@ if [ -d "$DIR/$EBN" ]; then passtest; else aborttestcase; fi
 cd $DIR/$EBN
 
 starttest AnyFilesExist
-if ls $DIR/$EBN/annotated.*.txt >&2; then passtest; else aborttestcase; fi
+if ls $DIR/$EBN/${EBN}_annotated.*.txt >&2; then passtest; else aborttestcase; fi
 
 starttest AnnotationSize 
 cutoff=0
@@ -28,7 +28,7 @@ do
     ls -l $file >&2
     failtestifactive Found at least one cover that was too small
   fi
-done< <(ls $DIR/$EBN/annotated.*.txt | sed '$d' )
+done< <(ls $DIR/$EBN/${EBN}_annotated.*.txt | sed '$d' )
 passtestbydefault
 
 summarize

@@ -60,8 +60,8 @@ while read case_bam
 do 
   bam="$DATA_DIR/\$case_bam/\$case_bam.bam"
 
-  echo "build_fusions.sh $GENOME $DATA_DIR/\$case_bam/final_fusions- -i $DATA_DIR//\$case_bam/final_fusions.txt -h -x -S \$case_bam " >> `get_step_cmds_file`
-  echo "build_fusions.sh $GENOME $DATA_DIR/\$case_bam/final_internal- -i $DATA_DIR//\$case_bam/final_internal.txt -h -x -S \$case_bam " >> `get_step_cmds_file`
+  echo "build_fusions.sh $GENOME $DATA_DIR/\$case_bam/\${case_bam}_final_fusions- -i $DATA_DIR//\$case_bam/\${case_bam}_final_fusions.txt -h -x -S \$case_bam " >> `get_step_cmds_file`
+  echo "build_fusions.sh $GENOME $DATA_DIR/\$case_bam/\${case_bam}_final_internal- -i $DATA_DIR//\$case_bam/\${case_bam}_final_internal.txt -h -x -S \$case_bam " >> `get_step_cmds_file`
 
 done < $ANLS_CONFIG
 EOF
@@ -75,7 +75,7 @@ cat > `get_step_qc_script` <<EOF
 anyfail=no
 while read case_bam
 do
-  if ! qcquiet.sh `get_step_failed_qc_dir`/\$case_bam qc_fusions.sh $DATA_DIR/\$case_bam final_fusions final_fusions
+  if ! qcquiet.sh `get_step_failed_qc_dir`/\$case_bam qc_fusions.sh $DATA_DIR/\$case_bam \${case_bam}_final_fusions \${case_bam}_final_fusions
   then 
     anyfail=yes
   fi
@@ -99,8 +99,8 @@ while read case_bam
 do 
   bam="$DATA_DIR/\$case_bam/\$case_bam.bam"
 
-  echo "java.sh org.stjude.compbio.sv.counting.AppendAlleleCounts -i $DATA_DIR/\$case_bam/final_fusions-event_fusion.txt -b \$bam -o $DATA_DIR/\$case_bam/final_fusions.counts -f $FASTA -V SILENT -l 20" >> `get_step_cmds_file`
-  echo "java.sh org.stjude.compbio.sv.counting.AppendAlleleCounts -i $DATA_DIR/\$case_bam/final_internal-event_fusion.txt -b \$bam -o $DATA_DIR/\$case_bam/final_internal.counts -f $FASTA  -V SILENT -l 20" >> `get_step_cmds_file`
+  echo "java.sh org.stjude.compbio.sv.counting.AppendAlleleCounts -i $DATA_DIR/\$case_bam/\${case_bam}_final_fusions-event_fusion.txt -b \$bam -o $DATA_DIR/\$case_bam/\${case_bam}_final_fusions.counts -f $FASTA -V SILENT -l 20" >> `get_step_cmds_file`
+  echo "java.sh org.stjude.compbio.sv.counting.AppendAlleleCounts -i $DATA_DIR/\$case_bam/\${case_bam}_final_internal-event_fusion.txt -b \$bam -o $DATA_DIR/\$case_bam/\${case_bam}_final_internal.counts -f $FASTA  -V SILENT -l 20" >> `get_step_cmds_file`
 
 done < $ANLS_CONFIG
 EOF
@@ -114,7 +114,7 @@ cat > `get_step_qc_script` <<EOF
 anyfail=no
 while read case_bam 
 do
-  if ! qcquiet.sh `get_step_failed_qc_dir`/\$case_bam qc_append_allele.sh $DATA_DIR/\$case_bam final_fusions final_fusions
+  if ! qcquiet.sh `get_step_failed_qc_dir`/\$case_bam qc_append_allele.sh $DATA_DIR/\$case_bam \${case_bam}_final_fusions \${case_bam}_final_fusions
   then 
     anyfail=yes
   fi
@@ -138,8 +138,8 @@ while read case_bam
 do 
   bam="$DATA_DIR/\$case_bam/\$case_bam.bam"
 
-  echo "cd $DATA_DIR/\$case_bam/; medal_ceremony_using_configs.sh GRCh37-lite -outfile-fq -single-sv $DATA_DIR/\$case_bam/final_fusions.counts" >> `get_step_cmds_file`
-  echo "cd $DATA_DIR/\$case_bam/; medal_ceremony_using_configs.sh GRCh37-lite -outfile-fq -single-sv $DATA_DIR/\$case_bam/final_internal.counts" >> `get_step_cmds_file`
+  echo "cd $DATA_DIR/\$case_bam/; medal_ceremony_using_configs.sh GRCh37-lite -outfile-fq -single-sv $DATA_DIR/\$case_bam/\${case_bam}_final_fusions.counts" >> `get_step_cmds_file`
+  echo "cd $DATA_DIR/\$case_bam/; medal_ceremony_using_configs.sh GRCh37-lite -outfile-fq -single-sv $DATA_DIR/\$case_bam/\${case_bam}_final_internal.counts" >> `get_step_cmds_file`
 
 done < $ANLS_CONFIG
 EOF
@@ -154,7 +154,7 @@ echo -n "" > $RUN_DIR/final_qa.txt
 anyfail=no
 while read case_bam 
 do
-  if ! qcquiet.sh `get_step_failed_qc_dir`/\$case_bam qc_classification.sh $DATA_DIR/\$case_bam final_fusions final_fusions 
+  if ! qcquiet.sh `get_step_failed_qc_dir`/\$case_bam qc_classification.sh $DATA_DIR/\$case_bam \${case_bam}_final_fusions \${case_bam}_final_fusions 
   then 
     anyfail=yes
     echo "FAIL \$case_bam" >> $RUN_DIR/final_qa.txt
