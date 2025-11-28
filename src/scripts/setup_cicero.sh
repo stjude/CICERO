@@ -275,6 +275,6 @@ cat > `get_step_local_work_script` <<EOF
 #!/bin/bash
 while read case_bam
  do
-   cat $HTML_FIRST_HALF $DATA_DIR/\$case_bam/\$case_bam_final_fusions.txt $HTML_SECOND_HALF> $DATA_DIR/\$case_bam/${case_bam}_final_fusions.report.html
+   cat $HTML_FIRST_HALF $DATA_DIR/\$case_bam/\${case_bam}_final_fusions.txt $HTML_SECOND_HALF> $DATA_DIR/\$case_bam/\${case_bam}_final_fusions.report.html
  done < $RUN_DIR/config.txt
 EOF
