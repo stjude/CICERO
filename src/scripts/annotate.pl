@@ -147,6 +147,7 @@ my @excluded_chroms = split(/,/,$excluded_chroms);
 # Load list of complex regions to be used later to determine if
 # breakpoints are located within a "complex" region
 my @complex_regions;
+my %complex_regions_by_chr; # chr => arrayref of regions, for fast lookup
 #if ($complex_region_file && -s $complex_region_file){
 	open (my $CRF, $complex_region_file) or die "Cannot open $complex_region_file: $!";
 	while(<$CRF>){
@@ -160,31 +161,45 @@ my @complex_regions;
 			end => $end
 			};
 		push @complex_regions, $cr;
+		push @{$complex_regions_by_chr{$chr}}, $cr;
 	}
 	close($CRF);
 	my %cr_hash = map { $_->{name} => 1 } @complex_regions;
 #}
 
 
+# Concatenate the given source files into $dest (in-Perl replacement for
+# shelling out to `cat`). Returns 1 on success, 0 on failure.
+sub concat_files {
+	my ($dest, @sources) = @_;
+	open(my $OUT, ">", $dest) or return 0;
+	foreach my $src (@sources){
+		open(my $IN, "<", $src) or do { close($OUT); return 0; };
+		local $/ = \1048576; # read in 1MB chunks
+		while(my $chunk = <$IN>){
+			print $OUT $chunk;
+		}
+		close($IN);
+	}
+	close($OUT);
+	return 1;
+}
+
 # Combine all of the individual results from Cicero.pl
 my $unfiltered_file = "$out_dir/unfiltered.fusion.txt";
 if($internal) {
 	$unfiltered_file = "$out_dir/unfiltered.internal.txt";
 	unless (-s $unfiltered_file){
-		`cat $out_dir/*/unfiltered.internal.txt > $unfiltered_file`;
-		if ($?){
-			my $err = $!;
-			print STDERR "Warning: combining internal events failed: $err\n";
+		unless(concat_files($unfiltered_file, glob("$out_dir/*/unfiltered.internal.txt"))){
+			print STDERR "Warning: combining internal events failed: $!\n";
 			print STDERR "No events may be a valid result.\n";
-		}		
+		}
 	}
 }
 else{
 	unless (-s $unfiltered_file){
-		`cat $out_dir/*/unfiltered.fusion.txt > $unfiltered_file`;
-		if ($?){
-			my $err = $!;
-			print STDERR "Warning: combining fusion events failed: $err\n";
+		unless(concat_files($unfiltered_file, glob("$out_dir/*/unfiltered.fusion.txt"))){
+			print STDERR "Warning: combining fusion events failed: $!\n";
 			print STDERR "No events may be a valid result.\n";
 		}
 	}
@@ -259,28 +274,44 @@ if($gold_gene_file && -e $gold_gene_file){
 	close($GGF);
 }
 
+# Excluded (bad) fusions are indexed for O(1) lookup:
+# %bad_fusions maps "chrA:chrB:binA:binB" => arrayref of [posA, posB],
+# where bins are int(pos / BADFUSION_DISTANCE_CUTOFF). Both orientations
+# are stored at load time so lookups only need one orientation.
 my %bad_fusions;
 my $df = new DelimitedFile(
 	"-file" => $excluded_fusion_file,
 	"-headers" => 1,
 );
 
+sub add_bad_fusion {
+	my ($chrA, $posA, $chrB, $posB) = @_;
+	my ($binA, $binB) = (int($posA / BADFUSION_DISTANCE_CUTOFF), int($posB / BADFUSION_DISTANCE_CUTOFF));
+	push @{$bad_fusions{join(":", $chrA, $chrB, $binA, $binB)}}, [$posA, $posB];
+}
+
 while (my $row = $df->get_hash()) {
 	my ($chrA, $posA, $chrB, $posB) = ($row->{chrA}, $row->{posA}, $row->{chrB}, $row->{posB});
-	$bad_fusions{$chrA.":".$posA.":".$chrB.":".$posB} = 1;	      
+	add_bad_fusion($chrA, $posA, $chrB, $posB);
+	add_bad_fusion($chrB, $posB, $chrA, $posA);
 }
 
 sub is_bad_fusion{
 	my ($chrA, $posA, $chrB, $posB) = @_;
 	$chrA = "chr".$chrA unless($chrA =~ /chr/);
 	$chrB = "chr".$chrB unless($chrB =~ /chr/);
-	foreach my $xx (keys %bad_fusions) {
-		my ($chr1, $pos1, $chr2, $pos2) = split(":",$xx);
-		#print STDERR " badfusionlist |".$chr1.":".$pos1.":".$chr2.":".$pos2."\n";
-		return 1 if($chrA eq $chr1 && $chrB eq $chr2 &&
-			    abs($pos1 - $posA) < BADFUSION_DISTANCE_CUTOFF && abs($pos2 - $posB) < BADFUSION_DISTANCE_CUTOFF);# cutoff is based on the cutoff of merging GTEx false positive fusions from CICERO running
-		return 1 if($chrA eq $chr2 && $chrB eq $chr1 &&
-			    abs($pos2 - $posA) < BADFUSION_DISTANCE_CUTOFF && abs($pos1 - $posB) < BADFUSION_DISTANCE_CUTOFF);
+	my ($binA, $binB) = (int($posA / BADFUSION_DISTANCE_CUTOFF), int($posB / BADFUSION_DISTANCE_CUTOFF));
+	# A match within BADFUSION_DISTANCE_CUTOFF can only fall in the same or
+	# an adjacent bin, so check the 3x3 bin neighborhood.
+	foreach my $dA (-1, 0, 1){
+		foreach my $dB (-1, 0, 1){
+			my $entries = $bad_fusions{join(":", $chrA, $chrB, $binA + $dA, $binB + $dB)} or next;
+			foreach my $pp (@{$entries}){
+				# cutoff is based on the cutoff of merging GTEx false positive fusions from CICERO running
+				return 1 if(abs($pp->[0] - $posA) < BADFUSION_DISTANCE_CUTOFF &&
+					    abs($pp->[1] - $posB) < BADFUSION_DISTANCE_CUTOFF);
+			}
+		}
 	}
 	return 0;
 }
@@ -583,17 +614,13 @@ foreach my $g (sort { $gene_recurrance{$b} <=> $gene_recurrance{$a} } keys %gene
 close($NEXC);
 
 print STDERR "out file is: $out_file\nnumber of SVs: ", scalar @raw_SVs, "\n" if($debug);
-`mkdir  -p $out_dir/tmp_anno`;
-if ($?){
-	my $err = $!;
-	print STDERR "Error creating annotation directory: $err\n";
+unless(-d "$out_dir/tmp_anno" || mkpath("$out_dir/tmp_anno")){
+	print STDERR "Error creating annotation directory: $!\n";
 	exit 4;
 }
 my $annotation_dir = tempdir(DIR => "$out_dir/tmp_anno");
-`mkdir -p $annotation_dir`;
-if ($?){
-	my $err = $!;
-	print STDERR "Error creating temp directory for annotation: $err\n";
+unless(-d $annotation_dir || mkpath($annotation_dir)){
+	print STDERR "Error creating temp directory for annotation: $!\n";
 	exit 5;
 }
 print STDERR "Annotation Dir: $annotation_dir\n" if($debug);
@@ -645,7 +672,6 @@ foreach my $sv (@raw_SVs){
 	my @genes1 = split(/,|\|/, $gene1);
 	my @genes2 = split(/,|\|/, $gene2);
 	my $bad_gene = 0;
-	print STDERR "xxx\n" if(abs($sv->{second_bp}->{tpos} - 170818803)<10 || abs($sv->{first_bp}->{tpos} - 170818803)<10);
 	foreach my $g1 (@genes1) {
 		if(exists($excluded{$g1})) {$bad_gene = 1; last;}
 	}
@@ -654,7 +680,6 @@ foreach my $sv (@raw_SVs){
 		if(exists($excluded{$g2})) {$bad_gene = 1; last;}
 	}
 	next if($bad_gene);
-	print STDERR "next if($contigSeq && ", $contig_recurrance{$contigSeq}," > $max_num_hits)\n" if(abs($sv->{second_bp}->{tpos} - 170818803)<10 || abs($sv->{first_bp}->{tpos} - 170818803)<10);
 
 	my $bp1_site = join("_", $first_bp->{tname}, $first_bp->{tpos}, $first_bp->{clip});
 	my $bp2_site = join("_", $second_bp->{tname}, $second_bp->{tpos}, $second_bp->{clip});
@@ -663,7 +688,6 @@ foreach my $sv (@raw_SVs){
 
 
 	my $start_run = time();
-	print STDERR "\nstart to quantify the fusion... ", join(" ", $sv->{first_bp}->{tname}, $sv->{first_bp}->{tpos}, $sv->{second_bp}->{tname}, $sv->{second_bp}->{tpos}), "\n" if(abs($sv->{second_bp}->{tpos} - 170818803)<10 || abs($sv->{first_bp}->{tpos} - 170818803)<10);
 	print STDERR "\nstart to quantify the fusion... ", join(" ", $sv->{first_bp}->{tname}, $sv->{first_bp}->{tpos}, $sv->{second_bp}->{tname}, $sv->{second_bp}->{tpos}), "\n" if($debug);
 	my @quantified_SVs = quantification(-SAM => $sam_d,
 		 	-GeneModel => $gm,
@@ -698,7 +722,6 @@ print "annotated_SVs: ", scalar @annotated_SVs, "\n";
 
 my @uniq_SVs;
 foreach my $sv (@annotated_SVs){
-	print STDERR "xxx\n" if(abs($sv->{second_bp}->{tpos} - 170818803)<10 || abs($sv->{first_bp}->{tpos} - 170818803)<10);
 	my ($bp1, $bp2, $qseq) = ($sv->{first_bp}, $sv->{second_bp}, $sv->{junc_seq});
 	if(exist_multiplename_checking(\%excluded, $bp1->{gene}) || exist_multiplename_checking(\%excluded, $bp2->{gene})){
 		# If the highly recurrent fusion doesn't involve known partners, remove it.
@@ -765,7 +788,7 @@ foreach my $sv (@uniq_SVs){
 	else{
 	    for (my $s = -5; $s<=5; $s++){
 		my $tmp_pos = $bp2->{tpos}+$s;
-		$bp2_site = $bp1->{tname}."_".$tmp_pos."_". $bp2->{clip};
+		$bp2_site = $bp2->{tname}."_".$tmp_pos."_". $bp2->{clip};
 	        if(exists($breakpoint_sites{$bp2_site}) && $breakpoint_sites{$bp2_site} ne "1"){
 		   my @bp2_fields = split(/\t/,$breakpoint_sites{$bp2_site});
 		   ($pscB, $nscB, $pnB, $nnB) = @bp2_fields[5,6,7,8];
@@ -836,71 +859,134 @@ sub is_good_ITD {
 	return 0;
 }
 
-sub is_dup_raw_SV {
-	my($r_SVs, $sv) = @_;
-	foreach my $s (@{$r_SVs}) {
-		return 1
-		if( abs($s->{first_bp}->{tpos} - $sv->{first_bp}->{tpos}) < 10 &&
-		    abs($s->{second_bp}->{tpos} - $sv->{second_bp}->{tpos}) < 10 &&
-			$s->{first_bp}->{tname} eq $sv->{first_bp}->{tname} &&
-			$s->{second_bp}->{tname} eq $sv->{second_bp}->{tname}
-		);
+# Duplicate detection uses a spatial bucket index instead of scanning all
+# prior SVs (which was O(n^2)). Positions are bucketed by int(pos/10); a
+# match within 10bp must be in the same or an adjacent bucket, so lookups
+# check the 3x3 bucket neighborhood.
+use constant DUP_SV_BIN => 10;
 
-		if( abs($s->{first_bp}->{tpos} - $sv->{second_bp}->{tpos}) < 10 &&
-		    abs($s->{second_bp}->{tpos} - $sv->{first_bp}->{tpos}) < 10 &&
-			$s->{first_bp}->{tname} eq $sv->{second_bp}->{tname} &&
-			$s->{second_bp}->{tname} eq $sv->{first_bp}->{tname}
-		){
-			$s->{second_bp} = $sv->{first_bp};
-			return 1;
+my %raw_sv_index; # "chrA:chrB:binA:binB" => arrayref of SVs
+
+sub _dup_sv_keys {
+	my ($sv) = @_;
+	my ($bp1, $bp2) = ($sv->{first_bp}, $sv->{second_bp});
+	my ($binA, $binB) = (int($bp1->{tpos}/DUP_SV_BIN), int($bp2->{tpos}/DUP_SV_BIN));
+	my @keys;
+	foreach my $dA (-1, 0, 1){
+		foreach my $dB (-1, 0, 1){
+			push @keys, join(":", $bp1->{tname}, $bp2->{tname}, $binA + $dA, $binB + $dB);
 		}
 	}
+	return @keys;
+}
+
+sub is_dup_raw_SV {
+	my($r_SVs, $sv) = @_;
+	# Same orientation match
+	foreach my $key (_dup_sv_keys($sv)) {
+		foreach my $s (@{$raw_sv_index{$key} || []}) {
+			return 1
+			if( abs($s->{first_bp}->{tpos} - $sv->{first_bp}->{tpos}) < 10 &&
+			    abs($s->{second_bp}->{tpos} - $sv->{second_bp}->{tpos}) < 10 &&
+				$s->{first_bp}->{tname} eq $sv->{first_bp}->{tname} &&
+				$s->{second_bp}->{tname} eq $sv->{second_bp}->{tname}
+			);
+		}
+	}
+	# Swapped orientation match: look up with breakpoints reversed
+	my $swapped = { first_bp => $sv->{second_bp}, second_bp => $sv->{first_bp} };
+	foreach my $key (_dup_sv_keys($swapped)) {
+		foreach my $s (@{$raw_sv_index{$key} || []}) {
+			if( abs($s->{first_bp}->{tpos} - $sv->{second_bp}->{tpos}) < 10 &&
+			    abs($s->{second_bp}->{tpos} - $sv->{first_bp}->{tpos}) < 10 &&
+				$s->{first_bp}->{tname} eq $sv->{second_bp}->{tname} &&
+				$s->{second_bp}->{tname} eq $sv->{first_bp}->{tname}
+			){
+				$s->{second_bp} = $sv->{first_bp};
+				return 1;
+			}
+		}
+	}
+	# Not a duplicate: index it for future lookups (single home bucket).
+	my ($bp1, $bp2) = ($sv->{first_bp}, $sv->{second_bp});
+	my $home = join(":", $bp1->{tname}, $bp2->{tname}, int($bp1->{tpos}/DUP_SV_BIN), int($bp2->{tpos}/DUP_SV_BIN));
+	push @{$raw_sv_index{$home}}, $sv;
 	return 0;
 }
 
+my %count_coverage_cache;
 sub count_coverage {
 	my ($sam, $chr, $pos) = @_;
+	my $key = "$chr:$pos";
+	return $count_coverage_cache{$key} if(exists($count_coverage_cache{$key}));
 	my $seg = $sam->segment(-seq_id => $chr, -start => $pos, -end => $pos);
-	return 0 unless $seg;
+	unless($seg){
+		$count_coverage_cache{$key} = 0;
+		return 0;
+	}
 	my $n = 0;
 	my $itr = $seg->features(-iterator => 1);
 	while( my $a = $itr->next_seq) {
 		next unless($a->start && $a->end); #why unmapped reads here?
 		$n++;
 	}
+	$count_coverage_cache{$key} = $n;
 	return $n;
 }
 
+my %uniq_sv_index; # "chrA:chrB:binA:binB" => arrayref of SVs
+
 sub is_dup_SV {
 	my($r_SVs, $sv) = @_;
-	foreach my $s (@{$r_SVs}) {
-		my $more_reads = ($s->{first_bp}->{reads_num} + $s->{second_bp}->{reads_num} >= $sv->{first_bp}->{reads_num} + $sv->{second_bp}->{reads_num}) ? 1 : 0;
-		my $longer_contig = ($s->{first_bp}->{matches} + $s->{second_bp}->{matches} >= $sv->{first_bp}->{matches} + $sv->{second_bp}->{matches}) ? 1 : 0;
-		return 1
-		if( 	($more_reads || $longer_contig) &&
-			abs($s->{first_bp}->{tpos} - $sv->{first_bp}->{tpos}) < 10 &&
-			abs($s->{second_bp}->{tpos} - $sv->{second_bp}->{tpos}) < 10 &&
-			$s->{first_bp}->{tname} eq $sv->{first_bp}->{tname} &&
-			$s->{second_bp}->{tname} eq $sv->{second_bp}->{tname});
+	foreach my $key (_dup_sv_keys($sv)) {
+		foreach my $s (@{$uniq_sv_index{$key} || []}) {
+			my $more_reads = ($s->{first_bp}->{reads_num} + $s->{second_bp}->{reads_num} >= $sv->{first_bp}->{reads_num} + $sv->{second_bp}->{reads_num}) ? 1 : 0;
+			my $longer_contig = ($s->{first_bp}->{matches} + $s->{second_bp}->{matches} >= $sv->{first_bp}->{matches} + $sv->{second_bp}->{matches}) ? 1 : 0;
+			return 1
+			if( 	($more_reads || $longer_contig) &&
+				abs($s->{first_bp}->{tpos} - $sv->{first_bp}->{tpos}) < 10 &&
+				abs($s->{second_bp}->{tpos} - $sv->{second_bp}->{tpos}) < 10 &&
+				$s->{first_bp}->{tname} eq $sv->{first_bp}->{tname} &&
+				$s->{second_bp}->{tname} eq $sv->{second_bp}->{tname});
+		}
 	}
+	# Not a duplicate: index it for future lookups (single home bucket).
+	my ($bp1, $bp2) = ($sv->{first_bp}, $sv->{second_bp});
+	my $home = join(":", $bp1->{tname}, $bp2->{tname}, int($bp1->{tpos}/DUP_SV_BIN), int($bp2->{tpos}/DUP_SV_BIN));
+	push @{$uniq_sv_index{$home}}, $sv;
 	return 0;
 }
 
+my %in_complex_region_cache;
 sub in_complex_region{
 	my ($chr, $pos) = @_;
 	my $full_chr = ($chr =~ m/chr/) ? $chr : "chr$chr";
-	foreach my $cr (@complex_regions){
-		return $cr->{name} if($cr->{chr} eq $full_chr && $pos > $cr->{start} && $pos < $cr->{end});
+	my $key = "$full_chr:$pos";
+	return $in_complex_region_cache{$key} if(exists($in_complex_region_cache{$key}));
+	my $rtn = 0;
+	foreach my $cr (@{$complex_regions_by_chr{$full_chr} || []}){
+		if($pos > $cr->{start} && $pos < $cr->{end}){
+			$rtn = $cr->{name};
+			last;
+		}
 	}
-	return 0;
+	$in_complex_region_cache{$key} = $rtn;
+	return $rtn;
 }
 
+my %is_bad_chrom_cache;
 sub is_bad_chrom{
 	my $chr = shift;
+	return $is_bad_chrom_cache{$chr} if(exists($is_bad_chrom_cache{$chr}));
+	my $rtn = 0;
 	foreach my $bad_chr (@excluded_chroms){
-		return 1 if($chr =~ /$bad_chr/i);
+		if($chr =~ /$bad_chr/i){
+			$rtn = 1;
+			last;
+		}
 	}
-	return 0;
+	$is_bad_chrom_cache{$chr} = $rtn;
+	return $rtn;
 }
 
 sub count_genes {
@@ -952,7 +1038,7 @@ sub low_complexity{
 	my $seg_len = 25;
 	for (my $i=0; $i<$len-$seg_len; $i++){
 		my $sub_seq = substr $mask_seq, $i, $seg_len;
-		my $n = @{[$sub_seq =~ /(N)/g]};
+		my $n = ($sub_seq =~ tr/N//);
 		return 1 if($n>20);
 	}
 	return 0;
@@ -1229,8 +1315,6 @@ sub quantification {
 	my ($bp1, $bp2) = ($SV->{first_bp}, $SV->{second_bp});
 	my ($chr1, $pos1, $start1, $end1) = ($bp1->{tname}, $bp1->{tpos}, $bp1->{ort}, $bp1->{tstart}, $bp1->{tend});
 	my ($chr2, $pos2, $start2, $end2) = ($bp2->{tname}, $bp2->{tpos}, $bp2->{ort}, $bp2->{tstart}, $bp2->{tend});
-	$debug = 0 if(abs($pos1 - 170818803)<10 || abs($pos2 - 170818803)<10);
-	print STDERR "xxx\n" if(abs($pos1 - 170818803)<10 || abs($pos2 - 170818803)<10);
 	my $fixSC1 = $bp1->{reads_num} < 10 ? 1 : 0;
 	my $fixSC2 = $bp2->{reads_num} < 10 ? 1 : 0;
 
@@ -1310,14 +1394,12 @@ sub quantification {
 	else {
 		unlink $fa_file if(-s $fa_file);
 		#unlink "$fa_file.qual" if(-s "$fa_file.qual");
-		my $arg = "";
-		$arg .= " $fa_file1 " if (-f $fa_file1 && -s $fa_file1);
-		$arg .= " $fa_file2 " if (-f $fa_file2 && -s $fa_file2);
-		if ($arg ne ""){
-			`cat $arg >> $fa_file`;
-			if ($?){
-				my $err = $!;
-				print STDERR "Error creating fasta file: $err\n";
+		my @srcs;
+		push @srcs, $fa_file1 if (-f $fa_file1 && -s $fa_file1);
+		push @srcs, $fa_file2 if (-f $fa_file2 && -s $fa_file2);
+		if (@srcs){
+			unless(concat_files($fa_file, @srcs)){
+				print STDERR "Error creating fasta file: $!\n";
 				exit 8;
 			}
 		}
@@ -1337,6 +1419,12 @@ sub quantification {
 	print STDERR "number of mapping: ", scalar @mappings, "\n" if($debug);
 	my $ref_chr2 = normalizeChromosomeName($seq_ids[0], $chr2);
 	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr2, -scSite=>$pos2, -CLIP=>$clip2, -READ_LEN => $read_len) if(-s $contig_file);
+	# PERF/REVIEW NOTE: the call below is identical to the one above (same
+	# -scChr/-scSite/-CLIP arguments), so for Internal_dup events (or when no
+	# mappings were found) the same gfClient/blat query is executed a second
+	# time and its results are pushed again. This doubles BLAT cost for ITDs
+	# and may duplicate mappings. It is preserved as-is pending confirmation
+	# of the original intent (possibly meant to target bp1, or different clip).
 	push @mappings, $mapper->run(-QUERY => $contig_file, -scChr => $ref_chr2, -scSite=>$pos2, -CLIP=>$clip2, -READ_LEN => $read_len) if(($SV->{type} eq 'Internal_dup' || !@mappings) && -s $contig_file);
 
 	my @qSVs;
@@ -1384,8 +1472,7 @@ sub quantification {
 		if (-s $fa_file1){
 			`blat -noHead -maxIntron=5 $tmp_ctg_file $fa_file1 $psl_file1`;
 			if ($?){
-				my $err = $!;
-				print STDERR "Error running blat: $err\n";
+				print STDERR "Error running blat (exit status $?)\n";
 				print STDERR "File: $fa_file1\n";
 				exit 9;
 			}
@@ -1393,8 +1480,7 @@ sub quantification {
 		if (-s $fa_file2){
 			`blat -noHead -maxIntron=5 $tmp_ctg_file $fa_file2 $psl_file2`;
 			if ($?){
-				my $err = $!;
-				print STDERR "Error running blat: $err\n";
+				print STDERR "Error running blat (exit status $?)\n";
 				print STDERR "File: $fa_file2\n";
 				exit 10;
 			}
