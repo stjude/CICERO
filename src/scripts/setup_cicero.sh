@@ -165,8 +165,8 @@ cat > `get_step_local_work_script` <<EOF
 while read case_bam
  do
    bam="$DATA_DIR/\$case_bam/\$case_bam.bam"
-   cat $DATA_DIR/\$case_bam/*/\${case_bam}_unfiltered.fusion.txt > $DATA_DIR/\$case_bam/\${case_bam}_unfiltered.fusion.txt
-   cat $DATA_DIR/\$case_bam/*/\${case_bam}_unfiltered.internal.txt > $DATA_DIR/\$case_bam/\${case_bam}_unfiltered.internal.txt
+   find "$DATA_DIR/\$case_bam" -mindepth 2 -maxdepth 2 -type f -name "\${case_bam}_unfiltered.fusion.txt" -exec cat {} + > "$DATA_DIR/\$case_bam/\${case_bam}_unfiltered.fusion.txt"
+   find "$DATA_DIR/\$case_bam" -mindepth 2 -maxdepth 2 -type f -name "\${case_bam}_unfiltered.internal.txt" -exec cat {} + > "$DATA_DIR/\$case_bam/\${case_bam}_unfiltered.internal.txt"
  done < $RUN_DIR/config.txt
 EOF
 
